@@ -6,7 +6,8 @@
     "dev": "vercel dev",
     "dev:legacy": "node server.mjs",
     "start": "vercel dev",
-    "check": "node --check app.js && node --check api/saju/analyze.js && node --check api/config.js"
+    "test": "node --test test/*.test.js",
+    "check": "node --check public/app.js && node --check public/admin.js && node --check public/analysis-batching.js && node --check api/_lib/aiTransport.js && node --check api/_lib/analysis.js && node --check api/saju/analyze.js && node --check api/saju/section.js && node --check api/config.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
