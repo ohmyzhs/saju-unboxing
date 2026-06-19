@@ -233,6 +233,22 @@
             </div>
           </form>
           <p class="form-status" data-saju-status></p>
+
+          <h2 style="margin-top:32px">AI 해설 모델</h2>
+          <p class="admin-help">
+            사주 해설을 만드는 AI 모델입니다 (OpenCode Go). <b>구조화 출력(json_schema)</b> 을 지원하는 모델만 정상 동작합니다 —
+            deepseek·minimax 등은 분석이 실패합니다. 비워두면 환경변수 <code>OPENCODE_MODEL</code> → 기본 <b>glm-5.2</b>.
+          </p>
+          <form class="product-admin-grid is-narrow" data-model-form>
+            <label>모델
+              <select name="ai_model" data-model-select>
+                <option value="glm-5.2">glm-5.2 (추천 · 기본)</option>
+                <option value="kimi-k2.7-code">kimi-k2.7-code (빠름)</option>
+              </select>
+            </label>
+            <button class="primary-action admin-save" type="submit">모델 저장</button>
+          </form>
+          <p class="form-status" data-model-status></p>
         </section>
 
         <section class="admin-panel" data-admin-panel="settings" hidden>

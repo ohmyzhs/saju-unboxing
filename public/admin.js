@@ -795,6 +795,29 @@ function saveSaju(event) {
   saveConfig({ saju }, "[data-saju-status]", "만세력 API 정보를 저장했습니다. 이제 .env 없이도 분석이 동작합니다.");
 }
 
+// ── AI 해설 모델 ──
+function renderModel() {
+  const select = document.querySelector("[data-model-select]");
+  if (!select) return;
+  const current = serverConfig.ai_model || "glm-5.2";
+  // 저장값이 목록에 없으면(예: 옛 gpt-5.4-mini) 맨 위에 표기해 현재 값을 보이게 한다.
+  if (current && ![...select.options].some((o) => o.value === current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = `${current} (현재 · 미검증)`;
+    select.insertBefore(opt, select.firstChild);
+  }
+  select.value = current;
+}
+
+function saveModel(event) {
+  event.preventDefault();
+  const select = event.currentTarget.querySelector("[data-model-select]");
+  const ai_model = String(select?.value || "").trim();
+  if (!ai_model) return;
+  saveConfig({ ai_model }, "[data-model-status]", "AI 모델을 저장했습니다. 다음 분석부터 적용됩니다.");
+}
+
 async function testSaju() {
   const form = document.querySelector("[data-saju-form]");
   const status = document.querySelector("[data-saju-status]");
@@ -851,6 +874,7 @@ document.querySelector("[data-product-form]")?.addEventListener("submit", savePr
 document.querySelector("[data-legal-form]")?.addEventListener("submit", saveLegal);
 document.querySelector("[data-business-form]")?.addEventListener("submit", saveBusiness);
 document.querySelector("[data-saju-form]")?.addEventListener("submit", saveSaju);
+document.querySelector("[data-model-form]")?.addEventListener("submit", saveModel);
 document.querySelector("[data-saju-test]")?.addEventListener("click", testSaju);
 document.querySelector("[data-password-form]")?.addEventListener("submit", changePassword);
 document.querySelector("[data-refresh-admin]").addEventListener("click", loadAnalytics);
@@ -863,6 +887,7 @@ async function init() {
   renderLegal();
   renderBusiness();
   renderSaju();
+  renderModel();
   loadAnalytics();
 }
 init();

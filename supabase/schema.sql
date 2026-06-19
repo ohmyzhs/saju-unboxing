@@ -21,7 +21,7 @@ create table if not exists site_config (
   legal    jsonb default '{}'::jsonb,   -- { terms, privacy, refund } (비우면 기본문구)
   business jsonb default '{}'::jsonb,   -- { name, owner, regNo, mailOrderNo, address, tel, email, privacyOfficer }
   saju     jsonb default '{}'::jsonb,   -- { base, key, productCode } 만세력 API 접속정보(어드민 입력, env 대체)
-  ai_model text default 'gpt-5.4-mini',
+  ai_model text default 'glm-5.2',
   admin_password_hash text,             -- sha256(비번). 미설정 시 ADMIN_PASSWORD env 사용
   updated_at timestamptz default now(),
   constraint site_config_singleton check (id = 1)

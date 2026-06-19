@@ -46,7 +46,9 @@ export default async function handler(req, res) {
 
     // 오늘의 무료운세 → 같은 사람·같은 날(KST)이면 저장 결과 재사용(만세력 포인트/AI 절약)
     if (productId === "daily-fortune") {
-      return handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct });
+      // await 필수: 안 하면 handleDaily 내부 에러가 위 try/catch 를 못 거치고
+      // FUNCTION_INVOCATION_FAILED(비-JSON "A server error...") 로 떨어진다.
+      return await handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct });
     }
 
     // 1) 중앙 만세력 (포인트 차감) — 접속정보는 어드민 입력(config.saju) 우선, 없으면 env
