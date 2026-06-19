@@ -2129,22 +2129,41 @@ function startAnalysis(productId, profile, meta = {}) {
 
         const allTitles = data.sections.map((s) => s.title);
         const sections = data.sections.map((s) => ({ ...s }));
-        await Promise.all(
-          sections.map((s) =>
-            getJson("/api/saju/section", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ productId, profile, partner, context: data.context, section: s, otherTitles: allTitles }),
+        const batches = window.AnalysisBatching.chunkSections(sections);
+        const requestSingleSection = (s) =>
+          getJson("/api/saju/section", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, profile, partner, context: data.context, section: s, otherTitles: allTitles }),
+          })
+            .then((r) => {
+              s.body = r.body || "";
+              fillSectionBody(s.id, s.body);
             })
-              .then((r) => {
-                s.body = r.body || "";
-                fillSectionBody(s.id, s.body);
-              })
-              .catch(() => {
-                s.body = "이 부분은 잠시 후 다시 펼쳐 주세요.";
-                fillSectionBody(s.id, s.body);
-              }),
-          ),
+            .catch(() => {
+              s.body = "이 부분은 잠시 후 다시 펼쳐 주세요.";
+              fillSectionBody(s.id, s.body);
+            });
+
+        await Promise.all(
+          batches.map(async (batch) => {
+            try {
+              const result = await getJson("/api/saju/section", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ productId, profile, partner, context: data.context, sections: batch, otherTitles: allTitles }),
+              });
+              const bodies = new Map((result.sections || []).map((item) => [item.id, item.body]));
+              for (const section of batch) {
+                const body = bodies.get(section.id);
+                if (!body) throw new Error(`섹션 응답 누락: ${section.id}`);
+                section.body = body;
+                fillSectionBody(section.id, body);
+              }
+            } catch {
+              await Promise.all(batch.map((s) => requestSingleSection(s)));
+            }
+          }),
         );
 
         archive(sections);
