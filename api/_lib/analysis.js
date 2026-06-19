@@ -1,38 +1,16 @@
-// OpenCode Zen(OpenAI 호환) 으로 사주 해설 글 생성 (가맹점 자기 OPENCODE_API_KEY 사용).
-// 모델 기본값 glm-5.2 (OpenCode Go, chat/completions + strict json_schema). 가맹점이 site_config.ai_model 로 변경 가능.
+// OpenCode Go로 사주 해설 글 생성 (가맹점 자기 OPENCODE_API_KEY 사용).
+// 모델별 Chat Completions/Messages 전송 방식은 aiTransport가 처리한다.
 // 출력은 Structured Outputs(json_schema)로 { headline, sections:[{icon,title,body}] } 강제.
-import OpenAI from "openai";
+import { requestStructured } from "./aiTransport.js";
 import { buildSajuContext, buildCompatContext, buildCycleContext, buildYearlyContext } from "./sajuContext.js";
 
-const DEFAULT_MODEL = process.env.OPENCODE_MODEL || "glm-5.2";
-// OpenCode Go(OpenAI 호환). chat/completions + strict json_schema 사용(glm-5.2 검증됨). Responses API 는 없음.
-const OPENCODE_BASE_URL = process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/go/v1";
-
-// 공용 OpenCode(OpenAI 호환) 클라이언트. 키 미설정이면 503.
 function getClient() {
-  const apiKey = process.env.OPENCODE_API_KEY;
-  if (!apiKey) {
-    const err = new Error("OpenCode 키가 설정되지 않았습니다 (OPENCODE_API_KEY).");
-    err.statusCode = 503;
-    throw err;
-  }
-  return new OpenAI({ apiKey, baseURL: OPENCODE_BASE_URL });
+  return null;
 }
 
-// chat/completions + strict json_schema 호출 → 본문(JSON 문자열) 반환. 비면 throw.
-// system=지시문, user=input. glm-5.2 는 reasoning effort 파라미터 없이도 깨끗한 JSON 을 출력한다.
-async function chatJSON(client, { model, system, input, name, schema }) {
-  const response = await client.chat.completions.create({
-    model: model || DEFAULT_MODEL,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: input },
-    ],
-    response_format: { type: "json_schema", json_schema: { name, strict: true, schema } },
-  });
-  const text = response.choices?.[0]?.message?.content;
-  if (!text) throw new Error("AI 응답이 비어 있습니다.");
-  return text;
+// 기존 생성 함수의 JSON 문자열 계약은 유지하고 전송·검증만 공용 계층에 맡긴다.
+async function chatJSON(_client, options) {
+  return JSON.stringify(await requestStructured(options));
 }
 
 // saju-analysis 기본 프롬프트.
@@ -357,6 +335,27 @@ const SECTION_SCHEMA = {
   },
 };
 
+export function validateSectionBatch(requested, generated) {
+  const requestedIds = requested.map((section) => String(section.id || ""));
+  const requestedSet = new Set(requestedIds);
+  const byId = new Map();
+
+  for (const item of generated || []) {
+    const id = String(item?.id || "");
+    if (!requestedSet.has(id)) throw new Error(`알 수 없는 섹션 ID입니다: ${id}`);
+    if (byId.has(id)) throw new Error(`중복된 섹션 ID입니다: ${id}`);
+    const body = typeof item?.body === "string" ? item.body.trim() : "";
+    if (!body) throw new Error(`섹션 본문이 비어 있습니다: ${id}`);
+    byId.set(id, { id, body });
+  }
+
+  return requestedIds.map((id) => {
+    const item = byId.get(id);
+    if (!item) throw new Error(`섹션 응답이 누락되었습니다: ${id}`);
+    return item;
+  });
+}
+
 // 궁합 설계 스키마: 점수·라벨·해시태그 + 섹션(제목/angle). 개운(lucky)은 2인이라 없음.
 const COMPAT_PLAN_SCHEMA = {
   type: "object",
@@ -468,44 +467,104 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
   return { headline: plan.headline, sections, lucky: luckyFromContext(context, plan.lucky), context };
 }
 
-/**
- * 2단계 — 섹션 본문. 설계에서 받은 한 섹션을 집중 작성.
- * @returns {Promise<{body:string}>}
- */
-export async function generateSection({ productId = "saju-analysis", extra, profile, partner, context, section, otherTitles = [], model }) {
-  const client = getClient();
-  const isCompat = productId === "compatibility";
-  const others = otherTitles.filter((t) => t && t !== section.title).join(" / ");
-  const subject = isCompat ? `두 사람("${profile.name}"님 × "${partner?.name || "상대"}"님) 관계` : `"${profile.name}"님`;
-
-  const instructions = `${composePrompt(productId, extra)}
-
-[이번 출력 — 이 섹션 본문 하나만]
-- 제목: "${section.title}"  / 이 섹션이 다룰 핵심: ${section.angle}
-- 위 말투·표기·금지 규칙을 그대로 지켜 body 3~4문단만 쓴다(${isCompat ? "두 사람 이야기로 시작" : "사람 이야기로 시작"}, 한자·사주용어 금지, 쉬운 일상 비유, 끝은 따뜻한 인정+바로 할 수 있는 조언).
-- 다음 다른 섹션 제목들과 내용·문장이 겹치지 않게 하라: ${others || "(없음)"}.
-- headline/제목/점수/개운은 다시 쓰지 말고 body만. ${subject} 기준.`;
-
-  const input = JSON.stringify({ subject, section: { title: section.title, angle: section.angle }, manse: context });
-  const callOnce = async (extra = "") => {
-    const t = await chatJSON(client, {
-      model,
-      system: instructions + extra,
-      input,
-      name: "saju_section",
-      schema: SECTION_SCHEMA,
-    });
-    return JSON.parse(t);
+function sectionBatchSchema(sections) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["sections"],
+    properties: {
+      sections: {
+        type: "array",
+        minItems: sections.length,
+        maxItems: sections.length,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "body"],
+          properties: {
+            id: { type: "string", enum: sections.map((section) => section.id) },
+            body: SECTION_SCHEMA.properties.body,
+          },
+        },
+      },
+    },
   };
-  let out = await callOnce();
-  if (hasFearWords({ sections: [{ title: section.title, body: out.body }] })) {
+}
+
+const SECTION_PRODUCT_FOCUS = {
+  "saju-analysis": "이 사람의 구체적인 성향·강점·그림자·일·재물·관계·현재 흐름을 섹션 각도와 사주 데이터에 맞춰 풀고 막연한 칭찬을 피한다.",
+  compatibility: "두 사람의 끌림·충돌·대화·생활 호흡과 오래 가는 방법을 균형 있게 다루며 어느 한쪽도 깎아내리지 않는다.",
+  cycle: "10년 단위 흐름의 전환점·준비 구간·기회·주의점을 현재 삶의 선택과 연결한다.",
+  "yearly-fortune": "해당 연도의 전체 흐름과 계절·월별 타이밍, 조심할 때와 행동 조언을 구체적으로 연결한다.",
+};
+
+export function buildSectionPrompt({ productId = "saju-analysis", extra, profile, partner, sections, otherTitles = [] }) {
+  const isCompat = productId === "compatibility";
+  const subject = isCompat ? `두 사람("${profile.name}"님 × "${partner?.name || "상대"}"님) 관계` : `"${profile.name}"님`;
+  const requested = sections.map((section) => `${section.id}: "${section.title}" — ${section.angle}`).join("\n");
+  const others = otherTitles.filter(Boolean).join(" / ") || "(없음)";
+  const custom = extra && String(extra).trim()
+    ? `\n[관리자 추가 지침]\n${String(extra).trim()}`
+    : "";
+
+  return `너는 사람의 마음을 구체적인 일상 언어로 풀어 주는 명리 상담가다.
+[이번 출력 — 지정된 섹션 본문만]
+- 대상: ${subject}
+- 각 섹션은 body 3~4문단으로 쓴다. ${isCompat ? "두 사람 관계 이야기" : "사람 이야기"}로 시작하고 쉬운 일상 장면, 따뜻한 인정, 바로 할 수 있는 조언을 포함한다.
+- 상품 초점: ${SECTION_PRODUCT_FOCUS[productId] || SECTION_PRODUCT_FOCUS["saju-analysis"]}
+- 주어진 사주 데이터에만 근거하고 누구에게나 맞는 일반론과 섹션 간 중복을 피한다.
+- 한자와 사주 전문용어를 노출하지 않는다. 한국어 존댓말로 쓴다.
+- 재난·질병·이혼·파산·투자를 단정하거나 공포를 조장하지 않는다.
+- headline, 제목, 점수, 개운 정보는 다시 쓰지 않고 요청한 id와 body만 반환한다.
+[작성할 섹션]
+${requested}
+[다른 섹션 제목 — 내용 중복 금지]
+${others}${custom}`;
+}
+
+export async function generateSections({ productId = "saju-analysis", extra, profile, partner, context, sections, otherTitles = [], model }, dependencies = {}) {
+  if (!Array.isArray(sections) || sections.length < 1 || sections.length > 2) {
+    throw new Error("섹션 배치는 1~2개여야 합니다.");
+  }
+  const request = dependencies.requestStructured || requestStructured;
+  const isCompat = productId === "compatibility";
+  const subject = isCompat ? `두 사람("${profile.name}"님 × "${partner?.name || "상대"}"님) 관계` : `"${profile.name}"님`;
+  const instructions = buildSectionPrompt({ productId, extra, profile, partner, sections, otherTitles });
+  const input = JSON.stringify({
+    subject,
+    sections: sections.map(({ id, title, angle }) => ({ id, title, angle })),
+    manse: context,
+  });
+  const schema = sectionBatchSchema(sections);
+  const callOnce = (rewrite = "") => request({
+      model,
+      system: instructions + rewrite,
+      input,
+      name: "saju_sections",
+      schema,
+    });
+
+  let out = validateSectionBatch(sections, (await callOnce()).sections);
+  if (out.some((item) => hasFearWords({ sections: [item] }))) {
     try {
-      out = await callOnce("\n\n[재작성] 직전 본문에 공포·재난·단정·투자 확언 어휘가 있었다. 모두 제거하고 생활 조언 어조로 다시 써라.");
+      out = validateSectionBatch(
+        sections,
+        (await callOnce("\n\n[재작성] 직전 본문에 공포·재난·단정·투자 확언 어휘가 있었다. 모두 제거하고 생활 조언 어조로 다시 써라.")).sections,
+      );
     } catch {
       // 유지
     }
   }
-  return { body: out.body };
+  return out;
+}
+
+/**
+ * 2단계 — 섹션 본문. 기존 단일 섹션 계약은 배치 생성의 1개짜리 호출로 유지.
+ * @returns {Promise<{body:string}>}
+ */
+export async function generateSection(args) {
+  const [section] = await generateSections({ ...args, sections: [args.section] });
+  return { body: section.body };
 }
 
 // ── 추가 질문 상담(결제형): 이미 계산된 만세력으로 고객의 후속 질문 1건에 답한다 ──
