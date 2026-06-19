@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" fill="none">
+  <defs>
+    <linearGradient id="fill" x1="18" y1="8" x2="218" y2="70" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DA5778"/>
+      <stop offset="1" stop-color="#B44592"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="236" height="60" rx="30" fill="url(#fill)"/>
+  <path d="M198 23 209 32l-11 9" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="103" y="39" fill="white" font-size="20" font-weight="800" text-anchor="middle" font-family="Pretendard, Noto Sans KR, sans-serif">해석 보기</text>
+</svg>

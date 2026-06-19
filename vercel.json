@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "echo no-build-needed",
+  "outputDirectory": "public",
+  "functions": {
+    "api/**/*.js": { "memory": 512, "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/setup", "destination": "/setup.html" },
+    { "source": "/terms", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/refund", "destination": "/index.html" },
+    { "source": "/payments/(.*)", "destination": "/index.html" }
+  ]
+}

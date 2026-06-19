@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>사주연구소 관리자</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>body.locked .admin-shell{display:none}</style>
+  </head>
+  <body class="admin-body locked">
+    <main class="admin-shell admin-layout">
+      <aside class="admin-sidebar">
+        <a class="admin-wordmark" href="./admin.html"><span>命</span><b>사주연구소 Admin</b></a>
+        <button class="nav-toggle-mobile" type="button" data-mobile-nav-toggle aria-label="메뉴 열고 닫기"><i></i></button>
+        <nav class="admin-side-nav" aria-label="관리자 메뉴">
+          <button class="is-active" data-admin-tab="overview">대시보드</button>
+
+          <div class="nav-group" data-nav-group>
+            <button class="nav-group-head" type="button" data-nav-toggle>트래픽</button>
+            <div class="nav-group-items">
+              <button data-admin-tab="visitors">방문자 분석</button>
+              <button data-admin-tab="funnel">전환 퍼널</button>
+              <button data-admin-tab="sources">유입/UTM</button>
+              <button data-admin-tab="exits">이탈 페이지</button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-nav-group>
+            <button class="nav-group-head" type="button" data-nav-toggle>운영</button>
+            <div class="nav-group-items">
+              <button data-admin-tab="payments">결제</button>
+              <button data-admin-tab="customers">고객</button>
+              <button data-admin-tab="analysis">분석 작업</button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-nav-group>
+            <button class="nav-group-head" type="button" data-nav-toggle>콘텐츠</button>
+            <div class="nav-group-items">
+              <button data-admin-tab="products">상품·가격</button>
+              <button data-admin-tab="images">이미지</button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-nav-group>
+            <button class="nav-group-head" type="button" data-nav-toggle>설정·정책</button>
+            <div class="nav-group-items">
+              <button data-admin-tab="business">사업자정보</button>
+              <button data-admin-tab="legal">약관/정책</button>
+              <button data-admin-tab="saju">만세력 API</button>
+              <button data-admin-tab="settings">비밀번호</button>
+            </div>
+          </div>
+        </nav>
+        <a class="admin-back" href="./">사용자 화면으로</a>
+      </aside>
+
+      <section class="admin-main">
+        <header class="admin-page-head">
+          <div>
+            <p>운영 콘솔</p>
+            <h1>결제·고객·유입을 한 곳에서 관리</h1>
+          </div>
+          <div class="admin-head-actions">
+            <small class="admin-updated" data-admin-updated></small>
+            <button class="secondary-action admin-refresh" type="button" data-refresh-admin>새로고침</button>
+          </div>
+        </header>
+
+        <section class="admin-metrics admin-metrics-wide" data-admin-panel="overview">
+          <article><span>오늘 매출</span><strong data-admin-revenue>0원</strong><small>결제 완료 기준</small></article>
+          <article><span>방문 세션</span><strong data-admin-visitors>0명</strong><small>세션 ID 기준</small></article>
+          <article><span>결제 고객</span><strong data-admin-payers>0명</strong><small>결제 완료 고객</small></article>
+          <article><span>전환율</span><strong data-admin-conversion>0%</strong><small>결제/방문</small></article>
+          <article><span>분석 완료</span><strong data-admin-analysis>0건</strong><small>보관함 기록</small></article>
+          <article><span>이탈 이벤트</span><strong data-admin-exits>0건</strong><small>페이지 종료 추정</small></article>
+        </section>
+
+        <section class="admin-metrics admin-metrics-wide admin-metrics-kpi" data-admin-panel="overview">
+          <article><span>이탈률</span><strong data-admin-bounce>0%</strong><small>이벤트 1건 이하 방문자</small></article>
+          <article><span>신규 방문자</span><strong data-admin-new>0명</strong><small>오늘 첫 방문 기준</small></article>
+          <article><span>재방문자</span><strong data-admin-returning>0명</strong><small>이전 방문 이력</small></article>
+          <article><span>평균 주문가</span><strong data-admin-aov>0원</strong><small>매출/주문수</small></article>
+          <article><span>LTV</span><strong data-admin-ltv>0원</strong><small>매출/결제 고객</small></article>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="overview">
+          <h2>최근 14일 트래픽 · 매출</h2>
+          <div class="admin-trend">
+            <header><h3>일자별 방문자</h3><span>고유 visitorId 기준</span></header>
+            <div class="trend-bars" data-admin-trend-visitors></div>
+          </div>
+          <div class="admin-trend">
+            <header><h3>일자별 매출</h3><span>결제 완료 합계</span></header>
+            <div class="trend-bars" data-admin-trend-revenue></div>
+          </div>
+          <div class="admin-trend">
+            <header><h3>디바이스 · OS · 브라우저 분포</h3><span>이벤트 기준</span></header>
+            <div class="distribution-grid">
+              <section><h3>디바이스</h3><ul data-admin-dist-device></ul></section>
+              <section><h3>OS</h3><ul data-admin-dist-os></ul></section>
+              <section><h3>브라우저</h3><ul data-admin-dist-browser></ul></section>
+              <section><h3>유입 페이지</h3><ul data-admin-dist-landing></ul></section>
+            </div>
+          </div>
+          <h2>운영 체크리스트</h2>
+          <div class="admin-checklist">
+            <article><b>결제 게이트</b><p>결제 승인 전에는 분석 생성이 열리지 않습니다. Toss 오류는 결제 시작 이벤트로 기록합니다.</p></article>
+            <article><b>방문자 추적</b><p>IP, 사용자 에이전트, 기기, 화면, UTM, 레퍼럴, 진입 페이지, 마지막 페이지를 이벤트로 쌓습니다.</p></article>
+            <article><b>퍼널 관리</b><p>상품 선택, 주문 확인, 결제 시작, 결제 오류, 분석 시작, 분석 완료를 단계별로 봅니다.</p></article>
+            <article><b>상품 운영</b><p>상품별 가격과 프롬프트를 분리해서 운영하고, 저장 즉시 사용자 화면에 반영합니다.</p></article>
+          </div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="visitors" hidden>
+          <h2>방문자 분석</h2>
+          <p class="admin-help">서버가 받은 IP와 브라우저가 보낸 기기 정보를 함께 표시합니다. 실제 운영에서는 개인정보 처리방침에 수집 항목을 명시해야 합니다.</p>
+          <div class="admin-table" data-admin-visitors-table></div>
+          <h2>최근 30명 방문 여정</h2>
+          <p class="admin-help">방문자별 페이지 이동·이벤트 흐름을 시간순으로 보여줍니다. 결제까지 도달한 동선과 이탈 지점을 함께 확인할 수 있어요.</p>
+          <div class="journey-list" data-admin-journeys></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="funnel" hidden>
+          <h2>전환 퍼널</h2>
+          <div class="funnel-grid" data-admin-funnel></div>
+          <div class="admin-table" data-admin-events></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="sources" hidden>
+          <h2>유입/UTM 분석</h2>
+          <div class="split-grid">
+            <div class="admin-table" data-admin-sources></div>
+            <div class="admin-table" data-admin-utms></div>
+          </div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="exits" hidden>
+          <h2>이탈 페이지</h2>
+          <p class="admin-help">브라우저 종료/이동 시점에 마지막으로 머물던 화면과 체류 시간을 기록합니다.</p>
+          <div class="admin-table" data-admin-exits-table></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="products" hidden>
+          <h2>상품·가격 관리</h2>
+          <p class="admin-help">가격을 0원으로 저장하면 사용자 화면에서 무료 상품으로 처리됩니다.</p>
+          <form class="product-admin-grid" data-product-form></form>
+          <p class="form-status" data-product-status></p>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="images" hidden>
+          <h2>이미지 관리</h2>
+          <p class="admin-help">메인 배너와 상품 썸네일을 교체합니다. 업로드 즉시 저장되고, 사용자 화면 새로고침 시 반영됩니다. (4MB 이하 권장)</p>
+          <div class="product-admin-grid" data-image-grid></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="business" hidden>
+          <h2>사업자 정보 (사이트 하단 표기 · 토스 카드사 심사 필수)</h2>
+          <p class="admin-help">토스에 제출한 사업자등록증과 100% 동일하게 입력하세요. 저장 후 사용자 화면 새로고침 시 하단 푸터에 반영됩니다.</p>
+          <form class="product-admin-grid" data-business-form>
+            <label>상호명 <input name="name" /></label>
+            <label>대표자명 <input name="owner" /></label>
+            <label>사업자등록번호 <input name="regNo" placeholder="000-00-00000" /></label>
+            <label>통신판매업신고번호 <input name="mailOrderNo" placeholder="2026-서울강남-00000" /></label>
+            <label>사업장 주소 <input name="address" /></label>
+            <label>고객센터 전화 <input name="tel" /></label>
+            <label>고객센터 이메일 <input name="email" /></label>
+            <label>개인정보 보호책임자 (선택) <input name="privacyOfficer" /></label>
+            <button class="primary-action admin-save" type="submit">사업자정보 저장</button>
+          </form>
+          <p class="form-status" data-business-status></p>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="legal" hidden>
+          <h2>약관 · 개인정보 · 환불 규정</h2>
+          <p class="admin-help">비워두면 우리가 제공하는 기본 문구가 자동 노출됩니다. "기본문구 불러오기"로 채운 뒤 사업 형태에 맞게 검토·수정하세요. ⚠️ 법적 효력이 있는 문서입니다.</p>
+          <form class="prompt-admin-grid is-narrow" data-legal-form>
+            <article class="admin-product-card prompt-card">
+              <header><b>이용약관</b><button type="button" class="secondary-action" data-legal-default="terms">기본문구 불러오기</button></header>
+              <textarea name="terms" rows="10" placeholder="비우면 기본 이용약관이 노출됩니다"></textarea>
+            </article>
+            <article class="admin-product-card prompt-card">
+              <header><b>개인정보처리방침</b><button type="button" class="secondary-action" data-legal-default="privacy">기본문구 불러오기</button></header>
+              <textarea name="privacy" rows="10" placeholder="비우면 기본 개인정보처리방침이 노출됩니다"></textarea>
+            </article>
+            <article class="admin-product-card prompt-card">
+              <header><b>환불·취소 규정</b><button type="button" class="secondary-action" data-legal-default="refund">기본문구 불러오기</button></header>
+              <textarea name="refund" rows="10" placeholder="비우면 기본 환불·취소 규정이 노출됩니다"></textarea>
+            </article>
+            <button class="primary-action admin-save" type="submit">약관/정책 저장</button>
+          </form>
+          <p class="form-status" data-legal-status></p>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="payments" hidden>
+          <h2>결제 관리</h2>
+          <div class="admin-table" data-admin-payments></div>
+          <h2>결제 오류</h2>
+          <p class="admin-help">최근 30건의 결제 시작 실패 / 승인 오류를 시각화합니다.</p>
+          <div class="admin-table" data-admin-errors></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="customers" hidden>
+          <h2>고객 관리</h2>
+          <div class="admin-table" data-admin-customers-list></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="analysis" hidden>
+          <h2>분석 작업</h2>
+          <div class="admin-table" data-admin-analyses></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="saju" hidden>
+          <h2>만세력 API 연결</h2>
+          <p class="admin-help">
+            본사(대표)에게 받은 <b>만세력 API 주소</b>와 <b>내 전용 키</b>를 여기에 입력하세요.
+            여기에 입력하면 <b>.env(환경변수)에 SAJU_API_BASE·SAJU_API_KEY를 따로 넣지 않아도</b> 됩니다.
+            (여기 값이 우선 적용되고, 비워두면 환경변수를 사용합니다. 응답 매핑은 자동이라 설정 불필요)
+          </p>
+          <form class="product-admin-grid is-narrow" data-saju-form>
+            <label>API 주소 (SAJU_API_BASE)
+              <input name="base" placeholder="예: https://api.sajulab.kr (본사 만세력 서버 주소)" />
+            </label>
+            <label>내 API 키 (SAJU_API_KEY)
+              <input name="key" type="password" placeholder="본사 관리자페이지에서 발급받은 내 전용 키" autocomplete="off" />
+            </label>
+            <label>상품 코드 (선택)
+              <input name="productCode" placeholder="비우면 saju_basic" />
+            </label>
+            <div class="btn-row">
+              <button class="primary-action admin-save" type="submit">저장</button>
+              <button class="secondary-action" type="button" data-saju-test>연결 테스트 (포인트 잔액 조회)</button>
+            </div>
+          </form>
+          <p class="form-status" data-saju-status></p>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="settings" hidden>
+          <h2>관리자 비밀번호 변경</h2>
+          <p class="admin-help">로그인에 쓰는 비밀번호를 여기서 바꿉니다. 변경 즉시 적용되고, 다음 로그인부터 새 비밀번호를 사용합니다.</p>
+          <form class="product-admin-grid is-narrow" data-password-form>
+            <label>새 비밀번호 <input type="password" name="newPassword" placeholder="4자 이상" autocomplete="new-password" /></label>
+            <label>새 비밀번호 확인 <input type="password" name="confirmPassword" placeholder="한 번 더 입력" autocomplete="new-password" /></label>
+            <button class="primary-action admin-save" type="submit">비밀번호 변경</button>
+          </form>
+          <p class="form-status" data-password-status></p>
+        </section>
+      </section>
+    </main>
+    <script src="./admin.js"></script>
+  </body>
+</html>

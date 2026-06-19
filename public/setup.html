@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>사주연구소 — 설정 점검</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: "Malgun Gothic", system-ui, sans-serif; max-width: 680px; margin: 0 auto; padding: 28px 18px 60px; color: #1f2430; background: #f6f7fb; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      p.sub { color: #6b7280; margin: 0 0 22px; }
+      .card { background: #fff; border: 1px solid #e6e8ef; border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; }
+      .ic { font-size: 22px; line-height: 1.2; }
+      .body b { display: block; font-size: 15px; }
+      .body span { color: #6b7280; font-size: 13px; }
+      .banner { padding: 14px 16px; border-radius: 12px; font-weight: 700; margin-bottom: 18px; }
+      .banner.ok { background: #e7f8ee; color: #137a43; }
+      .banner.no { background: #fdecec; color: #b42318; }
+      .row-actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+      a.btn, button.btn { background: #3b82f6; color: #fff; border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 700; text-decoration: none; cursor: pointer; font-size: 14px; }
+      a.btn.ghost { background: #eef1f7; color: #374151; }
+      code { background: #eef1f7; padding: 1px 6px; border-radius: 5px; }
+      .hint { font-size: 12.5px; color: #9aa1ad; margin-top: 26px; line-height: 1.7; }
+    </style>
+  </head>
+  <body>
+    <h1>⚙️ 설정 점검</h1>
+    <p class="sub">필요한 연결이 다 됐는지 확인하는 페이지예요. ❌가 있으면 <code>.env</code>를 채우고 서버를 다시 켜세요.</p>
+
+    <div id="banner" class="banner">불러오는 중…</div>
+    <div id="list"></div>
+
+    <div class="row-actions">
+      <button class="btn" onclick="load()">다시 점검</button>
+      <a class="btn ghost" href="/">사용자 화면</a>
+      <a class="btn ghost" href="/admin">관리자 페이지</a>
+    </div>
+
+    <p class="hint">
+      ❌ 항목별 안내:<br />
+      • <b>중앙 만세력 API</b> — 대표에게 받은 <code>SAJU_API_BASE</code>·<code>SAJU_API_KEY</code>를 넣으세요. 포인트 잔액도 함께 표시됩니다.<br />
+      • <b>Supabase</b> — <code>SUPABASE_URL</code>·<code>SUPABASE_SERVICE_KEY</code> 입력 + <code>supabase/schema.sql</code>을 SQL Editor에 1회 실행.<br />
+      • <b>OpenAI</b> — <code>OPENAI_API_KEY</code> 입력(해설 생성용).<br />
+      • <b>토스/카카오</b> — 없어도 학습은 됩니다(토스는 테스트키 자동). 고객 결제·로그인 쓰려면 키 입력.
+    </p>
+
+    <script>
+      async function load() {
+        const banner = document.getElementById("banner");
+        const list = document.getElementById("list");
+        banner.className = "banner";
+        banner.textContent = "불러오는 중…";
+        try {
+          const res = await fetch("/api/health", { cache: "no-store" });
+          const data = await res.json();
+          const names = {
+            centralApi: "중앙 만세력 API (포인트)",
+            supabase: "Supabase (데이터베이스)",
+            openai: "OpenAI (AI 해설)",
+            toss: "토스페이먼츠 (결제)",
+            kakao: "카카오 로그인",
+            admin: "관리자 비밀번호",
+          };
+          list.innerHTML = Object.entries(data.checks)
+            .map(([key, c]) => `
+              <div class="card">
+                <div class="ic">${c.ok ? "✅" : "❌"}</div>
+                <div class="body"><b>${names[key] || key}</b><span>${c.message || ""}</span></div>
+              </div>`)
+            .join("");
+          banner.classList.add(data.ready ? "ok" : "no");
+          banner.textContent = data.ready
+            ? "✅ 핵심 연결 완료! 이제 분석이 진짜로 작동합니다."
+            : "❌ 아직 핵심 연결이 빠졌어요. 아래 항목을 채워주세요.";
+        } catch (e) {
+          banner.classList.add("no");
+          banner.textContent = "점검 실패: 서버가 켜져 있는지 확인하세요. (" + e.message + ")";
+          list.innerHTML = "";
+        }
+      }
+      load();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+.env
+node_modules/
+.vercel
+
+# 개발 중 생성물(배포/수강생 배포 제외)
+cookies.txt
+*.pdf
+.DS_Store
+사이트_제작_프롬프트.md

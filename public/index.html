@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>사주연구소</title>
+    <!-- /payments/fail 같은 2단계 경로에서도 ./ 자원이 항상 루트 기준으로 풀리도록 -->
+    <base href="/" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://js.tosspayments.com/v2/standard" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <button class="brand brand-wordmark" data-view-target="home" aria-label="사주연구소 홈">
+          <span class="brand-mark">命</span>
+          <span class="brand-text">사주연구소</span>
+        </button>
+        <nav class="top-tools clean-top" aria-label="상단 메뉴">
+          <button class="auth-chip" data-mypage-open data-mypage-chip>로그인</button>
+          <button class="icon-button menu" data-mypage-open aria-label="메뉴 열기"></button>
+        </nav>
+      </header>
+
+      <section class="view is-active" data-view="home">
+        <section class="banner-carousel" aria-label="사주연구소 배너">
+          <article class="banner-slide is-active" data-slide="0">
+            <img src="./assets/generated/banners/hero-lab.jpg" alt="" data-img-key="banner.hero" />
+            <div class="banner-copy">
+              <p>결제 후 바로 분석되는 사주 리포트</p>
+              <h1>사주연구소</h1>
+              <button class="banner-button" data-view-target="profile">내 사주 등록</button>
+            </div>
+          </article>
+          <article class="banner-slide" data-slide="1">
+            <img src="./assets/generated/banners/daily-flow.jpg" alt="" loading="lazy" decoding="async" />
+            <div class="banner-copy">
+              <p>오늘의 분위기를 가볍게 확인</p>
+              <h2>오늘 운세 브리핑</h2>
+              <button class="banner-button" data-product-id="daily-fortune">무료로 보기</button>
+            </div>
+          </article>
+          <article class="banner-slide" data-slide="2">
+            <img src="./assets/generated/banners/auspicious-date.jpg" alt="" loading="lazy" decoding="async" />
+            <div class="banner-copy banner-copy-right">
+              <p>결정이 필요한 날을 고를 때</p>
+              <h2>택일 캘린더</h2>
+              <button class="banner-button" data-view-target="calendar">날짜 살펴보기</button>
+            </div>
+          </article>
+          <div class="carousel-dots" role="tablist" aria-label="배너 선택">
+            <button class="is-active" data-slide-target="0" aria-label="첫 번째 배너"></button>
+            <button data-slide-target="1" aria-label="두 번째 배너"></button>
+            <button data-slide-target="2" aria-label="세 번째 배너"></button>
+          </div>
+        </section>
+
+        <nav class="filters" aria-label="상품 분류">
+          <button class="is-active" data-filter="all">전체</button>
+          <button data-filter="saju">사주·명리</button>
+          <button data-filter="timing">운세·택일</button>
+          <button data-filter="consult">추가질문</button>
+        </nav>
+
+        <section class="product-grid" aria-label="사주연구소 서비스">
+          <article class="product-card" data-category="saju">
+            <button class="product-image" data-product-id="saju-analysis">
+              <img src="./assets/generated/thumbnails/saju-reading.jpg" alt="사주 해석 썸네일" data-img-key="thumb.saju-analysis" loading="lazy" decoding="async" />
+              <span>사주</span>
+            </button>
+            <div class="product-copy">
+              <h2 data-product-name="saju-analysis">기본 사주 리포트</h2>
+              <p data-product-description="saju-analysis">타고난 성향, 재물운, 직업운, 관계 흐름까지 한 번에 정리합니다.</p>
+              <footer>
+                <strong data-product-price="saju-analysis">990원</strong>
+                <button data-product-id="saju-analysis">사주 분석 신청</button>
+              </footer>
+            </div>
+          </article>
+
+          <article class="product-card" data-category="saju">
+            <button class="product-image" data-product-id="compatibility">
+              <img src="./assets/generated/thumbnails/compatibility.jpg" alt="궁합 썸네일" data-img-key="thumb.compatibility" loading="lazy" decoding="async" />
+              <span>궁합</span>
+            </button>
+            <div class="product-copy">
+              <h2 data-product-name="compatibility">관계 궁합 분석</h2>
+              <p data-product-description="compatibility">두 사람의 리듬과 충돌 지점을 부드럽게 풀어봅니다.</p>
+              <footer>
+                <strong data-product-price="compatibility">990원</strong>
+                <button data-product-id="compatibility">궁합 분석 신청</button>
+              </footer>
+            </div>
+          </article>
+
+          <article class="product-card" data-category="saju">
+            <button class="product-image" data-product-id="cycle">
+              <img src="./assets/generated/thumbnails/fortune-cycle.jpg" alt="대운 썸네일" data-img-key="thumb.cycle" loading="lazy" decoding="async" />
+              <span>대운</span>
+            </button>
+            <div class="product-copy">
+              <h2 data-product-name="cycle">대운의 흐름</h2>
+              <p data-product-description="cycle">10년 단위 운의 전환점과 준비 구간을 읽습니다.</p>
+              <footer>
+                <strong data-product-price="cycle">990원</strong>
+                <button data-product-id="cycle">대운 분석 신청</button>
+              </footer>
+            </div>
+          </article>
+
+          <article class="product-card" data-category="timing">
+            <button class="product-image" data-view-target="calendar">
+              <img src="./assets/generated/thumbnails/auspicious-date.jpg" alt="택일 썸네일" loading="lazy" decoding="async" />
+              <span>택일</span>
+            </button>
+            <div class="product-copy">
+              <h2>목적별 택일</h2>
+              <p>계약, 면접, 이사에 맞는 날짜를 고릅니다.</p>
+              <footer>
+                <strong>미리보기 무료</strong>
+                <button data-view-target="calendar">날짜 보기</button>
+              </footer>
+            </div>
+          </article>
+
+          <article class="product-card" data-category="timing">
+            <button class="product-image" data-product-id="yearly-fortune">
+              <img src="./assets/generated/thumbnails/year-wheel.jpg" alt="연도 운세 썸네일" data-img-key="thumb.yearly-fortune" loading="lazy" decoding="async" />
+              <span>연도</span>
+            </button>
+            <div class="product-copy">
+              <h2 data-product-name="yearly-fortune">연도별 운세</h2>
+              <p data-product-description="yearly-fortune">특정 연도의 총운, 계절별 포인트, 월별 흐름을 봅니다.</p>
+              <footer>
+                <strong data-product-price="yearly-fortune">990원</strong>
+                <button data-product-id="yearly-fortune">연도 운세 신청</button>
+              </footer>
+            </div>
+          </article>
+
+          <article class="product-card" data-category="consult">
+            <button class="product-image" data-view-target="followup">
+              <img src="./assets/generated/thumbnails/consult-chat.jpg" alt="추가 질문 썸네일" loading="lazy" decoding="async" />
+              <span>추가질문</span>
+            </button>
+            <div class="product-copy">
+              <h2>추가 질문 상담</h2>
+              <p>이미 받은 분석에 대해 더 궁금한 점을, 그 사주 그대로 답해드려요.</p>
+              <footer>
+                <strong>질문 1회권 · <span data-product-price="followup">990원</span></strong>
+                <button data-view-target="followup">질문하러 가기</button>
+              </footer>
+            </div>
+          </article>
+        </section>
+
+        <section class="home-story">
+          <h2>처음이어도 막히지 않게</h2>
+          <p>
+            이미 등록한 프로필이 있으면 다시 입력하라고 돌려보내지 않고, 저장된 사람 선택 창이 먼저 열립니다.
+            상품을 고르면 주문 내용을 확인하고 결제를 진행한 뒤, 승인된 주문만 분석으로 이어집니다.
+            분석이 끝난 결과는 보관함에서 다시 열어볼 수 있어요.
+          </p>
+          <div class="story-points">
+            <span>저장된 프로필 선택</span>
+            <span>주문 내용 확인</span>
+            <span>결제 승인</span>
+            <span>결과 보관</span>
+          </div>
+        </section>
+      </section>
+
+      <section class="view form-view" data-view="profile">
+        <div class="view-title emerald">
+          <h1>새 사람 추가</h1>
+          <button data-view-target="people" aria-label="닫기">×</button>
+        </div>
+        <form class="stack-form profile-form" data-profile-form>
+          <section class="form-step">
+            <div class="step-heading"><b>1</b><span>기본 정보</span></div>
+            <label>이름 <input type="text" name="name" placeholder="예: 민지" maxlength="20" required /></label>
+            <label>
+              관계
+              <select name="relation">
+                <option>본인</option><option>배우자</option><option>연인</option>
+                <option>부모</option><option>자녀</option><option>친구</option><option>직접 입력</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="form-step">
+            <div class="step-heading"><b>2</b><span>생년월일</span></div>
+            <div class="segmented" data-segmented="calendar">
+              <button type="button" class="is-active" data-value="solar">양력</button>
+              <button type="button" data-value="lunar">음력</button>
+            </div>
+            <div class="field-grid">
+              <label>생년월일 <input type="text" name="birthDate" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10" required /></label>
+              <label>성별 <select name="gender"><option value="F">여자</option><option value="M">남자</option></select></label>
+            </div>
+          </section>
+
+          <section class="form-step">
+            <div class="step-heading"><b>3</b><span>태어난 시간</span></div>
+            <div class="segmented" data-segmented="timeKnown">
+              <button type="button" class="is-active" data-value="yes">알아요</button>
+              <button type="button" data-value="no">몰라요</button>
+            </div>
+            <div class="segmented" data-segmented="timeMode">
+              <button type="button" class="is-active" data-value="exact">정확한 시간</button>
+              <button type="button" data-value="period">시간대 선택</button>
+            </div>
+            <label data-exact-time-field>출생 시각 <input type="time" name="birthTime" value="12:00" /></label>
+            <div class="time-period-grid" data-time-period-grid></div>
+            <div class="hint-box">실제 만세력 API가 연결되면 이 정보로 원국을 계산합니다.</div>
+            <div class="segmented small" data-segmented="yajasi">
+              <button type="button" class="is-active" data-value="no">야자시 미적용</button>
+              <button type="button" data-value="yes">야자시 적용</button>
+            </div>
+          </section>
+
+          <section class="form-step preview-step">
+            <div class="step-heading"><b>4</b><span>입력 내용 확인</span></div>
+            <div class="manse-preview" data-profile-manse-preview></div>
+          </section>
+
+          <p class="form-status" data-profile-status></p>
+          <button class="primary-action" type="submit">저장하기</button>
+        </form>
+      </section>
+
+      <section class="view checkout-view" data-view="checkout">
+        <div class="view-title">
+          <button data-view-target="home" aria-label="뒤로">‹</button>
+          <h1>주문 확인 및 결제</h1>
+          <span></span>
+        </div>
+        <section class="checkout-panel">
+          <h2>주문 상품</h2>
+          <div class="checkout-box">
+            <b data-checkout-product>기본 사주 리포트</b>
+            <span data-checkout-price>990원</span>
+          </div>
+        </section>
+        <section class="checkout-panel">
+          <h2>분석 대상</h2>
+          <div class="checkout-profile" data-checkout-profile></div>
+        </section>
+        <section class="checkout-panel">
+          <h2>상세 설명</h2>
+          <p data-checkout-description>결제 승인 후 분석 생성이 시작됩니다.</p>
+        </section>
+        <section class="checkout-panel amount-panel">
+          <span>최종 결제 금액</span>
+          <strong data-checkout-amount>990원</strong>
+        </section>
+        <div class="checkout-actions">
+          <button class="primary-action" type="button" data-checkout-pay>990원 결제하기</button>
+          <button class="secondary-action" type="button" data-checkout-free hidden>무료 분석 시작</button>
+        </div>
+        <p class="form-status" data-checkout-status></p>
+      </section>
+
+      <section class="view pay-view" data-view="pay">
+        <div class="view-title">
+          <button type="button" data-pay-back aria-label="뒤로">‹</button>
+          <h1>결제</h1>
+          <span></span>
+        </div>
+        <section class="checkout-panel amount-panel pay-summary">
+          <span data-pay-product>기본 사주 리포트</span>
+          <strong data-pay-amount>990원</strong>
+        </section>
+        <div class="toss-widget" data-toss-widget>
+          <div id="toss-payment-method"></div>
+          <div id="toss-agreement"></div>
+        </div>
+        <label class="terms-row" data-checkout-terms-row hidden>
+          <input type="checkbox" data-checkout-terms />
+          <span>위 주문 내용을 확인했으며, 결제 완료 후 분석이 시작되는 것에 동의합니다.</span>
+        </label>
+        <div class="checkout-actions">
+          <button class="primary-action" type="button" data-pay-confirm>990원 결제하기</button>
+        </div>
+        <p class="form-status" data-pay-status></p>
+      </section>
+
+      <section class="view analysis-view" data-view="analysis">
+        <header class="analysis-hero">
+          <button data-view-target="home" aria-label="홈으로">‹</button>
+          <div>
+            <p data-analysis-kicker>사주해설</p>
+            <h1 data-analysis-title>분석을 준비하고 있어요</h1>
+            <div class="analysis-chips" data-analysis-chips></div>
+          </div>
+        </header>
+        <div class="scroll-hint" data-scroll-hint hidden>아래로 스크롤해주세요 ⬇️</div>
+        <section class="analysis-section">
+          <h2>만세력</h2>
+          <div class="manse-board" data-analysis-manse></div>
+        </section>
+        <section class="analysis-loading" data-analysis-loading>
+          <div class="loading-visual" data-loading-visual>
+            <div class="loading-orb"><span>命</span></div>
+          </div>
+          <p data-analysis-message>결제 승인 정보를 확인했습니다. 만세력을 정리하는 중입니다...</p>
+          <div class="progress-track"><span data-analysis-progress></span><b data-analysis-progress-label>0%</b></div>
+          <small>화면을 나가도 분석은 계속 진행돼요. 끝나면 보관함에 안전하게 저장됩니다.</small>
+        </section>
+        <section class="analysis-section analysis-report" data-analysis-report hidden>
+          <h2>사주해설</h2>
+          <p class="accordion-hint">각 제목을 클릭하면 해설이 펼쳐져요</p>
+          <div data-analysis-sections></div>
+        </section>
+        <section class="related-products" data-analysis-related hidden>
+          <h2>이런 운세는 어때요?</h2>
+          <button data-product-id="compatibility">
+            <b>우리 사이는 몇 점?</b>
+            <small>SNS에서 소문난 궁합 맛집</small>
+          </button>
+          <button data-product-id="cycle">
+            <b>대운을 아직 모르신다구요?</b>
+            <small>언제 물 들어오는지 한번 확인해보자구요</small>
+          </button>
+          <button data-product-id="yearly-fortune">
+            <b>특정 연도의 사주가 궁금하다면?</b>
+            <small>내후년 운세는 어떨까?</small>
+          </button>
+          <button data-product-id="daily-fortune">
+            <b>오늘의 무료 운세는 챙겨보셨죠?</b>
+            <small>한줄짜리 띠별운세는 이제 그만</small>
+          </button>
+        </section>
+      </section>
+
+      <section class="view wallet-view" data-view="wallet">
+        <header class="slim-poster wallet-poster">
+          <p>건별 결제 방식으로 운영됩니다</p>
+          <h1>결제 안내</h1>
+        </header>
+        <section class="login-panel">
+          <div>
+            <h2>카카오로 이어서 보기</h2>
+            <p data-session-copy>로그인하면 결과와 결제 내역을 같은 브라우저에서 이어볼 수 있어요.</p>
+          </div>
+          <button class="kakao-action" data-auth-button>카카오 로그인</button>
+          <button class="ghost-action" data-logout-button hidden>로그아웃</button>
+        </section>
+        <section class="payment-panel" aria-live="polite">
+          <h2>Toss 결제 상태</h2>
+          <p data-payment-status>상품 상세에서 결제를 시작해주세요.</p>
+        </section>
+      </section>
+
+      <section class="view form-view" data-view="compatibility">
+        <div class="view-title rose">
+          <h1>관계 궁합 분석</h1>
+          <button data-view-target="home" aria-label="닫기">×</button>
+        </div>
+        <form class="stack-form compatibility-form" data-compatibility-form>
+          <label>첫 번째 프로필 <select data-profile-select data-compat-select="a"></select></label>
+          <label>두 번째 프로필 <select data-profile-select data-compat-select="b"></select></label>
+          <p class="form-status" data-compat-status></p>
+          <button class="primary-action" type="button" data-compat-checkout>궁합 결제하기</button>
+        </form>
+      </section>
+
+      <section class="view report-view" data-view="cycle">
+        <header class="slim-poster cycle-poster"><p>긴 흐름으로 보는 전환점</p><h1>대운의 흐름</h1></header>
+        <section class="timeline-panel">
+          <h2>10년 단위 연구 메모</h2>
+          <ol data-cycle-list>
+            <li><strong>20대</strong><span>기반을 넓히는 실험 구간</span></li>
+            <li><strong>30대</strong><span>성과와 책임이 커지는 구간</span></li>
+            <li><strong>40대</strong><span>선택을 좁혀 집중하는 구간</span></li>
+          </ol>
+        </section>
+        <button class="primary-action" type="button" data-cycle-checkout>내 대운 흐름 분석하기</button>
+      </section>
+
+      <section class="view calendar-view" data-view="calendar">
+        <header class="slim-poster calendar-poster"><p>중요한 일정을 맞출 기준</p><h1>택일 캘린더</h1></header>
+        <section class="profile-strip">
+          <button data-view-target="profile">+ 프로필 추가</button>
+          <span data-primary-profile>등록된 프로필을 선택해주세요.</span>
+        </section>
+        <section class="purpose-panel">
+          <h2><b>1</b> 어떤 목적의 택일인가요?</h2>
+          <div class="choice-row" data-purpose-row><button class="is-active" data-purpose="이사">이사</button><button data-purpose="면접">면접</button><button data-purpose="계약">계약</button><button data-purpose="여행">여행</button><button data-purpose="개업">개업</button><button data-purpose="기타">기타</button></div>
+        </section>
+        <section class="month-panel">
+          <header><button type="button" data-calendar-prev aria-label="이전 달">‹</button><h2 data-calendar-title>2026년 5월</h2><button type="button" data-calendar-next aria-label="다음 달">›</button></header>
+          <div class="calendar-grid" data-calendar-grid></div>
+        </section>
+        <p class="calendar-status" data-calendar-status></p>
+        <button class="primary-action calendar-action" type="button" data-calendar-confirm>목적과 날짜 확인</button>
+      </section>
+
+      <section class="view fortune-view" data-view="fortune">
+        <header class="slim-poster fortune-poster"><p>하루의 기류를 빠르게</p><h1>오늘 운세</h1></header>
+        <section class="fortune-card">
+          <header><h2>오늘의 운세</h2><time>2026년 5월 24일</time></header>
+          <label>오늘의 주인공 <select data-profile-select></select></label>
+          <h3>지금 가장 가까운 마음은?</h3>
+          <div class="answer-chips" data-fortune-mood><button class="is-active" data-mood="생각 정리 중">생각 정리 중</button><button data-mood="일에 몰입">일에 몰입</button><button data-mood="관계가 신경 쓰임">관계가 신경 쓰임</button><button data-mood="직접 입력">직접 입력</button></div>
+          <button class="primary-action" type="button" data-product-id="daily-fortune">오늘 운세 확인</button>
+        </section>
+      </section>
+
+      <section class="view followup-view" data-view="followup">
+        <header class="slim-poster followup-poster"><p>이미 받은 분석에 대해</p><h1>한 가지 더 물어보기</h1></header>
+        <p class="support-lead">질문할 분석을 고르고 궁금한 점을 적어주세요. 그 사주를 그대로 활용해 답해드려요.</p>
+        <div class="followup-wrap" data-followup-body></div>
+      </section>
+
+      <section class="view library-view" data-view="library">
+        <header class="slim-poster library-poster"><p>다시 꺼내 보는 결과</p><h1>보관함</h1></header>
+        <p class="library-retention">📌 분석 결과는 <b>생성일로부터 1개월간</b> 보관되며, 이후 자동으로 삭제됩니다. 필요하면 미리 저장(캡처)해 주세요.</p>
+        <div class="library-filters" data-library-filters><button class="is-active" data-library-filter="all">전체</button><button data-library-filter="saju-analysis">사주</button><button data-library-filter="compatibility">궁합</button><button data-library-filter="cycle">대운</button><button data-library-filter="auspicious-date">택일</button></div>
+        <section class="archive-list" data-archive-list></section>
+      </section>
+
+      <section class="view report-view" data-view="year">
+        <header class="slim-poster year-poster"><p>해당 연도의 큰 흐름</p><h1>연도별 운세</h1></header>
+        <section class="year-panel" data-year-panel><button data-year="2025">2025</button><button class="is-active" data-year="2026">2026</button><button data-year="2027">2027</button><p>봄에는 확장, 여름에는 점검, 가을에는 선택을 좁히는 흐름입니다.</p></section>
+        <button class="primary-action" type="button" data-year-checkout>이 연도 운세 결제하기</button>
+      </section>
+
+      <section class="view payment-view" data-view="payment">
+        <section class="payment-result">
+          <div class="payment-status-icon" data-payment-icon>⏳</div>
+          <h2 data-payment-title>결제 정보를 확인하고 있어요.</h2>
+          <p data-payment-message>결제창에서 돌아온 주문을 서버 승인 단계까지 이어갑니다.</p>
+          <div data-payment-detail></div>
+          <p class="payment-ref" data-payment-ref hidden></p>
+          <div class="payment-result-actions">
+            <button class="primary-action" type="button" data-payment-continue hidden>결제 확인됨, 분석 시작</button>
+            <button class="secondary-action" type="button" data-view-target="home">홈으로 돌아가기</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="view legal-view" data-view="terms">
+        <div class="view-title"><button data-view-target="home" aria-label="뒤로">‹</button><h1>이용약관</h1><span></span></div>
+        <div class="legal-body" data-legal-body="terms"></div>
+      </section>
+      <section class="view legal-view" data-view="privacy">
+        <div class="view-title"><button data-view-target="home" aria-label="뒤로">‹</button><h1>개인정보처리방침</h1><span></span></div>
+        <div class="legal-body" data-legal-body="privacy"></div>
+      </section>
+      <section class="view legal-view" data-view="refund">
+        <div class="view-title"><button data-view-target="home" aria-label="뒤로">‹</button><h1>환불·취소 규정</h1><span></span></div>
+        <div class="legal-body" data-legal-body="refund"></div>
+      </section>
+
+      <section class="view daily-view" data-view="daily">
+        <div class="view-title daily-title">
+          <button data-view-target="fortune" aria-label="뒤로">‹</button>
+          <h1>오늘의 운세</h1>
+          <span></span>
+        </div>
+        <div class="daily-body" data-daily-body></div>
+      </section>
+
+      <section class="view people-view" data-view="people">
+        <header class="slim-poster people-poster"><p>저장한 사람을 한눈에</p><h1>사주 인원 관리</h1></header>
+        <div class="people-toolbar">
+          <span data-people-count>0명 등록됨</span>
+          <button class="primary-action people-add" type="button" data-view-target="profile">+ 새 사람 추가</button>
+        </div>
+        <section class="people-list" data-people-list></section>
+      </section>
+
+      <section class="view orders-view" data-view="orders">
+        <header class="slim-poster orders-poster"><p>포인트·충전 없이, 분석 1건씩</p><h1>결제 내역</h1></header>
+        <section class="orders-list" data-orders-list></section>
+      </section>
+
+      <section class="view support-view" data-view="support">
+        <header class="slim-poster support-poster"><p>도움이 필요하신가요?</p><h1>문의하기</h1></header>
+        <p class="support-lead">문의 유형을 선택해주세요</p>
+        <section class="support-types" data-support-types>
+          <button type="button" data-support-type="error"><div><b>오류 문의</b><small>해설이 안 나오거나 화면이 멈췄나요?</small></div><i>›</i></button>
+          <button type="button" data-support-type="refund"><div><b>환불 요청</b><small>결제 취소·환불을 원하시나요?</small></div><i>›</i></button>
+          <button type="button" data-support-type="general"><div><b>일반 문의</b><small>그 밖에 궁금한 점을 남겨주세요</small></div><i>›</i></button>
+        </section>
+        <section class="support-contact" data-support-contact hidden></section>
+      </section>
+
+      <aside class="mypage-drawer" data-mypage hidden>
+        <div class="mypage-backdrop" data-mypage-close></div>
+        <div class="mypage-panel" role="dialog" aria-label="마이페이지" aria-modal="true">
+          <header class="mypage-head">
+            <h2>마이페이지</h2>
+            <button class="mypage-x" type="button" data-mypage-close aria-label="닫기">×</button>
+          </header>
+          <div class="mypage-id" data-mypage-id></div>
+          <nav class="mypage-menu">
+            <button type="button" data-view-target="people" data-mypage-close><span>👤 사주 인원 관리</span><i>›</i></button>
+            <button type="button" data-view-target="followup" data-mypage-close><span>💬 추가 질문 상담</span><i>›</i></button>
+            <button type="button" data-view-target="orders" data-mypage-close><span>🧾 결제 내역</span><i>›</i></button>
+            <button type="button" data-view-target="library" data-mypage-close><span>🗄️ 보관함</span><i>›</i></button>
+            <button type="button" data-view-target="support" data-mypage-close><span>💬 문의하기</span><i>›</i></button>
+          </nav>
+          <div class="mypage-divider"></div>
+          <nav class="mypage-menu mypage-menu-sub">
+            <button type="button" data-view-target="terms" data-mypage-close><span>이용약관</span><i>›</i></button>
+            <button type="button" data-view-target="privacy" data-mypage-close><span>개인정보처리방침</span><i>›</i></button>
+            <button type="button" data-view-target="refund" data-mypage-close><span>환불·취소 규정</span><i>›</i></button>
+          </nav>
+          <div class="mypage-foot">
+            <button class="mypage-logout" type="button" data-logout-button hidden>로그아웃</button>
+            <p class="mypage-note">결제는 분석 1건씩 진행됩니다. 포인트·충전 없이 필요한 분석만 결제하세요.</p>
+          </div>
+        </div>
+      </aside>
+
+      <div class="member-modal" data-member-modal hidden>
+        <div class="member-modal-card">
+          <button class="modal-close" type="button" data-member-modal-close aria-label="닫기">×</button>
+          <header><h2 data-member-modal-title>사주해설</h2><p data-member-modal-subtitle>어떤 분의 해설을 볼까요?</p></header>
+          <div class="member-list" data-member-list></div>
+          <button class="modal-add" type="button" data-view-target="profile" data-member-modal-close>새로운 사람 추가하기</button>
+        </div>
+      </div>
+
+      <footer class="site-footer" data-site-footer>
+        <nav class="footer-links" aria-label="약관 및 정책">
+          <button type="button" data-view-target="terms">이용약관</button>
+          <button type="button" data-view-target="privacy">개인정보처리방침</button>
+          <button type="button" data-view-target="refund">환불·취소 규정</button>
+        </nav>
+        <div class="footer-business" data-footer-business></div>
+      </footer>
+
+      <nav class="bottom-nav" aria-label="주요 메뉴">
+        <button class="is-active" data-view-target="home"><img src="./assets/ui/icon-home.svg" alt="" /><span>홈</span></button>
+        <button data-view-target="people"><img src="./assets/ui/icon-profile.svg" alt="" /><span>인원관리</span></button>
+        <button class="fortune-fab" data-view-target="fortune"><span><img src="./assets/ui/icon-fortune.svg" alt="" /></span><em>무료운세</em></button>
+        <button data-view-target="followup"><img src="./assets/ui/icon-chat.svg" alt="" /><span>추가질문</span></button>
+        <button data-view-target="library"><img src="./assets/ui/icon-vault.svg" alt="" /><span>보관함</span></button>
+      </nav>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

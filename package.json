@@ -1,0 +1,18 @@
+{
+  "name": "saju-research-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "dev:legacy": "node server.mjs",
+    "start": "vercel dev",
+    "check": "node --check app.js && node --check api/saju/analyze.js && node --check api/config.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.86.0",
+    "openai": "^4.104.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
