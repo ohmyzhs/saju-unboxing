@@ -1,146 +1,136 @@
-# AI model routing and report latency design
+# AI 모델 라우팅 및 리포트 속도 개선 설계
 
-## Goal
+## 목표
 
-Keep the report contract and visible amount of content unchanged while reducing
-the time and repeated prompt processing needed to generate section bodies. Add
-`deepseek-v4-flash` and `minimax-m3` as working administrator model choices.
+리포트의 구조와 화면에 보이는 분량은 유지하면서 섹션 본문 생성에 드는
+시간과 반복 프롬프트 처리를 줄인다. 관리자 모델 선택지에
+`deepseek-v4-flash`와 `minimax-m3`를 추가하고 실제 분석에도 동작하게 한다.
 
-“Same result” means the same response fields, section count, section order,
-body-length rules, safety rules, and progressive rendering behavior. Generated
-wording cannot be byte-identical because model output is nondeterministic and
-administrators may select a different model.
+여기서 “결과 동일”은 응답 필드, 섹션 개수, 섹션 순서, 본문 분량 규칙,
+안전 규칙, 점진적 표시 방식을 유지한다는 뜻이다. AI 출력은 비결정적이고
+관리자가 다른 모델을 선택할 수 있으므로 문장 자체가 완전히 같을 수는 없다.
 
-## Current behavior and bottleneck
+## 현재 구조와 병목
 
-The analysis endpoint first generates a plan containing 7–10 sections (6–8 for
-compatibility). The browser then starts one `/api/saju/section` request per
-section with `Promise.all`. Calls are already parallel, but every request repeats
-the full product prompt, the full saju context, and all title constraints. Most
-of those instructions apply only to planning and are redundant during body
-generation.
+분석 API가 먼저 7~10개 섹션의 설계를 만든다. 궁합은 6~8개다. 이후
+브라우저가 섹션마다 `/api/saju/section`을 `Promise.all`로 병렬 호출한다.
+병렬 처리는 이미 되어 있지만 모든 요청이 전체 상품 프롬프트, 전체 사주
+컨텍스트, 제목 작성 규칙까지 반복 전송한다. 이 중 대부분은 설계 단계에만
+필요하며 본문 작성 단계에서는 불필요하다.
 
-The current OpenAI-compatible client can call `deepseek-v4-flash`. OpenCode Go
-exposes `minimax-m3` through the Anthropic-compatible `/messages` endpoint, so a
-model-aware transport is required rather than only adding a select option.
+현재 OpenAI 호환 클라이언트로 `deepseek-v4-flash`를 호출할 수 있다.
+OpenCode Go는 `minimax-m3`를 Anthropic 호환 `/messages`로 제공하므로,
+선택지만 추가하지 않고 모델별 전송 방식을 분기해야 한다.
 
-## Chosen approach
+## 선택한 방식
 
-### 1. Model profiles and transport routing
+### 1. 모델 프로필과 전송 방식 분리
 
-- Keep `glm-5.2` and `kimi-k2.7-code` behavior available.
-- Add `deepseek-v4-flash` to the OpenAI-compatible chat-completions profile.
-- Add `minimax-m3` to the Anthropic-compatible messages profile.
-- Route by a small explicit model profile map. Unknown saved models retain the
-  current OpenAI-compatible behavior for backward compatibility.
-- Use strict `json_schema` where the selected endpoint accepts it. For a profile
-  without strict schema support, require JSON-only output, extract the JSON text,
-  parse it, and validate the required response shape. Retry once only when the
-  response is unparsable or structurally invalid.
+- 기존 `glm-5.2`, `kimi-k2.7-code`를 유지한다.
+- `deepseek-v4-flash`는 OpenAI 호환 Chat Completions로 호출한다.
+- `minimax-m3`는 Anthropic 호환 Messages로 호출한다.
+- 명시적인 모델 프로필 표에서 전송 방식을 결정한다.
+- 목록에 없는 기존 저장 모델은 하위 호환을 위해 현재 OpenAI 호환 방식으로
+  처리한다.
+- 엔드포인트가 `json_schema`를 지원하면 기존 엄격 스키마를 사용한다.
+  지원하지 않으면 JSON 전용 출력을 지시하고, JSON 추출·파싱·필수 구조
+  검증을 수행한다. 파싱 또는 구조 검증 실패에만 한 번 재시도한다.
 
-### 2. Section-only compact prompt
+### 2. 섹션 본문 전용 축약 프롬프트
 
-The planning call keeps the complete product prompt because it determines the
-headline, section selection, title diversity, lucky data, and report structure.
+설계 호출은 전체 상품 프롬프트를 유지한다. 헤드라인, 섹션 선정, 제목
+다양성, 개운 정보, 전체 구성을 결정해야 하기 때문이다.
 
-Section-body calls receive a compact prompt containing only rules that can
-affect a body:
+섹션 본문 호출에는 본문에 영향을 주는 다음 규칙만 전달한다.
 
-- the selected section title and angle;
-- the subject names and full saju context;
-- 3–4 paragraph body length;
-- Korean, honorific tone, concrete daily-life interpretation;
-- no hanja or exposed saju terminology;
-- no fear, medical, disaster, investment, or deterministic claims;
-- no duplication with the other section titles;
-- body-only JSON response.
+- 선택한 섹션의 제목과 핵심 각도
+- 대상자 이름과 전체 사주 컨텍스트
+- 3~4문단 분량
+- 한국어 존댓말, 구체적인 일상 해석
+- 한자와 노출된 사주 용어 금지
+- 공포·질병·재난·투자·단정 표현 금지
+- 다른 섹션과 내용 중복 금지
+- 본문만 담은 JSON 응답
 
-Planning-only title construction, headline, score, lucky-item, and global
-section-count instructions are omitted. Administrator extra instructions remain
-included so existing customization is not lost.
+제목 생성, 헤드라인, 점수, 개운 항목, 전체 섹션 개수 규칙은 본문
+프롬프트에서 제외한다. 관리자가 입력한 추가 지침은 계속 포함한다.
 
-### 3. Two-section parallel batches
+### 3. 두 섹션 단위 병렬 배치
 
-- The browser groups sections in original order, two per batch.
-- It starts all batches concurrently. A 7–10 section report therefore uses 4–5
-  body requests instead of 7–10.
-- `/api/saju/section` accepts either the existing single `section` payload or a
-  new `sections` array, preserving backward compatibility.
-- A batch response returns `{ sections: [{ id, body }] }` and the browser fills
-  each matching placeholder as soon as that batch finishes.
-- The final archive is written only after all batches settle, exactly as today.
-- A failed batch retries its two members as existing single-section requests.
-  Failure remains isolated to those sections; other completed content stays
-  visible.
+- 브라우저가 기존 순서대로 섹션을 두 개씩 묶는다.
+- 모든 묶음을 동시에 호출한다. 7~10개 리포트는 본문 요청이 7~10회에서
+  4~5회로 줄어든다.
+- `/api/saju/section`은 기존 단일 `section`과 새 `sections` 배열을 모두
+  허용해 하위 호환을 유지한다.
+- 배치 응답은 `{ sections: [{ id, body }] }` 형식이다.
+- 배치가 완료되는 즉시 해당 섹션 자리마다 본문을 채운다.
+- 모든 배치가 끝난 뒤 보관함에 저장하는 현재 동작은 유지한다.
+- 배치 실패 시 그 묶음의 두 섹션만 기존 단일 요청으로 재시도한다.
+  다른 섹션의 완료 결과에는 영향을 주지 않는다.
 
-This combines prompt reduction with fewer repeated contexts and fewer network
-round trips without converting the report into one large, timeout-prone call.
+이 방식은 하나의 큰 요청으로 바꾸지 않으면서 프롬프트 크기, 중복 컨텍스트,
+네트워크 왕복 횟수를 함께 줄인다.
 
-## Data flow
+## 데이터 흐름
 
-1. `/api/saju/analyze` computes manse and generates the unchanged report plan.
-2. The browser renders the headline, lucky data, titles, and placeholders.
-3. The browser partitions plan sections into ordered pairs and sends all pairs
-   to `/api/saju/section` concurrently.
-4. The section endpoint loads the configured model once per request, selects the
-   proper transport, and generates both bodies from one compact prompt.
-5. The browser merges bodies by section id and preserves plan order.
-6. After all batches settle, the complete report is archived and the existing
-   completion event is emitted.
+1. `/api/saju/analyze`가 만세력을 계산하고 기존과 같은 리포트 설계를 만든다.
+2. 브라우저가 헤드라인, 개운 정보, 제목, 본문 자리를 먼저 표시한다.
+3. 브라우저가 섹션을 두 개씩 묶어 모든 묶음을 동시에 전송한다.
+4. 섹션 API가 저장된 모델을 읽고 알맞은 전송 방식과 축약 프롬프트로 두
+   본문을 생성한다.
+5. 브라우저가 섹션 ID 기준으로 본문을 합쳐 설계 순서를 유지한다.
+6. 모든 묶음 처리가 끝나면 완성된 리포트를 보관하고 기존 완료 이벤트를
+   기록한다.
 
-## Error handling
+## 오류 처리
 
-- Invalid or empty AI output returns a normal JSON error with the current status
-  handling.
-- Structured-output fallback is model-profile-specific; it is not triggered for
-  every successful call.
-- Batch shape validation requires exactly the requested ids and non-empty body
-  strings. Unknown, duplicate, or missing ids fail the batch.
-- Browser fallback retries failed batch members individually and uses the
-  existing temporary placeholder only if the individual retry also fails.
-- Existing unknown administrator model values remain visible as “current,
-  unverified” and are not silently replaced.
+- 비어 있거나 잘못된 AI 출력은 기존과 동일한 JSON 오류로 반환한다.
+- 구조화 출력 대체 경로는 필요한 모델에만 사용한다.
+- 배치 결과는 요청한 ID가 정확히 한 번씩 있고 본문이 비어 있지 않아야 한다.
+  알 수 없는 ID, 중복 ID, 누락 ID는 배치 실패로 처리한다.
+- 브라우저는 실패한 배치만 단일 섹션 요청으로 재시도한다.
+- 단일 재시도도 실패할 때만 기존 임시 안내 문구를 표시한다.
+- 목록에 없는 관리자 저장 모델은 자동 변경하지 않고 “현재·미검증”으로
+  계속 표시한다.
 
-## Administrator UI
+## 관리자 화면
 
-The model selector contains:
+모델 선택지는 다음과 같다.
 
-- `glm-5.2` (default)
+- `glm-5.2` 기본값
 - `kimi-k2.7-code`
-- `deepseek-v4-flash` (speed-oriented)
+- `deepseek-v4-flash` 속도 우선
 - `minimax-m3`
 
-The current warning that DeepSeek and MiniMax always fail is replaced with an
-endpoint-aware explanation. Saving behavior and `site_config.ai_model` remain
-unchanged.
+DeepSeek와 MiniMax가 항상 실패한다는 기존 문구는 모델별 엔드포인트를
+지원한다는 설명으로 바꾼다. 저장 방식과 `site_config.ai_model` 필드는
+변경하지 않는다.
 
-## Testing and acceptance
+## 테스트와 완료 조건
 
-Tests are written before production changes and cover:
+제품 코드보다 테스트를 먼저 작성하며 다음을 검증한다.
 
-- administrator HTML exposes both new exact model ids;
-- model profiles route DeepSeek to chat completions and MiniMax to messages;
-- JSON text extraction and malformed-output rejection;
-- batch output validation, including missing and duplicate ids;
-- two-item grouping preserves order for odd and even section counts;
-- batch failure can fall back to single-section generation;
-- existing single-section request and response contracts still work.
+- 관리자 HTML에 두 새 모델 ID가 정확히 노출된다.
+- DeepSeek는 Chat Completions, MiniMax는 Messages로 라우팅된다.
+- JSON 텍스트 추출과 잘못된 출력 거부가 동작한다.
+- 배치 응답에서 ID 누락과 중복을 거부한다.
+- 홀수와 짝수 개수 모두 두 개씩 묶으며 순서를 유지한다.
+- 배치 실패 시 단일 섹션 생성으로 대체할 수 있다.
+- 기존 단일 섹션 요청과 응답 계약을 유지한다.
 
-Acceptance checks:
+완료 조건은 다음과 같다.
 
-- a 7–10 section plan still renders and archives 7–10 ordered bodies;
-- compatibility still renders and archives 6–8 ordered bodies;
-- section body requirements remain 3–4 paragraphs;
-- body-generation request count becomes `ceil(sectionCount / 2)` when batches
-  succeed;
-- all modified JavaScript files pass syntax checks and the automated tests pass;
-- no deployment, model-default change, or administrator selection change is made
-  automatically.
+- 7~10개 섹션을 기존 순서와 분량으로 표시하고 보관한다.
+- 궁합 6~8개 섹션을 기존 순서와 분량으로 표시하고 보관한다.
+- 섹션 본문은 계속 3~4문단이다.
+- 배치 성공 시 본문 요청 수는 `ceil(섹션 개수 / 2)`가 된다.
+- 수정한 모든 JavaScript 문법 검사와 자동화 테스트가 통과한다.
+- 배포, 기본 모델 변경, 현재 관리자 선택 변경은 자동으로 하지 않는다.
 
-## Out of scope
+## 범위 밖
 
-- Reducing report section count or paragraph count.
-- Changing the default model automatically.
-- Rewriting the plan prompt or saju interpretation rules.
-- Adding streaming transport or changing archive persistence semantics.
-- Guaranteeing identical prose across nondeterministic or different models.
+- 리포트 섹션 개수 또는 문단 수 축소
+- 기본 모델 자동 변경
+- 설계 프롬프트나 사주 해석 규칙 재작성
+- 스트리밍 전송 또는 보관 방식 변경
+- 서로 다른 모델에서 완전히 동일한 문장 보장
