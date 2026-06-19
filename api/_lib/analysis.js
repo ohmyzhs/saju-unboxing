@@ -614,7 +614,7 @@ const DAILY_SCHEMA = {
           emoji: { type: "string" },
           label: { type: "string", description: "분야명 4자 이내(예: 연애, 금전, 건강)" },
           score: { type: "integer", description: "0~100" },
-          body: { type: "string", description: "2~3문장 실용 조언" },
+          body: { type: "string", description: "1문장 실용 조언" },
         },
       },
     },
@@ -626,20 +626,20 @@ const DAILY_SCHEMA = {
     },
     sections: {
       type: "array",
-      minItems: 4,
-      maxItems: 6,
+      minItems: 2,
+      maxItems: 3,
       description: "오늘의 무드/관계/일/마음 등을 다루는 해설. 제목은 신선하고 친근하게 직접 지어라.",
       items: {
         type: "object",
         additionalProperties: false,
         required: ["emoji", "title", "body"],
-        properties: { emoji: { type: "string" }, title: { type: "string" }, body: { type: "string", description: "2~4문장" } },
+        properties: { emoji: { type: "string" }, title: { type: "string" }, body: { type: "string", description: "1~2문장" } },
       },
     },
     quests: {
       type: "array",
       minItems: 2,
-      maxItems: 3,
+      maxItems: 2,
       description: "오늘 바로 실천할 작은 행동 제안",
       items: {
         type: "object",
@@ -680,7 +680,8 @@ export async function generateDailyFortune({ profile, summary, model, prompt, to
 - 단정적 재난/질병/투자 확언 금지. 리스크는 생활 조언으로 바꾼다.
 - sections 의 title 은 진부한 표현을 피하고 매번 신선하게 직접 짓는다.
 - 점수(overallScore, categories.score)는 0~100, 너무 극단적이지 않게.
-- 럭키 컬러/넘버/아이템과 음식 추천은 오행 균형(부족/과다)을 근거로 고른다.`;
+- 럭키 컬러/넘버/아이템과 음식 추천은 오행 균형(부족/과다)을 근거로 고른다.
+- 분량은 간결하게: 섹션 2~3개, 각 분야·섹션 본문은 1~2문장으로. 군더더기 금지(속도·가독성 우선).`;
 
   const input = JSON.stringify({
     name: profile.name,
