@@ -4,12 +4,8 @@
 import { requestStructured } from "./aiTransport.js";
 import { buildSajuContext, buildCompatContext, buildCycleContext, buildYearlyContext } from "./sajuContext.js";
 
-function getClient() {
-  return null;
-}
-
 // 기존 생성 함수의 JSON 문자열 계약은 유지하고 전송·검증만 공용 계층에 맡긴다.
-async function chatJSON(_client, options) {
+async function chatJSON(options) {
   return JSON.stringify(await requestStructured(options));
 }
 
@@ -212,7 +208,6 @@ const ANALYSIS_SCHEMA = {
  * @returns {Promise<{headline:string, sections:Array, lucky?:object}>}
  */
 export async function generateAnalysis({ productId, productName, prompt, profile, manse, summary, model }) {
-  const client = getClient();
 
   const isFullReport = productId === "saju-analysis";
   // 형충회합·용신4단계·십성통계·오행공백 등을 모두 노출한 통합 컨텍스트.
@@ -241,7 +236,7 @@ export async function generateAnalysis({ productId, productName, prompt, profile
   });
 
   const callOnce = async (extraNote = "") => {
-    const text = await chatJSON(client, {
+    const text = await chatJSON({
       model,
       system: instructions + extraNote,
       input,
@@ -415,7 +410,6 @@ function contextFor(productId, manse) {
  * @returns {Promise<object>} 공통으로 { sections:[{id,icon,title,angle}], context } 포함
  */
 export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model }) {
-  const client = getClient();
   const isCompat = productId === "compatibility";
   const partnerName = partner?.name || "상대";
 
@@ -445,7 +439,7 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
       ? { a: profile.name, b: partnerName, product: productName, manse: context }
       : { name: profile.name, gender: profile.gender, birthDate: profile.birthDate, product: productName, manse: context },
   );
-  const text = await chatJSON(client, {
+  const text = await chatJSON({
     model,
     system: instructions,
     input,
@@ -603,7 +597,6 @@ const FOLLOWUP_SCHEMA = {
  * @returns {Promise<{answer:string}>}
  */
 export async function generateFollowup({ profile, manse, summary, question, history = [], model, extra }) {
-  const client = getClient();
 
   // 저장된 만세력 재사용. {summary, full} 형태면 그대로, full만 있으면 summary는 비어도 동작.
   const manseObj = manse && (manse.summary || manse.full) ? manse : { summary: summary || {}, full: manse || {} };
@@ -629,7 +622,7 @@ export async function generateFollowup({ profile, manse, summary, question, hist
   });
 
   const callOnce = async (note = "") => {
-    const t = await chatJSON(client, {
+    const t = await chatJSON({
       model,
       system: instructions + note,
       input,
@@ -729,7 +722,6 @@ const DAILY_DEFAULT_PROMPT =
  * @param {object} args { profile, summary, model, prompt, today, todayPillar }
  */
 export async function generateDailyFortune({ profile, summary, model, prompt, today, todayPillar }) {
-  const client = getClient();
 
   const instructions = `${prompt || DAILY_DEFAULT_PROMPT}
 
@@ -751,7 +743,7 @@ export async function generateDailyFortune({ profile, summary, model, prompt, to
     manse: summary,
   });
 
-  const text = await chatJSON(client, {
+  const text = await chatJSON({
     model,
     system: instructions,
     input,
