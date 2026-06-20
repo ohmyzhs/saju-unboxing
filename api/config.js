@@ -3,6 +3,7 @@
 import { sendJson } from "./_lib/http.js";
 import { loadSiteConfig } from "./_lib/supabase.js";
 import { LEGAL_DEFAULTS } from "./_lib/legalDefaults.js";
+import { POINT_CHARGE_TIERS } from "./_lib/points.js";
 
 export default async function handler(req, res) {
   const tossClientKey =
@@ -39,6 +40,8 @@ export default async function handler(req, res) {
     tossMode: tossClientKey.startsWith("test_") ? "test" : "live",
     tossVariantKey: process.env.TOSS_VARIANT_KEY || "DEFAULT", // 토스 결제위젯 어드민에서 만든 결제 UI 키
     kakaoEnabled: Boolean(process.env.KAKAO_REST_API_KEY),
+    pointsEnabled: Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
+    pointChargeTiers: POINT_CHARGE_TIERS,
     products: config?.products || {},
     images: config?.images || {},
     branding: config?.branding || {},

@@ -7,6 +7,11 @@ import { generateAnalysis, generateDailyFortune, generatePlan } from "../_lib/an
 import { getSupabase, loadSiteConfig } from "../_lib/supabase.js";
 import { dayPillar, todayKST } from "../_lib/ganzhi.js";
 import { getSessionUser, accountFields } from "../_lib/sessions.js";
+import {
+  getPointAccount,
+  releaseDailyRegeneration,
+  reserveDailyRegeneration,
+} from "../_lib/points.js";
 
 const PRODUCT_NAMES = {
   "saju-analysis": "기본 사주 리포트",
@@ -20,7 +25,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
-    const { productId = "saju-analysis", profile, partner, orderId, visitorId } = await readJson(req);
+    const { productId = "saju-analysis", profile, partner, orderId, visitorId, regen = false } = await readJson(req);
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -33,7 +38,8 @@ export default async function handler(req, res) {
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침(코드 base 위에 append)
     const model = config?.ai_model || undefined;
-    const acct = accountFields(await getSessionUser(req)); // 로그인 계정(카카오/이메일) — 고객 관리 기준
+    const sessionUser = await getSessionUser(req);
+    const acct = accountFields(sessionUser); // 로그인 계정(카카오/이메일) — 고객 관리 기준
 
     // 보관 정책: 1개월(30일) 지난 분석은 서버에서 자동 삭제(개인정보 최소보관·PG 부담 완화). 베스트에포트.
     {
@@ -48,7 +54,7 @@ export default async function handler(req, res) {
     if (productId === "daily-fortune") {
       // await 필수: 안 하면 handleDaily 내부 에러가 위 try/catch 를 못 거치고
       // FUNCTION_INVOCATION_FAILED(비-JSON "A server error...") 로 떨어진다.
-      return await handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct });
+      return await handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct, user: sessionUser, regen: Boolean(regen) });
     }
 
     // 1) 중앙 만세력 (포인트 차감) — 접속정보는 어드민 입력(config.saju) 우선, 없으면 env
@@ -163,16 +169,30 @@ function personKey(profile) {
     .slice(0, 32);
 }
 
-async function handleDaily({ res, profile, config, prompt, model, visitorId, orderId, acct = {} }) {
+async function handleDaily({ res, profile, config, prompt, model, visitorId, orderId, acct = {}, user, regen = false }) {
   const today = todayKST();
   const todayPillar = dayPillar(today.y, today.m, today.d);
   const pk = personKey(profile);
   const sb = getSupabase();
   const tp = { ganzhi: todayPillar.ganzhi, ko: todayPillar.ko };
   const td = { iso: today.iso, label: today.label };
+  let regeneration = { regenerate: false, reserved: false, remainingTokens: 0 };
+  if (regen && sb && user?.id) {
+    try {
+      const account = await getPointAccount(sb, user.id, 0);
+      regeneration = await reserveDailyRegeneration({
+        requested: true,
+        userId: user.id,
+        sb,
+        tokenBalance: account.regenTokens,
+      });
+    } catch {
+      regeneration = { regenerate: false, reserved: false, remainingTokens: 0 };
+    }
+  }
 
   // 1) 서버 캐시: 오늘(KST) 같은 사람의 결과가 이미 있으면 그대로 반환 → 포인트/AI 과금 없음
-  if (sb) {
+  if (sb && !regeneration.regenerate) {
     try {
       const startIso = new Date(`${today.iso}T00:00:00+09:00`).toISOString();
       const { data: rows } = await sb
@@ -187,7 +207,7 @@ async function handleDaily({ res, profile, config, prompt, model, visitorId, ord
       if (cached && cached.sections) {
         const summary = { ...(cached.summary || {}) };
         delete summary.pk;
-        return sendJson(res, 200, { ok: true, kind: "daily", cached: true, daily: cached.sections, summary, today: td, todayPillar: tp, cost: 0 });
+        return sendJson(res, 200, { ok: true, kind: "daily", cached: true, daily: cached.sections, summary, today: td, todayPillar: tp, cost: 0, regenTokens: regeneration.remainingTokens });
       }
     } catch {
       // 캐시 조회 실패 시 그냥 새로 계산(안전 폴백)
@@ -195,8 +215,15 @@ async function handleDaily({ res, profile, config, prompt, model, visitorId, ord
   }
 
   // 2) 캐시 미스 → 만세력(포인트 차감) + AI 생성
-  const manse = await computeManse(profile, config);
-  const daily = await generateDailyFortune({ profile, summary: manse.summary, model, prompt, today: td, todayPillar: tp });
+  let manse;
+  let daily;
+  try {
+    manse = await computeManse(profile, config);
+    daily = await generateDailyFortune({ profile, summary: manse.summary, model, prompt, today: td, todayPillar: tp });
+  } catch (error) {
+    await releaseDailyRegeneration({ reserved: regeneration.reserved, userId: user?.id, sb }).catch(() => {});
+    throw error;
+  }
   if (sb) {
     const dailyRow = {
       product_id: "daily-fortune",
@@ -214,5 +241,15 @@ async function handleDaily({ res, profile, config, prompt, model, visitorId, ord
       () => { sb.from("analyses").insert(dailyRow).then(() => {}, () => {}); },
     );
   }
-  return sendJson(res, 200, { ok: true, kind: "daily", daily, summary: manse.summary, today: td, todayPillar: tp, cost: manse.cost });
+  return sendJson(res, 200, {
+    ok: true,
+    kind: "daily",
+    daily,
+    summary: manse.summary,
+    today: td,
+    todayPillar: tp,
+    cost: manse.cost,
+    regenerated: regeneration.regenerate,
+    regenTokens: regeneration.remainingTokens,
+  });
 }

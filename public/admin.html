@@ -30,6 +30,7 @@
             <div class="nav-group-items">
               <button data-admin-tab="payments">결제</button>
               <button data-admin-tab="customers">고객</button>
+              <button data-admin-tab="points">회원 포인트</button>
               <button data-admin-tab="analysis">분석 작업</button>
             </div>
           </div>
@@ -203,6 +204,39 @@
         <section class="admin-panel" data-admin-panel="customers" hidden>
           <h2>고객 관리</h2>
           <div class="admin-table" data-admin-customers-list></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="points" hidden>
+          <h2>회원 포인트 관리</h2>
+          <p class="admin-help">회원별 잔액과 무료운세 재생성 토큰을 조회하고 수동으로 조정합니다. 모든 포인트 변경은 감사 내역에 기록됩니다.</p>
+          <div class="split-grid point-admin-grid">
+            <section>
+              <h3>회원 목록</h3>
+              <div class="admin-table" data-admin-point-members></div>
+            </section>
+            <section class="admin-point-detail">
+              <h3 data-admin-point-title>회원을 선택하세요</h3>
+              <div class="admin-point-summary" data-admin-point-summary></div>
+              <form class="product-admin-grid is-narrow" data-point-adjust>
+                <label>포인트 조정 (+충전 / −차감)
+                  <input type="number" name="amount" step="1" placeholder="예: 5000 또는 -500" required />
+                </label>
+                <label>관리 메모
+                  <input name="memo" maxlength="200" placeholder="예: CS 보상" />
+                </label>
+                <button class="primary-action admin-save" type="submit">포인트 반영</button>
+              </form>
+              <form class="product-admin-grid is-narrow" data-regen-adjust>
+                <label>무료운세 재생성 토큰 부여
+                  <input type="number" name="amount" min="1" step="1" value="1" required />
+                </label>
+                <button class="secondary-action" type="submit">토큰 부여</button>
+              </form>
+              <p class="form-status" data-admin-point-status></p>
+              <h3>최근 거래 내역</h3>
+              <div class="admin-table" data-admin-point-transactions></div>
+            </section>
+          </div>
         </section>
 
         <section class="admin-panel" data-admin-panel="analysis" hidden>

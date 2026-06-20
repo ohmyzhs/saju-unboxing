@@ -271,6 +271,16 @@
           <span data-pay-product>기본 사주 리포트</span>
           <strong data-pay-amount>990원</strong>
         </section>
+        <section class="checkout-panel point-payment" data-point-payment hidden>
+          <div class="point-payment-head">
+            <span>보유 포인트</span>
+            <b data-point-balance>0pt</b>
+          </div>
+          <label>사용할 포인트
+            <input type="number" min="0" step="1" value="0" data-point-use />
+          </label>
+          <div class="point-payment-total"><span>토스 결제 금액</span><strong data-pay-cash>990원</strong></div>
+        </section>
         <div class="toss-widget" data-toss-widget>
           <div id="toss-payment-method"></div>
           <div id="toss-agreement"></div>
@@ -460,6 +470,7 @@
           <span></span>
         </div>
         <div class="daily-body" data-daily-body></div>
+        <button class="secondary-action daily-regenerate" type="button" data-daily-regenerate hidden>재생성 토큰으로 다시 생성</button>
       </section>
 
       <section class="view people-view" data-view="people">
@@ -472,8 +483,22 @@
       </section>
 
       <section class="view orders-view" data-view="orders">
-        <header class="slim-poster orders-poster"><p>포인트·충전 없이, 분석 1건씩</p><h1>결제 내역</h1></header>
+        <header class="slim-poster orders-poster"><p>포인트와 결제 기록을 한눈에</p><h1>결제 내역</h1></header>
         <section class="orders-list" data-orders-list></section>
+      </section>
+
+      <section class="view points-view" data-view="points">
+        <header class="slim-poster points-poster"><p>충전할수록 커지는 보너스</p><h1>포인트 충전</h1></header>
+        <section class="points-balance-card" data-points-balance-card>
+          <span>현재 보유 포인트</span><strong data-points-balance>0pt</strong>
+          <small data-points-tokens>무료운세 재생성 토큰 0개</small>
+        </section>
+        <section class="point-tier-grid" data-point-tiers></section>
+        <section class="point-history">
+          <h2>최근 포인트 내역</h2>
+          <div data-point-transactions></div>
+        </section>
+        <p class="form-status" data-points-status></p>
       </section>
 
       <section class="view support-view" data-view="support">
@@ -495,7 +520,9 @@
             <button class="mypage-x" type="button" data-mypage-close aria-label="닫기">×</button>
           </header>
           <div class="mypage-id" data-mypage-id></div>
+          <div class="mypage-points" data-mypage-points hidden></div>
           <nav class="mypage-menu">
+            <button type="button" data-view-target="points" data-mypage-close><span>🪙 포인트 충전</span><i>›</i></button>
             <button type="button" data-view-target="people" data-mypage-close><span>👤 사주 인원 관리</span><i>›</i></button>
             <button type="button" data-view-target="followup" data-mypage-close><span>💬 추가 질문 상담</span><i>›</i></button>
             <button type="button" data-view-target="orders" data-mypage-close><span>🧾 결제 내역</span><i>›</i></button>
@@ -510,7 +537,7 @@
           </nav>
           <div class="mypage-foot">
             <button class="mypage-logout" type="button" data-logout-button hidden>로그아웃</button>
-            <p class="mypage-note">결제는 분석 1건씩 진행됩니다. 포인트·충전 없이 필요한 분석만 결제하세요.</p>
+            <p class="mypage-note">포인트를 충전하면 보너스를 받고, 부족한 금액만 토스로 결제할 수 있습니다.</p>
           </div>
         </div>
       </aside>

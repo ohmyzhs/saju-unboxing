@@ -100,6 +100,25 @@ create table if not exists user_data (
   primary key (user_id, kind, id)
 );
 
+-- [9] 회원 포인트 잔액과 무료운세 재생성 토큰
+create table if not exists user_points (
+  user_id text primary key,
+  balance integer not null default 0 check (balance >= 0),
+  regen_tokens integer not null default 0 check (regen_tokens >= 0),
+  updated_at timestamptz default now()
+);
+
+-- [10] 포인트 변경 감사 로그
+create table if not exists point_transactions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id text not null,
+  type text not null check (type in ('charge', 'bonus', 'spend', 'refund', 'admin_adjust')),
+  amount integer not null check (amount <> 0),
+  balance_after integer not null check (balance_after >= 0),
+  ref text,
+  created_at timestamptz default now()
+);
+
 -- ─────────────────────────────────────────────────────
 -- 2) 인덱스
 -- ─────────────────────────────────────────────────────
@@ -109,6 +128,10 @@ create index if not exists idx_events_visitor      on events(visitor_id);
 create index if not exists idx_analyses_created    on analyses(created_at desc);
 create index if not exists idx_profiles_user       on profiles(user_id);
 create index if not exists idx_user_data_user_kind on user_data(user_id, kind);
+create index if not exists idx_point_transactions_user_created on point_transactions(user_id, created_at desc);
+create unique index if not exists idx_point_transactions_idempotent
+  on point_transactions(user_id, type, ref)
+  where ref is not null and type in ('charge', 'bonus', 'spend', 'refund');
 
 -- ─────────────────────────────────────────────────────
 -- 3) 기존(옛 스키마) DB 보강 — 예전에 테이블을 만든 분만 해당. 새 DB는 위에서 이미 생성돼 무시됨.
@@ -123,9 +146,124 @@ alter table orders      add column if not exists user_provider text;
 alter table analyses    add column if not exists user_id       text;
 alter table analyses    add column if not exists user_label    text;
 alter table analyses    add column if not exists user_provider text;
+alter table orders      add column if not exists points_used integer not null default 0;
+alter table orders      add column if not exists pay_method text default 'toss';
 
 -- ─────────────────────────────────────────────────────
--- 4) 설정 단일 행 보장
+-- 4) 포인트 원자 변경 RPC
+-- ─────────────────────────────────────────────────────
+create or replace function adjust_points(
+  p_user_id text,
+  p_delta integer,
+  p_type text,
+  p_ref text default null
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_balance integer;
+  next_balance integer;
+  existing_balance integer;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_delta is null or p_delta = 0 then
+    raise exception 'invalid_point_delta';
+  end if;
+  if p_type not in ('charge', 'bonus', 'spend', 'refund', 'admin_adjust') then
+    raise exception 'invalid_point_type';
+  end if;
+  if p_type in ('charge', 'bonus', 'refund') and p_delta < 0 then
+    raise exception 'invalid_point_delta_sign';
+  end if;
+  if p_type = 'spend' and p_delta > 0 then
+    raise exception 'invalid_point_delta_sign';
+  end if;
+
+  insert into user_points(user_id) values (p_user_id)
+  on conflict (user_id) do nothing;
+
+  select balance into current_balance
+  from user_points
+  where user_id = p_user_id
+  for update;
+
+  if p_ref is not null and p_type in ('charge', 'bonus', 'spend', 'refund') then
+    select balance_after into existing_balance
+    from point_transactions
+    where user_id = p_user_id and type = p_type and ref = p_ref
+    limit 1;
+    if found then
+      return existing_balance;
+    end if;
+  end if;
+
+  next_balance := current_balance + p_delta;
+  if next_balance < 0 then
+    raise exception 'insufficient_points';
+  end if;
+
+  update user_points
+  set balance = next_balance, updated_at = now()
+  where user_id = p_user_id;
+
+  insert into point_transactions(user_id, type, amount, balance_after, ref)
+  values (p_user_id, p_type, p_delta, next_balance, p_ref);
+
+  return next_balance;
+end;
+$$;
+
+create or replace function adjust_regen_tokens(
+  p_user_id text,
+  p_delta integer
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_tokens integer;
+  next_tokens integer;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_delta is null or p_delta = 0 then
+    raise exception 'invalid_regen_delta';
+  end if;
+
+  insert into user_points(user_id) values (p_user_id)
+  on conflict (user_id) do nothing;
+
+  select regen_tokens into current_tokens
+  from user_points
+  where user_id = p_user_id
+  for update;
+
+  next_tokens := current_tokens + p_delta;
+  if next_tokens < 0 then
+    raise exception 'insufficient_regen_tokens';
+  end if;
+
+  update user_points
+  set regen_tokens = next_tokens, updated_at = now()
+  where user_id = p_user_id;
+
+  return next_tokens;
+end;
+$$;
+
+revoke all on function adjust_points(text, integer, text, text) from public;
+revoke all on function adjust_regen_tokens(text, integer) from public;
+grant execute on function adjust_points(text, integer, text, text) to service_role;
+grant execute on function adjust_regen_tokens(text, integer) to service_role;
+
+-- ─────────────────────────────────────────────────────
+-- 5) 설정 단일 행 보장
 -- ─────────────────────────────────────────────────────
 insert into site_config (id) values (1) on conflict (id) do nothing;
 

@@ -1,5 +1,5 @@
 // 토스페이먼츠 헬퍼 (가맹점 자기 키 사용). 키 미설정 시 토스 공식 테스트 키로 작동.
-import { createHash, randomUUID } from "crypto";
+import { createHash } from "crypto";
 
 export const PLANS = {
   starter: { amount: 990, name: "사주연구소 기본 분석" },
@@ -26,7 +26,7 @@ export async function confirmTossPayment(order, paymentKey) {
     headers: {
       Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`,
       "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
+      "Idempotency-Key": createHash("sha256").update(`${order.id}:${paymentKey}`).digest("hex"),
     },
     body: JSON.stringify({ paymentKey, orderId: order.id, amount: order.amount }),
   });

@@ -6,6 +6,7 @@ import { getSupabase, loadSiteConfig } from "../_lib/supabase.js";
 import { summarizeAnalytics } from "../_lib/analytics.js";
 import { LEGAL_DEFAULTS } from "../_lib/legalDefaults.js";
 import { fetchBalance } from "../_lib/sajuApi.js";
+import { handleAdminPoints } from "../_lib/adminPoints.js";
 
 const BUCKET = "site-images";
 
@@ -20,6 +21,7 @@ export default async function handler(req, res) {
   if (action === "analytics") return analytics(req, res);
   if (action === "password") return changePassword(req, res);
   if (action === "saju-test") return sajuTest(req, res);
+  if (action === "points") return handleAdminPoints(req, res, getSupabase());
   return sendJson(res, 404, { message: "관리자 경로를 찾지 못했습니다." });
 }
 

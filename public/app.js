@@ -174,6 +174,7 @@ let activeAnalysisTimer = null;
 let currentViewName = "home";
 let currentViewStartedAt = Date.now();
 let paymentReturn = false;
+let activeDailyProfile = null;
 // Calendar state for 택일
 let calendarState = {
   year: new Date().getFullYear(),
@@ -300,6 +301,7 @@ function showView(nextView) {
   if (nextView === "library") renderArchive();
   if (nextView === "people") renderPeople();
   if (nextView === "orders") renderOrders();
+  if (nextView === "points") renderPointsView();
   if (nextView === "support") renderSupport(null);
   if (nextView === "profile" && !openingEditProfile) resetProfileForm();
   if (nextView === "compatibility" || nextView === "fortune") renderProfileSelects();
@@ -557,6 +559,10 @@ function formatWon(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}원`;
 }
 
+function formatPoints(value) {
+  return `${Number(value || 0).toLocaleString("ko-KR")}pt`;
+}
+
 function shortDate(timestamp) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "2-digit",
@@ -673,6 +679,26 @@ function renderSession() {
       mypageId.querySelector("[data-email-signup]")?.addEventListener("click", () => emailAuth("signup"));
     }
   }
+  const pointBox = document.querySelector("[data-mypage-points]");
+  if (pointBox) {
+    const points = runtimeSession?.points;
+    pointBox.hidden = !user?.id || !points?.enabled;
+    pointBox.innerHTML = points?.enabled
+      ? `<span>보유 포인트</span><b>${formatPoints(points.balance)}</b><small>무료운세 재생성 ${Number(points.regenTokens || 0)}회</small>`
+      : "";
+  }
+}
+
+async function refreshPoints() {
+  if (!runtimeSession?.user?.id) return;
+  try {
+    const session = await getJson("/api/session");
+    runtimeSession = session;
+    renderSession();
+    renderPointsView();
+  } catch {
+    // 잔액 갱신 실패는 현재 화면의 마지막 확인값을 유지한다.
+  }
 }
 
 // 이메일 로그인/회원가입 (드로어 폼) — 카카오 외 대체 로그인. 토스 심사용 테스트 계정에도 사용.
@@ -690,7 +716,7 @@ async function emailAuth(action) {
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
-      runtimeSession = { user: body.user };
+      runtimeSession = { user: body.user, points: body.points };
       accountDataReady = false; // 새 계정 데이터 도착 전까지 "불러오는 중" 표시
       clearPendingPurchase(); // 계정 전환 시 미완료 결제정보 제거(교차 누수 방지)
       currentCheckout = null;
@@ -805,6 +831,76 @@ function renderOrders() {
     .join("");
 }
 
+const POINT_TX_LABELS = {
+  charge: "충전",
+  bonus: "충전 보너스",
+  spend: "상품 결제",
+  refund: "결제 환원",
+  admin_adjust: "관리자 조정",
+};
+
+function renderPointsView() {
+  const balance = document.querySelector("[data-points-balance]");
+  const tokens = document.querySelector("[data-points-tokens]");
+  const tiers = document.querySelector("[data-point-tiers]");
+  const history = document.querySelector("[data-point-transactions]");
+  const status = document.querySelector("[data-points-status]");
+  if (!tiers || !history) return;
+  const user = runtimeSession?.user;
+  const points = runtimeSession?.points;
+  if (!user?.id) {
+    if (balance) balance.textContent = "로그인 필요";
+    if (tokens) tokens.textContent = "로그인하면 포인트를 충전할 수 있습니다.";
+    tiers.innerHTML = `<button class="primary-action" type="button" data-points-login>로그인하기</button>`;
+    history.innerHTML = `<div class="empty-box">로그인 후 포인트 내역을 확인할 수 있습니다.</div>`;
+    tiers.querySelector("[data-points-login]")?.addEventListener("click", openMypage);
+    return;
+  }
+  if (!points?.enabled || !runtimeConfig?.pointsEnabled) {
+    if (balance) balance.textContent = "사용 준비 중";
+    if (tokens) tokens.textContent = "포인트 기능이 아직 활성화되지 않았습니다.";
+    tiers.innerHTML = `<div class="empty-box">현재는 기존 토스 단독 결제를 이용해주세요.</div>`;
+    history.innerHTML = "";
+    return;
+  }
+  if (balance) balance.textContent = formatPoints(points.balance);
+  if (tokens) tokens.textContent = `무료운세 재생성 토큰 ${Number(points.regenTokens || 0)}개`;
+  tiers.innerHTML = (runtimeConfig.pointChargeTiers || [])
+    .map((tier) => `
+      <button type="button" class="point-tier" data-point-charge="${Number(tier.amount)}">
+        <span>${formatWon(tier.amount)} 충전</span>
+        <b>${formatPoints(tier.points)}</b>
+        <small>보너스 ${Number(tier.bonusRate)}% · +${formatPoints(tier.bonus)}</small>
+      </button>`)
+    .join("");
+  history.innerHTML = (points.transactions || []).length
+    ? (points.transactions || []).map((tx) => `
+        <article class="point-tx">
+          <div><b>${escapeHtml(POINT_TX_LABELS[tx.type] || tx.type)}</b><small>${shortDate(tx.createdAt)}</small></div>
+          <strong class="${Number(tx.amount) >= 0 ? "plus" : "minus"}">${Number(tx.amount) >= 0 ? "+" : ""}${formatPoints(tx.amount)}</strong>
+        </article>`).join("")
+    : `<div class="empty-box">아직 포인트 내역이 없습니다.</div>`;
+  if (status) status.textContent = "";
+  tiers.querySelectorAll("[data-point-charge]").forEach((button) => {
+    button.addEventListener("click", () => startPointCharge(Number(button.dataset.pointCharge)));
+  });
+}
+
+function startPointCharge(amount) {
+  const tier = (runtimeConfig?.pointChargeTiers || []).find((item) => Number(item.amount) === Number(amount));
+  if (!tier || !runtimeSession?.user?.id) return;
+  const product = {
+    name: `포인트 ${formatPoints(tier.points)} 충전`,
+    amount: tier.amount,
+    amountLabel: formatWon(tier.amount),
+    paid: true,
+    planId: "point-charge",
+  };
+  currentCheckout = { productId: "point-charge", product, profile: null, partner: null, pointsUsed: 0 };
+  showView("pay");
+  setupPayView(product);
+}
+
 // ---------- 문의하기 ----------
 const SUPPORT_LABELS = {
   error: ["오류 문의", "어떤 화면에서 무엇이 안 되는지 적어주시면 가장 빠르게 도와드려요."],
@@ -858,15 +954,21 @@ function dailyCacheKey(profileId) {
   return `saju_lab_daily_${accountScopeId}_${profileId}_${iso}`;
 }
 
-function startDailyFortune(profile) {
+function startDailyFortune(profile, options = {}) {
   if (!profile) return;
+  activeDailyProfile = profile;
   showView("daily");
   const body = document.querySelector("[data-daily-body]");
   if (!body) return;
+  const regenerate = document.querySelector("[data-daily-regenerate]");
+  if (regenerate) {
+    regenerate.disabled = true;
+    regenerate.hidden = true;
+  }
 
   // 같은 날 + 같은 사람 → 캐시(즉시, 포인트 추가 없음)
   const cached = readStore(dailyCacheKey(profile.id), null);
-  if (cached) {
+  if (cached && !options.regen) {
     renderDailyFortune(profile, cached);
     return;
   }
@@ -882,9 +984,13 @@ function startDailyFortune(profile) {
   getJson("/api/saju/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ productId: "daily-fortune", profile, visitorId: visitorId() }),
+    body: JSON.stringify({ productId: "daily-fortune", profile, visitorId: visitorId(), regen: Boolean(options.regen) }),
   })
     .then((data) => {
+      if (runtimeSession?.points && Number.isInteger(data.regenTokens)) {
+        runtimeSession.points.regenTokens = data.regenTokens;
+        renderSession();
+      }
       writeStore(dailyCacheKey(profile.id), data);
       renderDailyFortune(profile, data);
       trackEvent("analysis_complete", { productId: "daily-fortune", profileId: profile.id, profileName: profile.name });
@@ -1064,8 +1170,18 @@ function renderDailyFortune(profile, data) {
       else openMemberModal(pid);
     });
   });
+  const regenerate = document.querySelector("[data-daily-regenerate]");
+  if (regenerate) {
+    regenerate.disabled = false;
+    regenerate.hidden = !(runtimeSession?.user?.id && Number(runtimeSession?.points?.regenTokens || 0) > 0);
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+document.querySelector("[data-daily-regenerate]")?.addEventListener("click", () => {
+  if (!activeDailyProfile || Number(runtimeSession?.points?.regenTokens || 0) <= 0) return;
+  startDailyFortune(activeDailyProfile, { regen: true });
+});
 
 // 화면 상단 토스트 (보이는 안내/에러)
 function showToast(text, isError) {
@@ -1582,8 +1698,54 @@ function setupPayView(product) {
   if (amt) amt.textContent = product.amountLabel;
   if (confirm) confirm.textContent = `${product.amountLabel} 결제하기`;
   document.querySelector("[data-pay-status]")?.replaceChildren();
-  setupCheckoutWidget(product); // 결제수단/약관 위젯 렌더(이 뷰가 보인 뒤 호출)
+  const pointPanel = document.querySelector("[data-point-payment]");
+  const pointInput = document.querySelector("[data-point-use]");
+  const canUsePoints = currentCheckout?.productId !== "point-charge" && Boolean(runtimeSession?.user?.id && runtimeSession?.points?.enabled);
+  if (pointPanel) pointPanel.hidden = !canUsePoints;
+  if (pointInput) {
+    pointInput.value = "0";
+    pointInput.max = String(Math.min(Number(product.amount || 0), Number(runtimeSession?.points?.balance || 0)));
+  }
+  currentCheckout.pointsUsed = 0;
+  updatePointPayment();
 }
+
+function pointPaymentBreakdown() {
+  const price = Number(currentCheckout?.product?.amount || 0);
+  const balance = Number(runtimeSession?.points?.balance || 0);
+  const requested = Number(currentCheckout?.pointsUsed || 0);
+  const pointsUsed = Math.max(0, Math.min(price, balance, Number.isFinite(requested) ? Math.floor(requested) : 0));
+  return { price, pointsUsed, cashAmount: price - pointsUsed };
+}
+
+function updatePointPayment() {
+  if (!currentCheckout) return;
+  const breakdown = pointPaymentBreakdown();
+  currentCheckout.pointsUsed = breakdown.pointsUsed;
+  const input = document.querySelector("[data-point-use]");
+  const balance = document.querySelector("[data-point-balance]");
+  const cash = document.querySelector("[data-pay-cash]");
+  const amount = document.querySelector("[data-pay-amount]");
+  const confirm = document.querySelector("[data-pay-confirm]");
+  const widgetBox = document.querySelector("[data-toss-widget]");
+  if (input && Number(input.value) !== breakdown.pointsUsed) input.value = String(breakdown.pointsUsed);
+  if (balance) balance.textContent = formatPoints(runtimeSession?.points?.balance || 0);
+  if (cash) cash.textContent = formatWon(breakdown.cashAmount);
+  if (amount) amount.textContent = currentCheckout.productId === "point-charge" ? formatWon(breakdown.price) : `${formatWon(breakdown.cashAmount)} + ${formatPoints(breakdown.pointsUsed)}`;
+  if (confirm) confirm.textContent = breakdown.cashAmount === 0 ? `${formatPoints(breakdown.pointsUsed)}로 결제하기` : `${formatWon(breakdown.cashAmount)} 결제하기`;
+  if (breakdown.cashAmount === 0) {
+    if (widgetBox) widgetBox.hidden = true;
+    document.querySelector("[data-pay-status]")?.replaceChildren();
+  } else {
+    setupCheckoutWidget({ ...currentCheckout.product, amount: breakdown.cashAmount });
+  }
+}
+
+document.querySelector("[data-point-use]")?.addEventListener("input", (event) => {
+  if (!currentCheckout) return;
+  currentCheckout.pointsUsed = Number(event.currentTarget.value || 0);
+  updatePointPayment();
+});
 
 
 // 주문확인 화면의 "결제하기" → 결제 페이지로 이동(다음 페이지에서 결제수단 선택)
@@ -1598,7 +1760,7 @@ document.querySelector("[data-pay-confirm]")?.addEventListener("click", () => {
   beginTossPayment(currentCheckout.product.planId, document.querySelector("[data-pay-confirm]"), currentCheckout);
 });
 document.querySelector("[data-pay-back]")?.addEventListener("click", () =>
-  showView(currentCheckout?.productId === "followup" ? "followup" : "checkout"),
+  showView(currentCheckout?.productId === "followup" ? "followup" : currentCheckout?.productId === "point-charge" ? "points" : "checkout"),
 );
 
 document.querySelector("[data-checkout-free]")?.addEventListener("click", () => {
@@ -1695,7 +1857,6 @@ async function setupCheckoutWidget(product) {
 async function beginTossPayment(planId, sourceButton, context = null) {
   const button = sourceButton || document.querySelector("[data-checkout-pay]");
   try {
-    if (!runtimeConfig?.tossClientKey) throw new Error("Toss 클라이언트 키가 없습니다.");
     if (button) {
       button.disabled = true;
       button.textContent = "결제창 준비 중...";
@@ -1708,11 +1869,12 @@ async function beginTossPayment(planId, sourceButton, context = null) {
       body: JSON.stringify({
         planId,
         amount: context?.product?.amount,
-        orderName: context?.product ? `${context.product.name} · ${context.profile.name}` : undefined,
+        pointsUsed: context?.pointsUsed || 0,
+        orderName: context?.product ? `${context.product.name}${context.profile?.name ? ` · ${context.profile.name}` : ""}` : undefined,
         visitorId: visitorId(),
         sessionId: sessionId(),
         productId: context?.productId,
-        profileName: context?.profile?.name,
+        profileName: context?.profile?.name || null,
       }),
     });
 
@@ -1720,11 +1882,14 @@ async function beginTossPayment(planId, sourceButton, context = null) {
       ? {
           productId: context.productId,
           product: context.product,
-          profile: context.profile,
+          profile: context.profile || null,
           partner: context.partner || null,
           orderId: order.orderId,
           orderName: order.orderName,
           amount: order.amount,
+          price: order.price,
+          pointsUsed: order.pointsUsed,
+          payMethod: order.payMethod,
           createdAt: Date.now(),
           // 추가 질문 상담: 결제 후 답변 생성에 필요한 정보(만세력 재사용)
           question: context.question || null,
@@ -1740,16 +1905,35 @@ async function beginTossPayment(planId, sourceButton, context = null) {
         orderId: order.orderId,
         productId: context.productId,
         productName: context.product.name,
-        profileName: context.profile.name,
-        amount: order.amount,
-        status: "결제 진행중",
+        profileName: context.profile?.name || "포인트 충전",
+        amount: order.price,
+        pointsUsed: order.pointsUsed,
+        status: order.paidWithPoints ? "결제 완료" : "결제 진행중",
         customer: runtimeSession?.user?.nickname || "비회원",
       });
     }
 
+    if (order.paidWithPoints && purchase) {
+      if (runtimeSession?.points) runtimeSession.points.balance = Number(order.pointBalance || 0);
+      renderSession();
+      clearPendingPurchase();
+      if (purchase.productId === "followup") {
+        await runFollowupAnswer(purchase);
+      } else {
+        startAnalysis(purchase.productId, purchase.profile, {
+          orderId: order.orderId,
+          paymentStatus: "포인트 결제 완료",
+          partner: purchase.partner || null,
+        });
+      }
+      return;
+    }
+
+    if (!runtimeConfig?.tossClientKey) throw new Error("Toss 클라이언트 키가 없습니다.");
+
     const successUrl = `${location.origin}/payments/success`;
     const failUrl = `${location.origin}/payments/fail`;
-    const orderName = purchase ? `${context.product.name} · ${context.profile.name}` : order.orderName;
+    const orderName = purchase ? `${context.product.name}${context.profile?.name ? ` · ${context.profile.name}` : ""}` : order.orderName;
     const customerName = runtimeSession?.user?.nickname || context?.profile?.name || "사주연구소 고객";
 
     trackEvent("payment_start", { orderId: order.orderId, productId: context?.productId, amount: order.amount });
@@ -2340,12 +2524,39 @@ async function confirmReturnedPayment() {
       productId: pending?.productId,
       productName: pending?.product?.name || result.orderName,
       profileName: pending?.profile?.name || "-",
-      amount: Number(amount),
+      amount: Number(pending?.price ?? amount),
+      pointsUsed: Number(pending?.pointsUsed || result.pointsUsed || 0),
       status: "결제 완료",
       paymentKey: result.paymentKey,
       customer: runtimeSession?.user?.nickname || "비회원",
       approvedAt: Date.now(),
     });
+
+    if (pending?.productId === "point-charge") {
+      if (runtimeSession?.points && Number.isFinite(Number(result.pointBalance))) {
+        runtimeSession.points.balance = Number(result.pointBalance);
+      }
+      clearPendingPurchase();
+      await refreshPoints();
+      setPaymentResult(
+        "포인트 충전 완료!",
+        `${formatPoints(result.pointsAdded || 0)}가 적립되었습니다.`,
+        [
+          ["충전 원금", formatWon(amount)],
+          ["적립 포인트", formatPoints(result.pointsAdded || 0)],
+          ["현재 잔액", formatPoints(runtimeSession?.points?.balance || result.pointBalance || 0)],
+        ],
+        true,
+        "🪙",
+      );
+      if (paymentRef) {
+        paymentRef.hidden = false;
+        paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주세요`;
+      }
+      return;
+    }
+
+    if (Number(pending?.pointsUsed || result.pointsUsed || 0) > 0) await refreshPoints();
 
     // 추가 질문 상담: 결제 완료 후 저장된 만세력으로 답변 생성 → 추가 질문 화면으로
     if (pending?.productId === "followup") {
@@ -2363,7 +2574,8 @@ async function confirmReturnedPayment() {
       [
         ["상품", pending?.product?.name || "선택 상품"],
         ["대상", pending?.profile?.name || "프로필"],
-        ["결제금액", formatWon(amount)],
+        ["토스 결제", formatWon(amount)],
+        ...(Number(pending?.pointsUsed || 0) > 0 ? [["사용 포인트", formatPoints(pending.pointsUsed)]] : []),
       ],
       true,
       "🎉",
@@ -2853,7 +3065,7 @@ logoutButtons.forEach((button) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "logout" }),
     });
-    runtimeSession = { user: null };
+    runtimeSession = { user: null, points: { enabled: false, balance: 0, regenTokens: 0, transactions: [] } };
     accountDataReady = true; // 게스트 데이터는 로컬이라 즉시 준비됨
     clearPendingPurchase(); // 미완료 결제정보 제거(다음 사람에게 안 넘어가게)
     currentCheckout = null;

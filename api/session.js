@@ -5,6 +5,7 @@ import { readJson, sendJson, cookie, cookieSecure } from "./_lib/http.js";
 import { getSupabase } from "./_lib/supabase.js";
 import { getSessionUser, createSession, deleteSession } from "./_lib/sessions.js";
 import { hashPassword, verifyPassword } from "./_lib/password.js";
+import { ensurePointAccount, getPointAccount } from "./_lib/points.js";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -15,10 +16,20 @@ function setSessionCookie(res, sid) {
   );
 }
 
+async function pointPayload(sb, user) {
+  if (!sb || !user?.id) return { enabled: false, balance: 0, regenTokens: 0, updatedAt: null, transactions: [] };
+  try {
+    await ensurePointAccount(sb, user.id);
+    return await getPointAccount(sb, user.id, 30);
+  } catch {
+    return { enabled: false, balance: 0, regenTokens: 0, updatedAt: null, transactions: [] };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === "GET") {
     const user = await getSessionUser(req);
-    return sendJson(res, 200, { user: user || null });
+    return sendJson(res, 200, { user: user || null, points: await pointPayload(getSupabase(), user) });
   }
   if (req.method !== "POST") return sendJson(res, 405, { message: "GET/POST only" });
 
@@ -55,7 +66,7 @@ export default async function handler(req, res) {
     if (error) return sendJson(res, 500, { message: error.message });
     const user = { id: data.id, email: data.email, nickname: data.nickname, provider: "email" };
     setSessionCookie(res, await createSession(user));
-    return sendJson(res, 200, { ok: true, user });
+    return sendJson(res, 200, { ok: true, user, points: await pointPayload(sb, user) });
   }
 
   // 기본: 로그인
@@ -69,5 +80,5 @@ export default async function handler(req, res) {
   }
   const user = { id: u.id, email: u.email, nickname: u.nickname, provider: "email" };
   setSessionCookie(res, await createSession(user));
-  return sendJson(res, 200, { ok: true, user });
+  return sendJson(res, 200, { ok: true, user, points: await pointPayload(sb, user) });
 }
