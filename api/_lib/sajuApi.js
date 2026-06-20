@@ -2,6 +2,8 @@
 // 가맹점 API 키(SAJU_API_KEY)로 POST {SAJU_API_BASE}/api/v1/saju/compute 를 호출한다.
 // 호출 1회당 가맹점 포인트가 차감된다(중앙에서 처리).
 
+import { computeManseLocal } from "./manse/index.js";
+
 const GENDER_MAP = { M: "male", F: "female", male: "male", female: "female" };
 
 /**
@@ -36,6 +38,10 @@ export function toComputeInput(profile, productCode) {
 
 /** 중앙 API 호출 → { ok, cost, summary, full } */
 export async function computeManse(profile, config) {
+  // 자체 통합 만세력 엔진 — SAJU_ENGINE=local(또는 config.saju.engine='local')이면 외부 호출 없이 로컬 계산(cost 0).
+  if (process.env.SAJU_ENGINE === "local" || config?.saju?.engine === "local") {
+    return computeManseLocal(profile);
+  }
   const { base, key, productCode } = sajuCreds(config);
   if (!base || !key) {
     const err = new Error(
