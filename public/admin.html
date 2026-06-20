@@ -227,6 +227,12 @@
             <label>상품 코드 (선택)
               <input name="productCode" placeholder="비우면 saju_basic" />
             </label>
+            <label>만세력 엔진
+              <select name="engine" data-saju-engine>
+                <option value="">중앙 SAJULAB API (기본 · 포인트 차감)</option>
+                <option value="local">자체 엔진 (로컬 계산 · 외부호출·포인트 없음)</option>
+              </select>
+            </label>
             <div class="btn-row">
               <button class="primary-action admin-save" type="submit">저장</button>
               <button class="secondary-action" type="button" data-saju-test>연결 테스트 (포인트 잔액 조회)</button>

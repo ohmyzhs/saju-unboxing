@@ -773,14 +773,14 @@ function saveBusiness(event) {
 }
 
 // ── 만세력 API 접속정보 ──
-const SAJU_FIELDS = ["base", "key", "productCode"];
+const SAJU_FIELDS = ["base", "key", "productCode", "engine"];
 
 function renderSaju() {
   const form = document.querySelector("[data-saju-form]");
   if (!form) return;
   const s = serverConfig.saju || {};
   SAJU_FIELDS.forEach((k) => {
-    const input = form.querySelector(`input[name="${k}"]`);
+    const input = form.querySelector(`[name="${k}"]`);
     if (input) input.value = s[k] || "";
   });
 }
