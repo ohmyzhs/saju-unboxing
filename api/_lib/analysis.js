@@ -466,7 +466,7 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
     input,
     name: isCompat ? "compat_plan" : "saju_plan",
     schema: isCompat ? COMPAT_PLAN_SCHEMA : PLAN_SCHEMA,
-    maxTokens: 2048,
+    maxTokens: 8192,
     timeoutMs: 70000,
   });
   const sections = (plan.sections || []).map((s, i) => ({ id: `s${i}`, icon: s.icon, title: s.title, angle: s.angle }));
@@ -558,7 +558,7 @@ export async function generateSections({ productId = "saju-analysis", extra, pro
       input,
       name: "saju_sections",
       schema,
-      maxTokens: 4096,
+      maxTokens: 8192,
       timeoutMs: 90000,
     });
 
