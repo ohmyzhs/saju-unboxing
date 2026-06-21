@@ -34,3 +34,13 @@ test("분석 요청은 제한 시간과 초안 체크포인트를 사용한다",
   assert.match(app, /analysisDraftSync/);
   assert.match(app, /reportStatus: "failed"/);
 });
+
+test("분석 진행률은 SSE 업무 이벤트와 완료 섹션 수만 사용한다", () => {
+  assert.match(app, /AnalysisStream\.consume/);
+  assert.match(app, /progressForSections/);
+  assert.match(app, /event === "manse_ready"/);
+  assert.match(app, /event === "plan_ready"/);
+  assert.match(app, /event === "section_ready"/);
+  assert.doesNotMatch(app, /Math\.random\(\) \* 9/);
+  assert.doesNotMatch(app, /percent < 92/);
+});

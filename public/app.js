@@ -1163,15 +1163,23 @@ function startDailyFortune(profile, options = {}) {
 }
 
 function pillarCell(label, pillar) {
-  const stem = pillar?.stem || "?";
-  const branch = pillar?.branch || "?";
+  const normalized = window.DailyFortuneUI.normalizePillar(pillar);
+  if (normalized.unknown) {
+    return `
+      <div class="mcell">
+        <div class="mcell-label">${label}</div>
+        <div class="mcell-unknown">미상</div>
+      </div>`;
+  }
+  const stem = normalized.stemHanja;
+  const branch = normalized.branchHanja;
   const [sko, sel] = gz(stem);
   const [bko, bel] = gz(branch);
   return `
     <div class="mcell">
       <div class="mcell-label">${label}</div>
-      <div class="mcell-gz el-${sel}"><span class="gz-han">${escapeHtml(stem)}</span><span class="gz-ko">${sko}</span></div>
-      <div class="mcell-gz el-${bel}"><span class="gz-han">${escapeHtml(branch)}</span><span class="gz-ko">${bko}</span></div>
+      <div class="mcell-gz el-${sel}"><span class="gz-han">${escapeHtml(stem)}</span><span class="gz-ko">${escapeHtml(normalized.stemKo || sko)}</span></div>
+      <div class="mcell-gz el-${bel}"><span class="gz-han">${escapeHtml(branch)}</span><span class="gz-ko">${escapeHtml(normalized.branchKo || bko)}</span></div>
     </div>`;
 }
 
@@ -1872,12 +1880,14 @@ function setupPayView(product) {
   document.querySelector("[data-pay-status]")?.replaceChildren();
   const pointPanel = document.querySelector("[data-point-payment]");
   const pointInput = document.querySelector("[data-point-use]");
+  const pointUseAll = document.querySelector("[data-point-use-all]");
   const canUsePoints = currentCheckout?.productId !== "point-charge" && Boolean(runtimeSession?.user?.id && runtimeSession?.points?.enabled);
   if (pointPanel) pointPanel.hidden = !canUsePoints;
   if (pointInput) {
     pointInput.value = "0";
     pointInput.max = String(Math.min(Number(product.amount || 0), Number(runtimeSession?.points?.balance || 0)));
   }
+  if (pointUseAll) pointUseAll.disabled = !canUsePoints || Number(pointInput?.max || 0) <= 0;
   currentCheckout.pointsUsed = 0;
   updatePointPayment();
 }
@@ -1895,12 +1905,14 @@ function updatePointPayment() {
   const breakdown = pointPaymentBreakdown();
   currentCheckout.pointsUsed = breakdown.pointsUsed;
   const input = document.querySelector("[data-point-use]");
+  const useAll = document.querySelector("[data-point-use-all]");
   const balance = document.querySelector("[data-point-balance]");
   const cash = document.querySelector("[data-pay-cash]");
   const amount = document.querySelector("[data-pay-amount]");
   const confirm = document.querySelector("[data-pay-confirm]");
   const widgetBox = document.querySelector("[data-toss-widget]");
   if (input && Number(input.value) !== breakdown.pointsUsed) input.value = String(breakdown.pointsUsed);
+  if (useAll) useAll.disabled = window.PointPayment.fullUse(runtimeSession?.points?.balance, breakdown.price) <= 0;
   if (balance) balance.textContent = formatPoints(runtimeSession?.points?.balance || 0);
   if (cash) cash.textContent = formatWon(breakdown.cashAmount);
   if (amount) amount.textContent = currentCheckout.productId === "point-charge" ? formatWon(breakdown.price) : `${formatWon(breakdown.cashAmount)} + ${formatPoints(breakdown.pointsUsed)}`;
@@ -1916,6 +1928,15 @@ function updatePointPayment() {
 document.querySelector("[data-point-use]")?.addEventListener("input", (event) => {
   if (!currentCheckout) return;
   currentCheckout.pointsUsed = Number(event.currentTarget.value || 0);
+  updatePointPayment();
+});
+
+document.querySelector("[data-point-use-all]")?.addEventListener("click", () => {
+  if (!currentCheckout) return;
+  currentCheckout.pointsUsed = window.PointPayment.fullUse(
+    runtimeSession?.points?.balance,
+    currentCheckout.product?.amount,
+  );
   updatePointPayment();
 });
 
@@ -2468,15 +2489,11 @@ function startAnalysis(productId, profile, meta = {}) {
   const progress = document.querySelector("[data-analysis-progress]");
   const progressLabel = document.querySelector("[data-analysis-progress-label]");
   const message = document.querySelector("[data-analysis-message]");
-  const messages = [
-    "만세력 뼈대를 정리하는 중...",
-    "십성과 오행의 균형을 맞춰보는 중...",
-    "사주 원국에서 반복되는 패턴을 찾는 중...",
-    "말투를 너무 딱딱하지 않게 다듬는 중...",
-    "결과 페이지를 펼칠 준비를 하는 중...",
-  ];
-  let percent = 8;
-  let index = 0;
+  const setProgress = (value) => {
+    const percent = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    if (progress) progress.style.width = `${percent}%`;
+    if (progressLabel) progressLabel.textContent = `${percent}%`;
+  };
 
   if (loading) loading.hidden = false;
   const scrollHint = document.querySelector("[data-scroll-hint]");
@@ -2487,44 +2504,121 @@ function startAnalysis(productId, profile, meta = {}) {
   document.querySelector("[data-analysis-title]").textContent = `${profile.name}님의 ${product.name}`;
   document.querySelector("[data-analysis-kicker]").textContent = product.category;
   document.querySelector("[data-analysis-manse]").innerHTML = "";
-  if (progress) progress.style.width = `${percent}%`;
-  if (progressLabel) progressLabel.textContent = `${percent}%`;
-  if (message) message.textContent = messages[index];
-
-  // 진행 애니메이션: 실제 응답이 오기 전까지 92%에서 대기
-  activeAnalysisTimer = window.setInterval(() => {
-    if (percent < 92) percent += Math.round(Math.random() * 9) + 3;
-    if (percent > 92) percent = 92;
-    index = (index + 1) % messages.length;
-    if (progress) progress.style.width = `${percent}%`;
-    if (progressLabel) progressLabel.textContent = `${percent}%`;
-    if (message) message.textContent = messages[index];
-  }, 600);
+  setProgress(5);
+  if (message) message.textContent = "분석 요청을 확인하는 중입니다...";
 
   const finishLoading = () => {
     window.clearInterval(activeAnalysisTimer);
     activeAnalysisTimer = null;
   };
 
-  // 실제 분석 호출: 중앙 만세력 + AI 해설
-  getJson("/api/saju/analyze", {
+  const complete = () =>
+    trackEvent("analysis_complete", { productId, productName: product.name, profileId: profile.id, profileName: profile.name, orderId: meta.orderId || null });
+
+  let streamCompleted = false;
+  const handleStreamEvent = ({ event, data: payload }) => {
+    if (event === "started") {
+      setProgress(payload.progress || 5);
+      if (message) message.textContent = "입력 정보를 확인했습니다. 만세력을 계산하는 중입니다...";
+      return;
+    }
+    if (event === "manse_ready") {
+      setProgress(payload.progress || 20);
+      if (message) message.textContent = "만세력 계산을 마쳤습니다. 리포트 구성을 설계합니다...";
+      return;
+    }
+    if (event === "plan_started") {
+      setProgress(payload.progress || 25);
+      if (message) message.textContent = "이 사주에 맞는 리포트 구성을 만들고 있습니다...";
+      return;
+    }
+    if (event === "heartbeat") {
+      if (message && payload.stage === "plan_started") message.textContent = "리포트 구성을 검증하고 있습니다...";
+      return;
+    }
+    if (event === "plan_ready") {
+      const data = payload.data;
+      setProgress(payload.progress || 40);
+      if (message) message.textContent = `구성을 마쳤습니다. ${payload.total || data.sections.length}개 해설을 동시에 작성합니다...`;
+      analysisDraft = createAnalysisDraft({
+        productId,
+        product,
+        profile,
+        partner,
+        orderId: meta.orderId,
+        paymentStatus: meta.paymentStatus,
+        data,
+      });
+      saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
+      renderAnalysisResult(productId, profile, partner, data);
+      return;
+    }
+    if (event === "section_ready") {
+      if (!analysisDraft || !payload.section) return;
+      const { id, body } = payload.section;
+      fillSectionBody(id, body || "");
+      analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, id, body || "");
+      saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
+      setProgress(window.AnalysisStream.progressForSections(payload.completed, payload.total));
+      if (message) message.textContent = `해설 ${payload.completed}/${payload.total}개를 완성해 보관함에 저장했습니다.`;
+      return;
+    }
+    if (event === "error") {
+      throw new Error(payload.message || "분석 처리 중 오류가 발생했습니다.");
+    }
+    if (event === "complete") {
+      if (!analysisDraft) throw new Error("리포트 설계 결과를 받지 못했습니다.");
+      streamCompleted = true;
+      setProgress(100);
+      if (message) message.textContent = "리포트 생성을 완료했습니다.";
+      analysisDraft = window.ReportRecovery.finish(analysisDraft);
+      saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
+      finishLoading();
+      if (loading) loading.hidden = true;
+      const hint = document.querySelector("[data-scroll-hint]");
+      if (hint) hint.hidden = true;
+      complete();
+      paymentReturn = false;
+    }
+  };
+
+  // 구조화 SSE: 실제 만세력·설계·완료 섹션 이벤트만 진행률에 반영한다.
+  const analysisController = new AbortController();
+  activeAnalysisTimer = window.setTimeout(() => analysisController.abort(), 295000);
+  fetch("/api/saju/analyze", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    signal: analysisController.signal,
     body: JSON.stringify({
       productId,
       profile,
       partner,
       orderId: meta.orderId || null,
       visitorId: visitorId(),
+      stream: true,
     }),
   })
+    .then(async (response) => {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream")) {
+        await window.AnalysisStream.consume(response, handleStreamEvent);
+        if (!streamCompleted) throw new Error("분석 연결이 완료 전에 종료되었습니다. 결제내역에서 다시 시도해주세요.");
+        return null;
+      }
+      const text = await response.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`분석 서버 요청에 실패했습니다. (${response.status || 500})`);
+      }
+      if (!response.ok) throw new Error(data.message || data.error || "분석 요청에 실패했습니다.");
+      return data;
+    })
     .then(async (data) => {
+      if (!data) return;
       finishLoading();
-      if (progress) progress.style.width = "100%";
-      if (progressLabel) progressLabel.textContent = "100%";
-
-      const complete = () =>
-        trackEvent("analysis_complete", { productId, productName: product.name, profileId: profile.id, profileName: profile.name, orderId: meta.orderId || null });
+      setProgress(100);
 
       // ── 2단계(plan): 제목·개운 먼저 그리고, 본문은 섹션별 병렬 호출로 채운다(점진적 UX) ──
       if (data.mode === "plan" && Array.isArray(data.sections)) {
@@ -2623,6 +2717,7 @@ function startAnalysis(productId, profile, meta = {}) {
       paymentReturn = false;
     })
     .catch((error) => {
+      if (error?.name === "AbortError") error = new Error("분석 시간이 초과되었습니다. 결제내역에서 다시 시도할 수 있습니다.");
       finishLoading();
       if (progressLabel) progressLabel.textContent = "오류";
       if (message) message.textContent = `분석을 불러오지 못했어요: ${error.message}`;

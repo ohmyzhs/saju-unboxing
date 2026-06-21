@@ -97,10 +97,30 @@ function jsonOnlySystem(system, schema) {
   return `${system}\n\n[출력 형식]\n설명이나 마크다운 없이 아래 JSON Schema를 만족하는 JSON 객체 하나만 출력한다.\n${JSON.stringify(schema)}`;
 }
 
-async function requestChat({ model, system, input, name, schema, profile }) {
+function timeoutSignal(timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 70000));
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
+function normalizeTransportError(error) {
+  if (error?.name !== "AbortError") return error;
+  const timeout = new Error("AI 요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.");
+  timeout.statusCode = 504;
+  timeout.retryable = true;
+  return timeout;
+}
+
+function isRetryableTransport(error) {
+  const status = Number(error?.statusCode || error?.status || 0);
+  return error?.retryable === true || status === 429 || status >= 500;
+}
+
+async function requestChat({ model, system, input, name, schema, profile, maxTokens = 8192, timeoutMs = 70000 }) {
   const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
   const request = {
     model,
+    max_tokens: maxTokens,
     messages: [
       { role: "system", content: profile.strictJson ? system : jsonOnlySystem(system, schema) },
       { role: "user", content: input },
@@ -112,38 +132,53 @@ async function requestChat({ model, system, input, name, schema, profile }) {
       json_schema: { name, strict: true, schema },
     };
   }
-  const response = await client.chat.completions.create(request);
-  const text = response.choices?.[0]?.message?.content;
-  if (!text) throw new Error("AI 응답이 비어 있습니다.");
-  return text;
+  const timeout = timeoutSignal(timeoutMs);
+  try {
+    const response = await client.chat.completions.create(request, { signal: timeout.signal });
+    const text = response.choices?.[0]?.message?.content;
+    if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    return text;
+  } catch (error) {
+    throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);
+  } finally {
+    timeout.clear();
+  }
 }
 
-async function requestMessages({ model, system, input, schema }) {
-  const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/+$/, "")}/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey(),
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 8192,
-      system: jsonOnlySystem(system, schema),
-      messages: [{ role: "user", content: input }],
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(payload?.error?.message || payload?.message || `OpenCode 요청 실패 (${response.status})`);
-    error.statusCode = response.status;
-    throw error;
+async function requestMessages({ model, system, input, schema, maxTokens = 8192, timeoutMs = 70000 }) {
+  const timeout = timeoutSignal(timeoutMs);
+  try {
+    const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/+$/, "")}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey(),
+        "anthropic-version": "2023-06-01",
+      },
+      signal: timeout.signal,
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: jsonOnlySystem(system, schema),
+        messages: [{ role: "user", content: input }],
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.error?.message || payload?.message || `OpenCode 요청 실패 (${response.status})`);
+      error.statusCode = response.status;
+      throw error;
+    }
+    const text = Array.isArray(payload.content)
+      ? payload.content.filter((part) => part?.type === "text").map((part) => part.text).join("\n")
+      : "";
+    if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    return text;
+  } catch (error) {
+    throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);
+  } finally {
+    timeout.clear();
   }
-  const text = Array.isArray(payload.content)
-    ? payload.content.filter((part) => part?.type === "text").map((part) => part.text).join("\n")
-    : "";
-  if (!text) throw new Error("AI 응답이 비어 있습니다.");
-  return text;
 }
 
 export async function requestStructured(options, dependencies = {}) {
@@ -152,16 +187,22 @@ export async function requestStructured(options, dependencies = {}) {
   const request = dependencies.request || (profile.transport === "messages" ? requestMessages : requestChat);
   const requestOptions = { ...options, model, profile };
 
-  let text = await request(requestOptions);
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    let text;
+    try {
+      text = await request(requestOptions);
+    } catch (error) {
+      lastError = normalizeTransportError(error);
+      if (attempt === 0 && isRetryableTransport(lastError)) continue;
+      throw lastError;
+    }
     try {
       const value = extractJsonObject(text);
       validateSchema(value, options.schema);
       return value;
     } catch (error) {
       lastError = error;
-      if (attempt === 0) text = await request(requestOptions);
     }
   }
   throw lastError;

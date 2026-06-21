@@ -2,10 +2,65 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildPlanPrompt,
   buildSectionPrompt,
+  generatePlan,
   generateSections,
   validateSectionBatch,
 } from "../api/_lib/analysis.js";
+
+test("builds a compact plan-only prompt and preserves admin instructions", () => {
+  const prompt = buildPlanPrompt({
+    productId: "saju-analysis",
+    extra: "관리자 지침: 현실적인 직장 예시를 쓴다.",
+    profile: { name: "가람" },
+  });
+  assert.match(prompt, /현실적인 직장 예시/);
+  assert.match(prompt, /headline/);
+  assert.match(prompt, /7~10개/);
+  assert.doesNotMatch(prompt, /각 섹션 body는 3~4문단/);
+  assert.doesNotMatch(prompt, /지장간·납음·십이운성/);
+  assert.ok(prompt.length < 2400, `compact plan prompt is too long: ${prompt.length}`);
+});
+
+test("keeps product focus in the compact plan prompt", () => {
+  const common = { extra: "", profile: { name: "가람" } };
+  assert.match(buildPlanPrompt({ ...common, productId: "cycle" }), /10년/);
+  assert.match(buildPlanPrompt({ ...common, productId: "yearly-fortune" }), /계절|월별/);
+  assert.match(buildPlanPrompt({
+    ...common,
+    productId: "compatibility",
+    partner: { name: "누리" },
+  }), /점수|두 사람/);
+});
+
+test("caps plan output and passes a plan-specific timeout", async () => {
+  let requestOptions;
+  const plan = await generatePlan({
+    productId: "saju-analysis",
+    productName: "기본 사주 리포트",
+    profile: { name: "가람", gender: "female", birthDate: "1990-01-01" },
+    manse: { 기준: "테스트" },
+    model: "deepseek-v4-flash",
+  }, {
+    requestStructured: async (options) => {
+      requestOptions = options;
+      return {
+        headline: "선명한 한 줄",
+        sections: Array.from({ length: 7 }, (_, index) => ({
+          icon: "✨",
+          title: `제목 ${index}`,
+          angle: `핵심 ${index}`,
+        })),
+        lucky: { why: "이유", whyKeywords: ["균형", "보완"], personalNote: "한 줄" },
+      };
+    },
+  });
+
+  assert.equal(requestOptions.maxTokens, 2048);
+  assert.equal(requestOptions.timeoutMs, 70000);
+  assert.equal(plan.sections.length, 7);
+});
 
 test("returns batch bodies in requested section order", () => {
   const result = validateSectionBatch(
@@ -93,10 +148,12 @@ test("generates two section bodies with one structured request", async () => {
     otherTitles: sections.map((section) => section.title),
     model: "deepseek-v4-flash",
   }, {
-    requestStructured: async ({ model, name, schema }) => {
+    requestStructured: async ({ model, name, schema, maxTokens, timeoutMs }) => {
       calls += 1;
       assert.equal(model, "deepseek-v4-flash");
       assert.equal(name, "saju_sections");
+      assert.equal(maxTokens, 4096);
+      assert.equal(timeoutMs, 90000);
       assert.equal(schema.properties.sections.minItems, 2);
       return {
         sections: [

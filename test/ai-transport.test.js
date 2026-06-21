@@ -115,3 +115,53 @@ test("does not retry transport failures", async () => {
   );
   assert.equal(attempts, 1);
 });
+
+test("retries one retryable transport failure", async () => {
+  let attempts = 0;
+  const value = await requestStructured({
+    model: "deepseek-v4-flash",
+    system: "system",
+    input: "input",
+    name: "section",
+    maxTokens: 2048,
+    timeoutMs: 1234,
+    schema: {
+      type: "object",
+      required: ["body"],
+      properties: { body: { type: "string" } },
+    },
+  }, {
+    request: async ({ maxTokens, timeoutMs }) => {
+      attempts += 1;
+      assert.equal(maxTokens, 2048);
+      assert.equal(timeoutMs, 1234);
+      if (attempts === 1) {
+        throw Object.assign(new Error("provider busy"), { statusCode: 503 });
+      }
+      return '{"body":"정상"}';
+    },
+  });
+
+  assert.equal(attempts, 2);
+  assert.deepEqual(value, { body: "정상" });
+});
+
+test("converts repeated aborts into a Korean 504 timeout", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    requestStructured({
+      model: "deepseek-v4-flash",
+      system: "system",
+      input: "input",
+      name: "section",
+      schema: { type: "object", properties: {} },
+    }, {
+      request: async () => {
+        attempts += 1;
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      },
+    }),
+    (error) => error.statusCode === 504 && /시간이 초과/.test(error.message),
+  );
+  assert.equal(attempts, 2);
+});

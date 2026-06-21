@@ -66,6 +66,10 @@
 .point-payment-head, .point-payment-total { display: flex; justify-content: space-between; align-items: center; }
 .point-payment label { display: grid; gap: 7px; font-weight: 700; }
 .point-payment input { width: 100%; padding: 12px; border: 1px solid #d9d4ca; border-radius: 12px; font-size: 16px; }
+.point-use-field { display: grid; gap: 7px; }
+.point-use-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.point-use-row button { min-width: 84px; padding: 0 14px; border: 1px solid #d9d4ca; border-radius: 12px; background: #fff9e8; color: #6e5422; font-weight: 900; }
+.point-use-row button:disabled { opacity: 0.45; cursor: not-allowed; }
 .point-payment-total { padding-top: 12px; border-top: 1px solid #eee8dc; }
 .daily-regen-card { margin: 16px; padding: 16px; border: 1px solid #d9d4ca; border-radius: 16px; background: #fff9e8; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .daily-regen-card[hidden] { display: none; }
@@ -4508,12 +4512,16 @@ select {
 /* 히어로 */
 .daily-hero {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 14px;
   padding: 22px 18px 20px;
   background:
     radial-gradient(circle at 88% 12%, rgba(255, 196, 71, 0.5), transparent 42%),
     linear-gradient(135deg, #ffe0e8, #ffe9d4 55%, #fbf3c9);
 }
 .daily-hero-top {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -4522,14 +4530,16 @@ select {
   font-weight: 700;
 }
 .daily-headline {
+  grid-column: 1;
   margin: 10px 0 0;
   font-size: 20px;
   font-weight: 950;
   line-height: 1.4;
   color: #2c2317;
-  max-width: 84%;
+  max-width: none;
 }
 .daily-tags {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -4544,9 +4554,10 @@ select {
   border-radius: 999px;
 }
 .daily-score {
-  position: absolute;
-  right: 18px;
-  top: 46px;
+  position: static;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
   text-align: right;
 }
 .daily-score b {
@@ -4559,6 +4570,22 @@ select {
   font-size: 12px;
   color: #8a7a63;
   font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .daily-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .daily-headline,
+  .daily-score,
+  .daily-tags {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .daily-score {
+    margin-top: 8px;
+    text-align: left;
+  }
 }
 
 /* 분야 점수 막대 */
@@ -4686,6 +4713,14 @@ select {
 .mcell-gz .gz-ko {
   font-size: 9px;
   opacity: 0.85;
+}
+.mcell-unknown {
+  min-height: 74px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 .el-wood { background: #e7f3da; color: #3f7d2f; }
 .el-fire { background: #fde2e0; color: #c43d3d; }

@@ -405,11 +405,44 @@ function contextFor(productId, manse) {
   return buildSajuContext(manse);
 }
 
+const PLAN_PRODUCT_FOCUS = {
+  "saju-analysis": "타고난 기질, 강점과 그림자, 일과 재물, 관계, 현재 흐름, 이 사람에게 맞는 생활 보완법을 7~10개 섹션으로 설계한다.",
+  compatibility: "두 사람의 끌림, 잘 맞는 결, 충돌, 대화법, 생활 호흡, 오래 가는 방법을 6~8개 섹션과 점수로 설계한다.",
+  cycle: "지나온 흐름과 앞으로의 10년 단위 전환점, 준비 구간, 기회와 주의점을 7~10개 섹션으로 설계한다.",
+  "yearly-fortune": "해당 연도의 총운과 계절·월별 흐름, 조심할 때와 행동 방향을 7~10개 섹션으로 설계한다.",
+};
+
+export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner }) {
+  const isCompat = productId === "compatibility";
+  const subject = isCompat
+    ? `"${profile.name}"님과 "${partner?.name || "상대"}"님의 관계`
+    : `"${profile.name}"님`;
+  const output = isCompat
+    ? "headline, score(0~100), scoreLabel, hashtags 3개, sections 6~8개(icon·title·angle)만 설계한다."
+    : "headline, sections 7~10개(icon·title·angle), lucky(why·whyKeywords·personalNote)만 설계한다. 색·숫자·방향과 본문은 쓰지 않는다.";
+  const custom = extra && String(extra).trim()
+    ? `\n[관리자 추가 지침]\n${String(extra).trim()}`
+    : "";
+
+  return `너는 사람의 마음과 삶을 따뜻하고 구체적인 일상 언어로 읽는 명리 상담가다.
+[이번 작업 — 리포트 설계만]
+- 대상: ${subject}
+- ${PLAN_PRODUCT_FOCUS[productId] || PLAN_PRODUCT_FOCUS["saju-analysis"]}
+- ${output}
+- 주어진 만세력 데이터에만 근거하고, 누구에게나 맞는 칭찬이나 막연한 일반론을 피한다.
+- 한자와 사주 전문용어를 headline·title·angle·lucky의 화면 문구에 쓰지 않는다. 분석 근거는 쉬운 사람 이야기로 번역한다.
+- headline과 제목은 한 컷처럼 선명하게 짓고 서로 겹치지 않게 한다. 은유·단언·위로·역설·질문 형태와 끝맺음을 섞으며 질문형은 최대 1개만 쓴다.
+- 같은 종결어미와 '~한 사람' 결말을 반복하지 않는다. 관계의 온도·거리, '돈은~', '지금은~', 이름+사용법 같은 상투 제목을 쓰지 않는다.
+- 각 angle은 해당 만세력에서만 나오는 구체적인 긴장·강점·삶의 장면을 한 줄로 적고 다른 섹션과 중복하지 않는다.
+- 재난·질병·이혼·파산·투자 결과를 단정하거나 공포를 조장하지 않는다. 약점은 관리 방향과 강점의 이면까지 제시한다.
+- 한국어 존댓말로 자연스럽게 쓰고, 본문(body)은 절대 작성하지 않는다.${custom}`;
+}
+
 /**
  * 1단계 — 설계(제품별). 단일 인물(사주/대운/연도운)은 {headline,sections,lucky}, 궁합은 {headline,score,scoreLabel,hashtags,sections}.
  * @returns {Promise<object>} 공통으로 { sections:[{id,icon,title,angle}], context } 포함
  */
-export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model }) {
+export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model }, dependencies = {}) {
   const isCompat = productId === "compatibility";
   const partnerName = partner?.name || "상대";
 
@@ -419,34 +452,23 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
       ? contextFor(productId, manse)
       : manse;
 
-  const instructions = isCompat
-    ? `${composePrompt(productId, extra)}
-
-[이번 출력 — 설계만]
-- 본문(body)은 쓰지 않는다. score·scoreLabel·hashtags·headline + 섹션 6~8개(icon·title·angle)만 설계한다(angle = 이 커플만의 핵심 한 줄).
-- 위의 제목 다양성·금지 틀·바넘 금지 규칙을 전역 보장. 한자·사주용어를 노출하지 않는다.
-- 두 사람: "${profile.name}"님 × "${partnerName}"님.`
-    : `${composePrompt(productId, extra)}
-
-[이번 출력 — 설계만]
-- 본문(body)은 쓰지 않는다. 섹션 7~10개의 icon·title·angle만 설계한다(angle = 그 섹션 본문이 펼칠 이 사주만의 핵심 한 줄).
-- 이 단계가 '전체 제목'을 한눈에 보는 유일한 단계다. 제목 다양성·끝맺음 분산·금지 틀·바넘 금지 규칙을 여기서 전부 보장하라.
-- headline 1줄 + lucky(why·whyKeywords·personalNote, 색/숫자/방향은 출력 금지) 포함.
-- 한자·사주용어를 title/headline/angle에 노출하지 않는다. "${profile.name}"님 기준.`;
+  const instructions = buildPlanPrompt({ productId, extra, profile, partner });
 
   const input = JSON.stringify(
     isCompat
       ? { a: profile.name, b: partnerName, product: productName, manse: context }
       : { name: profile.name, gender: profile.gender, birthDate: profile.birthDate, product: productName, manse: context },
   );
-  const text = await chatJSON({
+  const request = dependencies.requestStructured || requestStructured;
+  const plan = await request({
     model,
     system: instructions,
     input,
     name: isCompat ? "compat_plan" : "saju_plan",
     schema: isCompat ? COMPAT_PLAN_SCHEMA : PLAN_SCHEMA,
+    maxTokens: 2048,
+    timeoutMs: 70000,
   });
-  const plan = JSON.parse(text);
   const sections = (plan.sections || []).map((s, i) => ({ id: `s${i}`, icon: s.icon, title: s.title, angle: s.angle }));
   if (isCompat) {
     return {
@@ -536,6 +558,8 @@ export async function generateSections({ productId = "saju-analysis", extra, pro
       input,
       name: "saju_sections",
       schema,
+      maxTokens: 4096,
+      timeoutMs: 90000,
     });
 
   let out = validateSectionBatch(sections, (await callOnce()).sections);

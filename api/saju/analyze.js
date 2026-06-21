@@ -3,7 +3,8 @@
 import { createHash } from "crypto";
 import { readJson, sendJson } from "../_lib/http.js";
 import { computeManse } from "../_lib/sajuApi.js";
-import { generateAnalysis, generateDailyFortune, generatePlan } from "../_lib/analysis.js";
+import { generateAnalysis, generateDailyFortune, generatePlan, generateSections } from "../_lib/analysis.js";
+import { openSse, runReportStream, sendSse } from "../_lib/reportStream.js";
 import { getSupabase, loadSiteConfig } from "../_lib/supabase.js";
 import { dayPillar, todayKST } from "../_lib/ganzhi.js";
 import { getSessionUser, accountFields } from "../_lib/sessions.js";
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
-    const { productId = "saju-analysis", profile, partner, orderId, visitorId, regen = false } = await readJson(req);
+    const { productId = "saju-analysis", profile, partner, orderId, visitorId, regen = false, stream = false } = await readJson(req);
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -40,6 +41,19 @@ export default async function handler(req, res) {
     const model = config?.ai_model || undefined;
     const sessionUser = await getSessionUser(req);
     const acct = accountFields(sessionUser); // 로그인 계정(카카오/이메일) — 고객 관리 기준
+
+    if (productId === "compatibility" && (!partner || !partner.name || !partner.birthDate)) {
+      return sendJson(res, 400, { message: "궁합은 두 사람의 정보가 필요합니다." });
+    }
+
+    const sbInsert = (row) => {
+      const sb = getSupabase();
+      if (!sb) return;
+      // 계정 식별(acct)을 함께 저장. lucky/계정 컬럼이 아직 없으면(미마이그레이션) 기본 컬럼만으로 폴백.
+      sb.from("analyses")
+        .insert({ ...row, lucky: row.lucky || null, ...acct })
+        .then(({ error } = {}) => { if (error) { const { lucky, ...base } = row; sb.from("analyses").insert(base).then(() => {}, () => {}); } }, () => { const { lucky, ...base } = row; sb.from("analyses").insert(base).then(() => {}, () => {}); });
+    };
 
     // 보관 정책: 1개월(30일) 지난 분석은 서버에서 자동 삭제(개인정보 최소보관·PG 부담 완화). 베스트에포트.
     {
@@ -57,17 +71,48 @@ export default async function handler(req, res) {
       return await handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct, user: sessionUser, regen: Boolean(regen) });
     }
 
+    const wantsStream = stream === true && String(req.headers.accept || "").includes("text/event-stream");
+    if (wantsStream) {
+      openSse(res);
+      try {
+        const result = await runReportStream({
+          productId,
+          productName,
+          profile,
+          partner,
+          config,
+          extra,
+          model,
+        }, {
+          emit: (event, payload) => sendSse(res, event, payload),
+          computeManse,
+          generatePlan,
+          generateSections,
+        });
+        sbInsert({
+          product_id: productId,
+          profile_name: productId === "compatibility" ? `${profile.name} × ${partner.name}` : profile.name,
+          manse: result.manse,
+          summary: result.summary,
+          headline: result.headline,
+          sections: result.sections,
+          lucky: productId === "compatibility"
+            ? { score: result.score, scoreLabel: result.scoreLabel, hashtags: result.hashtags }
+            : result.lucky,
+          visitor_id: visitorId || null,
+          order_id: orderId || null,
+        });
+      } catch (error) {
+        sendSse(res, "error", {
+          status: error.statusCode || 500,
+          message: error.message || "분석 처리 중 오류가 발생했습니다.",
+        });
+      }
+      return res.end();
+    }
+
     // 1) 중앙 만세력 (포인트 차감) — 접속정보는 어드민 입력(config.saju) 우선, 없으면 env
     const manse = await computeManse(profile, config);
-
-    const sbInsert = (row) => {
-      const sb = getSupabase();
-      if (!sb) return;
-      // 계정 식별(acct)을 함께 저장. lucky/계정 컬럼이 아직 없으면(미마이그레이션) 기본 컬럼만으로 폴백.
-      sb.from("analyses")
-        .insert({ ...row, lucky: row.lucky || null, ...acct })
-        .then(({ error } = {}) => { if (error) { const { lucky, ...base } = row; sb.from("analyses").insert(base).then(() => {}, () => {}); } }, () => { const { lucky, ...base } = row; sb.from("analyses").insert(base).then(() => {}, () => {}); });
-    };
 
     // 2) 궁합: 두 사람 만세력(2회 차감) → 2단계 설계(점수·해시태그·섹션). 본문은 프론트가 섹션별로.
     if (productId === "compatibility") {

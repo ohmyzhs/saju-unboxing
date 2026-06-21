@@ -276,9 +276,13 @@
             <span>보유 포인트</span>
             <b data-point-balance>0pt</b>
           </div>
-          <label>사용할 포인트
-            <input type="number" min="0" step="1" value="0" data-point-use />
-          </label>
+          <div class="point-use-field">
+            <label for="point-use-input">사용할 포인트</label>
+            <span class="point-use-row">
+              <input id="point-use-input" type="number" min="0" step="1" value="0" data-point-use />
+              <button type="button" data-point-use-all>전액사용</button>
+            </span>
+          </div>
           <div class="point-payment-total"><span>토스 결제 금액</span><strong data-pay-cash>990원</strong></div>
         </section>
         <div class="toss-widget" data-toss-widget>
@@ -315,7 +319,7 @@
           </div>
           <p data-analysis-message>결제 승인 정보를 확인했습니다. 만세력을 정리하는 중입니다...</p>
           <div class="progress-track"><span data-analysis-progress></span><b data-analysis-progress-label>0%</b></div>
-          <small>화면을 나가도 분석은 계속 진행돼요. 끝나면 보관함에 안전하게 저장됩니다.</small>
+          <small>완료된 단계마다 보관함에 안전하게 저장됩니다.</small>
         </section>
         <section class="analysis-section analysis-report" data-analysis-report hidden>
           <h2>사주해설</h2>
@@ -572,9 +576,12 @@
         <button data-view-target="library"><img src="./assets/ui/icon-vault.svg" alt="" /><span>보관함</span></button>
       </nav>
     </main>
+    <script src="./analysis-stream.js"></script>
     <script src="./analysis-batching.js"></script>
     <script src="./order-recovery.js"></script>
     <script src="./report-recovery.js"></script>
+    <script src="./daily-fortune-ui.js"></script>
+    <script src="./point-payment.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
