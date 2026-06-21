@@ -56,6 +56,7 @@ let analytics = {
 // 방문자 → 로그인 계정(카카오/이메일) 매핑. 주문·분석에서 채워(renderDashboard) 방문자 분석에 표시.
 let visitorAccountMap = new Map();
 let pointAdminData = { members: [], account: null, selectedUserId: null };
+let pointMemberFilter = "";
 
 function readStore(key, fallback) {
   try {
@@ -116,6 +117,14 @@ function formatWon(value) {
 
 function formatPoints(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}pt`;
+}
+
+function adminPaymentLabel(order) {
+  const cash = Number(order.cashAmount ?? order.amount ?? 0);
+  const points = Number(order.pointsUsed || 0);
+  if (order.payMethod === "mixed" || (cash > 0 && points > 0)) return `현금 ${formatWon(cash)} + ${formatPoints(points)}`;
+  if (order.payMethod === "points" || points > 0) return formatPoints(points);
+  return `현금 ${formatWon(cash)}`;
 }
 
 function formatPercent(value) {
@@ -611,7 +620,7 @@ function renderDashboard() {
         <td><b>${safe(DEFAULT_PRODUCTS[order.productId]?.name || order.productName || order.orderName || "상품")}</b><small>${safe(order.orderId || order.id || "-")}</small></td>
         <td>${order.userId ? `${providerBadge(order.userProvider)} <b>${safe(order.userLabel || "회원")}</b>` : `<span class="acct-badge acct-guest">비회원</span>`}</td>
         <td>${safe(order.profileName || "-")}</td>
-        <td>${formatWon(order.amount)}</td>
+        <td><b>${adminPaymentLabel(order)}</b><small>${order.payMethod === "points" ? "포인트 결제" : order.payMethod === "mixed" ? "혼합 결제" : "토스 결제"}</small></td>
         <td>${statusPill(order.status)}</td>
       </tr>
     `),
@@ -702,14 +711,31 @@ const POINT_TYPE_LABELS = {
   admin_adjust: "관리자 조정",
 };
 
-async function loadAdminPoints(userId = pointAdminData.selectedUserId) {
-  const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+async function loadAdminPoints() {
   try {
-    const res = await fetch(`/api/admin/points${query}`, { cache: "no-store" });
+    const res = await fetch("/api/admin/points", { cache: "no-store" });
     if (res.status === 401) return showLogin();
     const body = await res.json();
     if (!res.ok) throw new Error(body.message || "포인트 정보를 불러오지 못했습니다.");
-    pointAdminData = body;
+    pointAdminData = { ...body, account: null, selectedUserId: null };
+    renderAdminPoints();
+  } catch (error) {
+    setStatus(document.querySelector("[data-admin-point-status]"), error.message, "error");
+  }
+}
+
+async function loadAdminPointDetail(userId) {
+  pointAdminData.selectedUserId = String(userId || "");
+  pointAdminData.account = null;
+  renderAdminPoints();
+  const summary = document.querySelector("[data-admin-point-summary]");
+  if (summary) summary.innerHTML = `<div class="empty-box is-loading"><span class="inline-spinner"></span>회원 정보를 불러오는 중…</div>`;
+  try {
+    const res = await fetch(`/api/admin/points?userId=${encodeURIComponent(pointAdminData.selectedUserId)}`, { cache: "no-store" });
+    if (res.status === 401) return showLogin();
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "회원 포인트 정보를 불러오지 못했습니다.");
+    pointAdminData = { ...pointAdminData, selectedUserId: body.selectedUserId, account: body.account };
     renderAdminPoints();
   } catch (error) {
     setStatus(document.querySelector("[data-admin-point-status]"), error.message, "error");
@@ -718,19 +744,23 @@ async function loadAdminPoints(userId = pointAdminData.selectedUserId) {
 
 function renderAdminPoints() {
   const members = pointAdminData.members || [];
+  const needle = pointMemberFilter.trim().toLowerCase();
+  const visibleMembers = needle
+    ? members.filter((member) => `${member.userLabel} ${member.userId} ${member.userProvider}`.toLowerCase().includes(needle))
+    : members;
   renderTable(
     document.querySelector("[data-admin-point-members]"),
-    members.map((member) => `
+    visibleMembers.map((member) => `
       <tr>
-        <td><button class="admin-member-pick" type="button" data-point-member="${safe(member.userId)}"><b>${safe(member.userLabel)}</b><small>${safe(member.userId)}</small></button></td>
+        <td><button class="admin-member-pick${member.userId === pointAdminData.selectedUserId ? " is-active" : ""}" type="button" data-point-member="${safe(member.userId)}"><b>${safe(member.userLabel)}</b><small>${safe(member.userId)}</small></button></td>
         <td>${providerBadge(member.userProvider)}</td>
         <td><b>${formatPoints(member.balance)}</b><small>토큰 ${Number(member.regenTokens || 0)}개</small></td>
       </tr>`),
-    "포인트 회원 데이터가 없습니다.",
+    needle ? "검색 결과가 없습니다." : "포인트 회원 데이터가 없습니다.",
     ["회원", "계정", "잔액"],
   );
   document.querySelectorAll("[data-point-member]").forEach((button) => {
-    button.addEventListener("click", () => loadAdminPoints(button.dataset.pointMember));
+    button.addEventListener("click", () => loadAdminPointDetail(button.dataset.pointMember));
   });
 
   const member = members.find((item) => item.userId === pointAdminData.selectedUserId);
@@ -752,13 +782,18 @@ function renderAdminPoints() {
     member ? "포인트 거래 내역이 없습니다." : "회원을 먼저 선택하세요.",
     ["유형 / 메모", "변경", "변경 후 잔액"],
   );
+  const canAdjust = Boolean(member && account);
+  document.querySelectorAll("[data-point-adjust] input, [data-regen-adjust] input, [data-point-adjust] button, [data-regen-adjust] button, [data-point-quick]").forEach((control) => {
+    control.disabled = !canAdjust;
+  });
 }
 
 async function submitPointAdmin(event, operation) {
   event.preventDefault();
+  const form = event.currentTarget;
   const status = document.querySelector("[data-admin-point-status]");
   if (!pointAdminData.selectedUserId) return setStatus(status, "회원을 먼저 선택하세요.", "error");
-  const data = new FormData(event.currentTarget);
+  const data = new FormData(form);
   const amount = Number(data.get("amount"));
   const memo = String(data.get("memo") || "관리자 조정").trim();
   setStatus(status, "반영 중...");
@@ -771,14 +806,46 @@ async function submitPointAdmin(event, operation) {
     });
     if (code === 401) return showLogin();
     if (!ok) throw new Error(body.message || "포인트 조정에 실패했습니다.");
-    event.currentTarget.reset();
-    if (operation === "regen") event.currentTarget.querySelector('[name="amount"]').value = "1";
-    await loadAdminPoints(pointAdminData.selectedUserId);
+    form.reset();
+    if (operation === "regen") form.querySelector('[name="amount"]').value = "1";
+    await loadAdminPointDetail(pointAdminData.selectedUserId);
     setStatus(status, operation === "regen" ? "재생성 토큰을 부여했습니다." : "포인트를 반영했습니다.", "ok");
   } catch (error) {
     setStatus(status, error.message, "error");
   }
 }
+
+document.querySelector("[data-point-member-search]")?.addEventListener("input", (event) => {
+  pointMemberFilter = event.currentTarget.value || "";
+  renderAdminPoints();
+});
+
+document.querySelectorAll("[data-point-quick]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const status = document.querySelector("[data-admin-point-status]");
+    if (!pointAdminData.selectedUserId) return setStatus(status, "회원을 먼저 선택하세요.", "error");
+    const operation = button.dataset.operation;
+    const amount = Number(button.dataset.amount);
+    button.disabled = true;
+    setStatus(status, "반영 중...");
+    try {
+      const { ok, status: code, body } = await adminPost("/api/admin/points", {
+        operation,
+        amount,
+        userId: pointAdminData.selectedUserId,
+        memo: "관리자 빠른 조정",
+      });
+      if (code === 401) return showLogin();
+      if (!ok) throw new Error(body.message || "포인트 조정에 실패했습니다.");
+      await loadAdminPointDetail(pointAdminData.selectedUserId);
+      setStatus(status, operation === "regen" ? "재생성 토큰을 부여했습니다." : "포인트를 반영했습니다.", "ok");
+    } catch (error) {
+      setStatus(status, error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+});
 
 document.querySelectorAll("[data-admin-tab]").forEach((tab) => {
   tab.addEventListener("click", () => {

@@ -21,9 +21,14 @@ test("결제 화면에 포인트 사용 입력과 현금 잔액이 있다", () =
 });
 
 test("무료운세 재생성 버튼과 regen 요청이 연결된다", () => {
+  assert.match(html, /data-daily-regen-card/);
+  assert.match(html, /data-daily-regen-count/);
   assert.match(html, /data-daily-regenerate/);
+  assert.match(html, /data-points-daily/);
   assert.match(app, /regen: Boolean\(options\.regen\)/);
-  assert.match(app, /regenerate\.disabled = true/);
+  assert.match(app, /renderDailyRegeneration/);
+  assert.match(app, /재생성권 1개를 사용/);
+  assert.match(app, /options\.regen && !data\.regenerated/);
 });
 
 test("공개 설정은 서버 충전 티어를 노출한다", () => {

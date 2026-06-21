@@ -469,8 +469,11 @@
           <h1>오늘의 운세</h1>
           <span></span>
         </div>
+        <section class="daily-regen-card" data-daily-regen-card hidden>
+          <div><b>무료운세 재생성권</b><small data-daily-regen-count>남은 재생성권 0개</small></div>
+          <button class="secondary-action" type="button" data-daily-regenerate>재생성권 1개 사용</button>
+        </section>
         <div class="daily-body" data-daily-body></div>
-        <button class="secondary-action daily-regenerate" type="button" data-daily-regenerate hidden>재생성 토큰으로 다시 생성</button>
       </section>
 
       <section class="view people-view" data-view="people">
@@ -492,6 +495,7 @@
         <section class="points-balance-card" data-points-balance-card>
           <span>현재 보유 포인트</span><strong data-points-balance>0pt</strong>
           <small data-points-tokens>무료운세 재생성 토큰 0개</small>
+          <button class="secondary-action points-daily-link" type="button" data-points-daily>무료운세에서 재생성권 사용하기</button>
         </section>
         <section class="point-tier-grid" data-point-tiers></section>
         <section class="point-history">
@@ -569,6 +573,8 @@
       </nav>
     </main>
     <script src="./analysis-batching.js"></script>
+    <script src="./order-recovery.js"></script>
+    <script src="./report-recovery.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

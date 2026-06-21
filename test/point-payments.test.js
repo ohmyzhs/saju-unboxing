@@ -81,3 +81,19 @@ test("이미 완료된 주문은 토스를 다시 호출하지 않는다", async
   assert.equal(called, false);
   assert.equal(result.alreadyProcessed, true);
 });
+
+test("취소된 주문은 뒤늦은 토스 승인 콜백을 거절한다", async () => {
+  let confirmed = false;
+  await assert.rejects(
+    () => confirmOrderPayment({
+      order: { id: "o5", amount: 990, status: "결제 취소" },
+      paymentKey: "late",
+      requestedAmount: 990,
+      adjust: async () => 0,
+      confirm: async () => { confirmed = true; return {}; },
+      markDone: async () => {},
+    }),
+    /취소된 주문/,
+  );
+  assert.equal(confirmed, false);
+});

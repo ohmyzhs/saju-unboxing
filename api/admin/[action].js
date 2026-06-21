@@ -162,13 +162,17 @@ function mapEvent(row) {
     ip: row.ip,
   };
 }
-function mapOrder(row) {
+export function mapOrder(row) {
   return {
     orderId: row.id,
     productId: row.product_id,
     productName: row.product_id,
     profileName: row.profile_name,
     amount: row.amount,
+    cashAmount: Number(row.amount || 0),
+    pointsUsed: Number(row.points_used || 0),
+    payMethod: row.pay_method || "toss",
+    totalAmount: Number(row.amount || 0) + Number(row.points_used || 0),
     status: row.status,
     visitorId: row.visitor_id,
     userId: row.user_id || null,

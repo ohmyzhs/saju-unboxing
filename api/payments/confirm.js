@@ -23,6 +23,9 @@ export async function confirmOrderPayment({
   if (Number(requestedAmount) !== Number(order.amount)) {
     throw paymentError("주문 금액과 결제 요청 금액이 다릅니다.");
   }
+  if (order.status === "결제 취소") {
+    throw paymentError("취소된 주문은 승인할 수 없습니다.", 409);
+  }
   if (order.status === "결제 완료" || order.status === "DONE") {
     return {
       paymentKey: order.toss_payment_key || paymentKey,

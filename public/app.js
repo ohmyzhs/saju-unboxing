@@ -175,6 +175,7 @@ let currentViewName = "home";
 let currentViewStartedAt = Date.now();
 let paymentReturn = false;
 let activeDailyProfile = null;
+let analysisDraftSync = Promise.resolve();
 // Calendar state for 택일
 let calendarState = {
   year: new Date().getFullYear(),
@@ -385,8 +386,8 @@ function removeServerProfile(id) {
 }
 // 보관함(archive)·주문(order) 항목을 서버에 저장(로그인 시).
 function pushUserData(kind, item) {
-  if (!runtimeSession?.user?.id || !item) return;
-  fetch("/api/profiles", {
+  if (!runtimeSession?.user?.id || !item) return Promise.resolve();
+  return fetch("/api/profiles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, item }),
@@ -487,11 +488,13 @@ function pruneArchiveRetention() {
   return kept;
 }
 
-function saveArchive(item) {
+function saveArchive(item, options = {}) {
   const archive = getArchive();
-  archive.unshift(item);
+  const index = archive.findIndex((entry) => entry.id === item.id);
+  if (index >= 0) archive.splice(index, 1, item);
+  else archive.unshift(item);
   writeStore(scopedKey(ARCHIVE_KEY), archive.slice(0, 60));
-  pushUserData("archive", item); // 로그인 상태면 보관함도 서버 저장(기기 무관)
+  if (options.sync !== false) pushUserData("archive", item); // 로그인 상태면 보관함도 서버 저장(기기 무관)
   renderArchive();
 }
 
@@ -605,13 +608,29 @@ function setPaymentStatus(message) {
 }
 
 // ---------- Fetch helper ----------
-async function getJson(url, options) {
-  const response = await fetch(url, options);
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(body.message || body.error || "요청 처리에 실패했습니다.");
+const REQUEST_TIMEOUT_MS = 55000;
+async function getJson(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const text = await response.text();
+    let body = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(response.ok ? "서버 응답 형식을 확인할 수 없습니다." : `서버 요청에 실패했습니다. (${response.status})`);
+    }
+    if (!response.ok) {
+      throw new Error(body.message || body.error || "요청 처리에 실패했습니다.");
+    }
+    return body;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("요청 시간이 초과되었습니다. 결제내역에서 다시 시도할 수 있습니다.");
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
   }
-  return body;
 }
 
 // ---------- Auth session ----------
@@ -816,19 +835,151 @@ function renderOrders() {
       const st = String(o.status || "");
       const cls = st.includes("완료") ? "ok" : st.includes("실패") || st.includes("오류") ? "fail" : "pending";
       const when = o.approvedAt || o.updatedAt || o.createdAt;
+      const report = getArchive().find((item) => item.orderId === o.orderId);
+      const actions = window.OrderRecovery.capabilities({ ...o, hasReport: Boolean(report) });
+      const purchase = recoverOrderPurchase(o);
+      const reportLabel = o.reportStatus === "generating"
+        ? `<span class="order-report-status pending">리포트 생성중</span>`
+        : o.reportStatus === "failed"
+          ? `<span class="order-report-status fail">리포트 생성 실패</span>`
+          : report
+            ? `<span class="order-report-status ok">리포트 완료</span>`
+            : "";
+      const actionButtons = [
+        actions.resume && purchase ? `<button type="button" data-order-resume="${escapeHtml(o.orderId)}">결제 이어하기</button>` : "",
+        actions.cancel ? `<button type="button" class="is-danger" data-order-cancel="${escapeHtml(o.orderId)}">주문 취소</button>` : "",
+        actions.viewReport ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}">리포트 보기</button>` : "",
+        actions.retryReport && purchase ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}" data-retry="true">리포트 다시 생성</button>` : "",
+      ].filter(Boolean).join("");
       return `
         <article class="order-card">
-          <header>
-            <b>${escapeHtml(o.productName || "상품")}</b>
-            <span class="order-amount">${formatWon(o.amount)}</span>
-          </header>
-          <div class="order-meta">
-            <span>${escapeHtml(o.profileName || "-")} · ${shortDate(when)}</span>
-            <span class="order-status ${cls}">${escapeHtml(st || "진행 중")}</span>
+          <button class="order-card-summary" type="button" data-order-detail="${escapeHtml(o.orderId)}" aria-expanded="false">
+            <header>
+              <b>${escapeHtml(o.productName || "상품")}</b>
+              <span class="order-amount">${escapeHtml(window.OrderRecovery.paymentSummary(o))}</span>
+            </header>
+            <div class="order-meta">
+              <span>${escapeHtml(o.profileName || "-")} · ${shortDate(when)}</span>
+              <span class="order-status ${cls}">${escapeHtml(st || "진행 중")}</span>
+            </div>
+            ${reportLabel}
+          </button>
+          <div class="order-detail" data-order-panel="${escapeHtml(o.orderId)}" hidden>
+            <dl>
+              <div><dt>주문번호</dt><dd>${escapeHtml(o.orderId)}</dd></div>
+              <div><dt>상품금액</dt><dd>${formatWon(window.OrderRecovery.totalAmount(o))}</dd></div>
+              <div><dt>토스 결제</dt><dd>${formatWon(window.OrderRecovery.cashAmount(o))}</dd></div>
+              <div><dt>사용 포인트</dt><dd>${formatPoints(o.pointsUsed || 0)}</dd></div>
+              <div><dt>결제 방식</dt><dd>${escapeHtml(o.payMethod === "points" ? "포인트" : o.payMethod === "mixed" ? "혼합 결제" : "토스")}</dd></div>
+              <div><dt>처리 시각</dt><dd>${shortDate(when)}</dd></div>
+            </dl>
+            ${o.reportError ? `<p class="order-error">${escapeHtml(o.reportError)}</p>` : ""}
+            ${actionButtons ? `<div class="order-actions">${actionButtons}</div>` : ""}
           </div>
         </article>`;
     })
     .join("");
+  list.querySelectorAll("[data-order-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = list.querySelector(`[data-order-panel="${CSS.escape(button.dataset.orderDetail)}"]`);
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      button.setAttribute("aria-expanded", String(!panel.hidden));
+    });
+  });
+  list.querySelectorAll("[data-order-cancel]").forEach((button) => {
+    button.addEventListener("click", () => cancelOrder(button.dataset.orderCancel, button));
+  });
+  list.querySelectorAll("[data-order-resume]").forEach((button) => {
+    button.addEventListener("click", () => resumeOrderPayment(button.dataset.orderResume, button));
+  });
+  list.querySelectorAll("[data-order-report]").forEach((button) => {
+    button.addEventListener("click", () => button.dataset.retry === "true"
+      ? retryOrderReport(button.dataset.orderReport)
+      : openOrderReport(button.dataset.orderReport));
+  });
+}
+
+function recoverOrderPurchase(order) {
+  if (order?.purchase?.productId && order.purchase.profile) return order.purchase;
+  const productId = order?.productId;
+  const product = PRODUCTS[productId];
+  const profile = getProfiles().find((item) => item.name === order?.profileName);
+  if (!product || !profile) return null;
+  return { productId, product, profile, partner: null, pointsUsed: Number(order.pointsUsed || 0) };
+}
+
+async function cancelOrder(orderId, button) {
+  if (!window.confirm("이 미결제 주문을 취소할까요?")) return;
+  if (button) button.disabled = true;
+  try {
+    await getJson("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel", orderId }),
+    });
+    upsertOrder({ orderId, status: "결제 취소" });
+    if (getPendingPurchase()?.orderId === orderId) clearPendingPurchase();
+    renderOrders();
+    showToast("주문을 취소했습니다.");
+  } catch (error) {
+    if (button) button.disabled = false;
+    showToast(error.message, true);
+  }
+}
+
+async function resumeOrderPayment(orderId, button) {
+  const order = getOrders().find((item) => item.orderId === orderId);
+  const purchase = recoverOrderPurchase(order);
+  if (!order || !purchase) return showToast("결제 정보를 복구할 수 없습니다. 새 주문으로 진행해주세요.", true);
+  if (button) button.disabled = true;
+  try {
+    const resumed = await getJson("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "resume", orderId }),
+    });
+    const pending = { ...purchase, orderId, amount: resumed.amount, pointsUsed: resumed.pointsUsed, customerKey: resumed.customerKey };
+    savePendingPurchase(pending);
+    await requestExistingOrderPayment(order, pending);
+  } catch (error) {
+    if (button) button.disabled = false;
+    showToast(`결제를 이어갈 수 없습니다: ${error.message}`, true);
+  }
+}
+
+function openStoredAnalysis(item) {
+  if (!item) return;
+  const profile = getProfiles().find((entry) => entry.id === item.profileId);
+  if (!profile) return showToast("분석 대상 프로필을 찾을 수 없습니다.", true);
+  const partner = item.partnerId ? getProfiles().find((entry) => entry.id === item.partnerId) : null;
+  window.clearInterval(activeAnalysisTimer);
+  activeAnalysisTimer = null;
+  showView("analysis");
+  const loading = document.querySelector("[data-analysis-loading]");
+  if (loading) loading.hidden = true;
+  const hint = document.querySelector("[data-scroll-hint]");
+  if (hint) hint.hidden = true;
+  renderAnalysisResult(item.productId, profile, partner, item.analysis || null);
+}
+
+function openOrderReport(orderId) {
+  const item = getArchive().find((entry) => entry.orderId === orderId);
+  if (!item) return retryOrderReport(orderId);
+  openStoredAnalysis(item);
+  trackEvent("archive_reopen", { archiveId: item.id, productId: item.productId, source: "orders" });
+}
+
+function retryOrderReport(orderId) {
+  const order = getOrders().find((item) => item.orderId === orderId);
+  const purchase = recoverOrderPurchase(order);
+  if (!purchase) return showToast("리포트 생성 정보를 복구할 수 없습니다.", true);
+  startAnalysis(purchase.productId, purchase.profile, {
+    orderId,
+    paymentStatus: "결제 완료",
+    partner: purchase.partner || null,
+    retry: true,
+  });
 }
 
 const POINT_TX_LABELS = {
@@ -845,9 +996,11 @@ function renderPointsView() {
   const tiers = document.querySelector("[data-point-tiers]");
   const history = document.querySelector("[data-point-transactions]");
   const status = document.querySelector("[data-points-status]");
+  const dailyLink = document.querySelector("[data-points-daily]");
   if (!tiers || !history) return;
   const user = runtimeSession?.user;
   const points = runtimeSession?.points;
+  if (dailyLink) dailyLink.hidden = !user?.id;
   if (!user?.id) {
     if (balance) balance.textContent = "로그인 필요";
     if (tokens) tokens.textContent = "로그인하면 포인트를 충전할 수 있습니다.";
@@ -963,8 +1116,8 @@ function startDailyFortune(profile, options = {}) {
   const regenerate = document.querySelector("[data-daily-regenerate]");
   if (regenerate) {
     regenerate.disabled = true;
-    regenerate.hidden = true;
   }
+  renderDailyRegeneration();
 
   // 같은 날 + 같은 사람 → 캐시(즉시, 포인트 추가 없음)
   const cached = readStore(dailyCacheKey(profile.id), null);
@@ -987,6 +1140,9 @@ function startDailyFortune(profile, options = {}) {
     body: JSON.stringify({ productId: "daily-fortune", profile, visitorId: visitorId(), regen: Boolean(options.regen) }),
   })
     .then((data) => {
+      if (options.regen && !data.regenerated) {
+        throw new Error("재생성권을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.");
+      }
       if (runtimeSession?.points && Number.isInteger(data.regenTokens)) {
         runtimeSession.points.regenTokens = data.regenTokens;
         renderSession();
@@ -1170,18 +1326,34 @@ function renderDailyFortune(profile, data) {
       else openMemberModal(pid);
     });
   });
-  const regenerate = document.querySelector("[data-daily-regenerate]");
-  if (regenerate) {
-    regenerate.disabled = false;
-    regenerate.hidden = !(runtimeSession?.user?.id && Number(runtimeSession?.points?.regenTokens || 0) > 0);
-  }
+  renderDailyRegeneration();
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderDailyRegeneration() {
+  const card = document.querySelector("[data-daily-regen-card]");
+  const count = document.querySelector("[data-daily-regen-count]");
+  const button = document.querySelector("[data-daily-regenerate]");
+  const loggedIn = Boolean(runtimeSession?.user?.id);
+  const tokens = Math.max(0, Number(runtimeSession?.points?.regenTokens || 0));
+  if (card) card.hidden = !loggedIn;
+  if (count) count.textContent = tokens > 0
+    ? `남은 재생성권 ${tokens}개 · 오늘 운세를 새로 만들 수 있어요.`
+    : "남은 재생성권이 없습니다.";
+  if (button) {
+    button.hidden = tokens <= 0;
+    button.disabled = !activeDailyProfile;
+    button.textContent = "재생성권 1개 사용";
+  }
 }
 
 document.querySelector("[data-daily-regenerate]")?.addEventListener("click", () => {
   if (!activeDailyProfile || Number(runtimeSession?.points?.regenTokens || 0) <= 0) return;
+  if (!window.confirm("재생성권 1개를 사용해 오늘의 무료운세를 새로 만들까요?")) return;
   startDailyFortune(activeDailyProfile, { regen: true });
 });
+
+document.querySelector("[data-points-daily]")?.addEventListener("click", () => showView("fortune"));
 
 // 화면 상단 토스트 (보이는 안내/에러)
 function showToast(text, isError) {
@@ -1890,6 +2062,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           price: order.price,
           pointsUsed: order.pointsUsed,
           payMethod: order.payMethod,
+          customerKey: order.customerKey,
           createdAt: Date.now(),
           // 추가 질문 상담: 결제 후 답변 생성에 필요한 정보(만세력 재사용)
           question: context.question || null,
@@ -1907,7 +2080,10 @@ async function beginTossPayment(planId, sourceButton, context = null) {
         productName: context.product.name,
         profileName: context.profile?.name || "포인트 충전",
         amount: order.price,
+        cashAmount: order.amount,
         pointsUsed: order.pointsUsed,
+        payMethod: order.payMethod,
+        purchase,
         status: order.paidWithPoints ? "결제 완료" : "결제 진행중",
         customer: runtimeSession?.user?.nickname || "비회원",
       });
@@ -1974,6 +2150,43 @@ async function beginTossPayment(planId, sourceButton, context = null) {
     setPaymentStatus(`결제 시작 실패: ${error.message}`);
     trackEvent("payment_error", { message: error.message, productId: context?.productId, amount: context?.product?.amount });
   }
+}
+
+async function requestExistingOrderPayment(order, purchase) {
+  if (!runtimeConfig?.tossClientKey) throw new Error("Toss 클라이언트 키가 없습니다.");
+  const amount = Number(purchase.amount ?? order.cashAmount ?? window.OrderRecovery.cashAmount(order));
+  if (!(amount > 0)) throw new Error("토스로 결제할 금액이 없습니다.");
+  const orderName = purchase.orderName || `${purchase.product?.name || order.productName || "사주 리포트"}${purchase.profile?.name ? ` · ${purchase.profile.name}` : ""}`;
+  const customerName = runtimeSession?.user?.nickname || purchase.profile?.name || "사주연구소 고객";
+  const successUrl = `${location.origin}/payments/success`;
+  const failUrl = `${location.origin}/payments/fail`;
+  trackEvent("payment_resume", { orderId: order.orderId, productId: order.productId, amount });
+
+  if (tossWidgetSupported) {
+    try {
+      const widgets = await ensureTossWidgets(amount);
+      await widgets.requestPayment({ orderId: order.orderId, orderName, customerName, successUrl, failUrl });
+      return;
+    } catch (error) {
+      if (!isWidgetKeyError(error)) throw error;
+      tossWidgetSupported = false;
+    }
+  }
+
+  const TossPayments = await loadTossSdk();
+  const payment = TossPayments(runtimeConfig.tossClientKey).payment({
+    customerKey: purchase.customerKey || TossPayments.ANONYMOUS || "ANONYMOUS",
+  });
+  await payment.requestPayment({
+    method: "CARD",
+    amount: { value: amount, currency: "KRW" },
+    orderId: order.orderId,
+    orderName,
+    customerName,
+    successUrl,
+    failUrl,
+    windowTarget: "self",
+  });
 }
 
 
@@ -2199,9 +2412,47 @@ function compatCardHtml(data) {
     </div>`;
 }
 
+function createAnalysisDraft({ productId, product, profile, partner, orderId, paymentStatus, data }) {
+  return window.ReportRecovery.createDraft({
+    id: orderId ? `analysis-${orderId}` : `analysis-${crypto.randomUUID()}`,
+    orderId: orderId || null,
+    productId,
+    productName: product.name,
+    profileName: partner ? `${profile.name} × ${partner.name}` : profile.name,
+    profileId: profile.id,
+    partnerId: partner?.id || null,
+    partnerName: partner?.name || null,
+    paymentStatus: paymentStatus || "결제 완료",
+    data: {
+      ...data,
+      context: productId === "cycle" || productId === "yearly-fortune"
+        ? { 대운타임라인: data.context?.대운타임라인, 현재대운: data.context?.현재대운, 세운: data.context?.세운 }
+        : undefined,
+    },
+  });
+}
+
+function saveAnalysisDraft(draft, { reportStatus = draft.generationStatus, reportError = draft.generationError } = {}) {
+  saveArchive(draft, { sync: false });
+  analysisDraftSync = analysisDraftSync
+    .then(() => pushUserData("archive", draft))
+    .catch(() => {});
+  if (draft.orderId) {
+    upsertOrder({
+      orderId: draft.orderId,
+      reportStatus,
+      reportError: reportError || null,
+      archiveId: draft.id,
+    });
+  }
+  return draft;
+}
+
 function startAnalysis(productId, profile, meta = {}) {
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
   const partner = meta.partner || null;
+  let analysisDraft = null;
+  if (meta.orderId) upsertOrder({ orderId: meta.orderId, reportStatus: "generating", reportError: null });
   trackEvent("analysis_start", {
     productId,
     productName: product.name,
@@ -2272,61 +2523,49 @@ function startAnalysis(productId, profile, meta = {}) {
       if (progress) progress.style.width = "100%";
       if (progressLabel) progressLabel.textContent = "100%";
 
-      const archive = (sections) =>
-        saveArchive({
-          id: `analysis-${crypto.randomUUID()}`,
-          productId,
-          productName: product.name,
-          profileName: partner ? `${profile.name} × ${partner.name}` : profile.name,
-          profileId: profile.id,
-          partnerId: partner?.id || null,
-          partnerName: partner?.name || null,
-          orderId: meta.orderId || null,
-          paymentStatus: meta.paymentStatus || "결제 완료",
-          analysis: {
-            headline: data.headline,
-            sections,
-            manse: data.manse,
-            summary: data.summary || null, // 추가 질문 상담에서 만세력 재사용(재계산 없이)
-            lucky: data.lucky || null,
-            // 궁합 재미 요소(보관함 재생용)
-            score: typeof data.score === "number" ? data.score : undefined,
-            scoreLabel: data.scoreLabel || undefined,
-            hashtags: data.hashtags || undefined,
-            // 대운/연도운 타임라인 재생용(나이·연도만)
-            context:
-              productId === "cycle" || productId === "yearly-fortune"
-                ? { 대운타임라인: data.context?.대운타임라인, 현재대운: data.context?.현재대운, 세운: data.context?.세운 }
-                : undefined,
-          },
-          createdAt: Date.now(),
-        });
       const complete = () =>
         trackEvent("analysis_complete", { productId, productName: product.name, profileId: profile.id, profileName: profile.name, orderId: meta.orderId || null });
 
       // ── 2단계(plan): 제목·개운 먼저 그리고, 본문은 섹션별 병렬 호출로 채운다(점진적 UX) ──
       if (data.mode === "plan" && Array.isArray(data.sections)) {
+        analysisDraft = createAnalysisDraft({
+          productId,
+          product,
+          profile,
+          partner,
+          orderId: meta.orderId,
+          paymentStatus: meta.paymentStatus,
+          data,
+        });
+        saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
         renderAnalysisResult(productId, profile, partner, data); // 제목 placeholder 표시
         if (loading) loading.hidden = true;
         const hint = document.querySelector("[data-scroll-hint]");
         if (hint) hint.hidden = true;
 
         const allTitles = data.sections.map((s) => s.title);
-        const sections = data.sections.map((s) => ({ ...s }));
+        const sections = analysisDraft.analysis.sections.map((s) => ({ ...s }));
         const batches = window.AnalysisBatching.chunkSections(sections);
+        let sectionFailures = 0;
         const requestSingleSection = (s) =>
           getJson("/api/saju/section", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ productId, profile, partner, context: data.context, section: s, otherTitles: allTitles }),
-          })
+          }, 30000)
             .then((r) => {
               s.body = r.body || "";
               fillSectionBody(s.id, s.body);
+              analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, s.id, s.body);
+              saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
             })
-            .catch(() => {
+            .catch((error) => {
+              sectionFailures += 1;
               s.body = "이 부분은 잠시 후 다시 펼쳐 주세요.";
               fillSectionBody(s.id, s.body);
+              analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, s.id, s.body);
+              analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", error.message);
+              saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: error.message });
             });
 
         await Promise.all(
@@ -2336,13 +2575,15 @@ function startAnalysis(productId, profile, meta = {}) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ productId, profile, partner, context: data.context, sections: batch, otherTitles: allTitles }),
-              });
+              }, 30000);
               const bodies = new Map((result.sections || []).map((item) => [item.id, item.body]));
               for (const section of batch) {
                 const body = bodies.get(section.id);
                 if (!body) throw new Error(`섹션 응답 누락: ${section.id}`);
                 section.body = body;
                 fillSectionBody(section.id, body);
+                analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, section.id, body);
+                saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
               }
             } catch {
               await Promise.all(batch.map((s) => requestSingleSection(s)));
@@ -2350,8 +2591,14 @@ function startAnalysis(productId, profile, meta = {}) {
           }),
         );
 
-        archive(sections);
-        complete();
+        if (sectionFailures > 0) {
+          analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", "일부 리포트 생성이 완료되지 않았습니다.");
+          saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: analysisDraft.generationError });
+        } else {
+          analysisDraft = window.ReportRecovery.finish(analysisDraft);
+          saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
+          complete();
+        }
         paymentReturn = false;
         return;
       }
@@ -2361,7 +2608,17 @@ function startAnalysis(productId, profile, meta = {}) {
       if (loading) loading.hidden = true;
       const hint = document.querySelector("[data-scroll-hint]");
       if (hint) hint.hidden = true;
-      archive(data.sections);
+      analysisDraft = createAnalysisDraft({
+        productId,
+        product,
+        profile,
+        partner,
+        orderId: meta.orderId,
+        paymentStatus: meta.paymentStatus,
+        data,
+      });
+      analysisDraft = window.ReportRecovery.finish(analysisDraft);
+      saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
       complete();
       paymentReturn = false;
     })
@@ -2369,6 +2626,12 @@ function startAnalysis(productId, profile, meta = {}) {
       finishLoading();
       if (progressLabel) progressLabel.textContent = "오류";
       if (message) message.textContent = `분석을 불러오지 못했어요: ${error.message}`;
+      if (analysisDraft) {
+        analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", error.message);
+        saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: error.message });
+      } else if (meta.orderId) {
+        upsertOrder({ orderId: meta.orderId, reportStatus: "failed", reportError: error.message });
+      }
       trackEvent("analysis_error", { productId, message: error.message });
     });
 }
@@ -2398,7 +2661,7 @@ function renderArchive() {
         <button type="button" class="archive-card" data-archive-id="${escapeHtml(item.id)}">
           <header>
             <span class="archive-product">${escapeHtml(item.productName)}</span>
-            <span class="archive-status">${escapeHtml(item.paymentStatus || "결제 완료")}</span>
+            <span class="archive-status">${escapeHtml(item.generationStatus === "failed" ? "일부 생성 실패 · 재시도 가능" : item.generationStatus === "generating" ? "생성 중" : item.paymentStatus || "결제 완료")}</span>
           </header>
           <b>${escapeHtml(item.profileName)}님</b>
           <small>${shortDate(item.createdAt)}</small>
@@ -2411,18 +2674,7 @@ function renderArchive() {
     button.addEventListener("click", () => {
       const item = getArchive().find((entry) => entry.id === button.dataset.archiveId);
       if (!item) return;
-      const profile = getProfiles().find((p) => p.id === item.profileId);
-      if (!profile) return;
-      const partner = item.partnerId ? getProfiles().find((p) => p.id === item.partnerId) : null;
-      // Skip loading screen, render result directly
-      window.clearInterval(activeAnalysisTimer);
-      activeAnalysisTimer = null;
-      showView("analysis");
-      const loading = document.querySelector("[data-analysis-loading]");
-      if (loading) loading.hidden = true;
-      const hint = document.querySelector("[data-scroll-hint]");
-      if (hint) hint.hidden = true;
-      renderAnalysisResult(item.productId, profile, partner, item.analysis || null);
+      openStoredAnalysis(item);
       trackEvent("archive_reopen", { archiveId: item.id, productId: item.productId });
     });
   });

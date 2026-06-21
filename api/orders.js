@@ -4,6 +4,7 @@ import { PLANS, makeCustomerKey } from "./_lib/toss.js";
 import { getSupabase, loadSiteConfig } from "./_lib/supabase.js";
 import { getSessionUser, accountFields } from "./_lib/sessions.js";
 import { adjustPoints, chargeTier, getPointAccount, isInsufficientPoints, paymentBreakdown } from "./_lib/points.js";
+import { cancelOwnedOrder, resumeOwnedOrder } from "./_lib/orderLifecycle.js";
 
 // 주문번호: 한국시각 YYMMDDHHmmss + 4자리 랜덤 = 16자리 숫자 (예: 2606170454239218).
 // 쇼핑몰 표준식 — 시간순 정렬·식별이 쉽고, 토스 orderId 규격(6~64자 영숫자)도 충족.
@@ -52,10 +53,28 @@ export async function completePointOnlyOrder({ userId, orderId, pointsUsed, adju
 export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
   try {
-    const { planId, amount, orderName, visitorId, sessionId, productId, profileName, pointsUsed = 0 } =
-      await readJson(req);
+    const body = await readJson(req);
+    const { planId, amount, orderName, visitorId, sessionId, productId, profileName, pointsUsed = 0 } = body;
     const user = await getSessionUser(req);
     const sb = getSupabase();
+    if (body.action === "cancel" || body.action === "resume") {
+      if (!user?.id) return sendJson(res, 401, { message: "로그인이 필요합니다." });
+      if (!sb) return sendJson(res, 503, { message: "주문 정보를 확인할 수 없습니다." });
+      const { data: order, error: findError } = await sb.from("orders").select("id, user_id, status, amount, points_used, product_id").eq("id", String(body.orderId || "")).maybeSingle();
+      if (findError) throw findError;
+      if (body.action === "resume") {
+        return sendJson(res, 200, { ok: true, ...resumeOwnedOrder({ order, userId: user.id }), customerKey: makeCustomerKey(user) });
+      }
+      const result = await cancelOwnedOrder({
+        order,
+        userId: user.id,
+        update: async (patch) => {
+          const updated = await sb.from("orders").update(patch).eq("id", order.id);
+          if (updated.error) throw updated.error;
+        },
+      });
+      return sendJson(res, 200, { ok: true, ...result });
+    }
     const isPointCharge = productId === "point-charge";
     const tier = isPointCharge ? chargeTier(amount) : null;
     if (isPointCharge && !tier) return sendJson(res, 400, { message: "선택할 수 없는 포인트 충전 금액입니다." });

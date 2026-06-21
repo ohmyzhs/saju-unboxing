@@ -67,7 +67,12 @@
 .point-payment label { display: grid; gap: 7px; font-weight: 700; }
 .point-payment input { width: 100%; padding: 12px; border: 1px solid #d9d4ca; border-radius: 12px; font-size: 16px; }
 .point-payment-total { padding-top: 12px; border-top: 1px solid #eee8dc; }
-.daily-regenerate { margin: 18px auto 110px; max-width: 320px; }
+.daily-regen-card { margin: 16px; padding: 16px; border: 1px solid #d9d4ca; border-radius: 16px; background: #fff9e8; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.daily-regen-card[hidden] { display: none; }
+.daily-regen-card div { display: grid; gap: 4px; }
+.daily-regen-card small { color: #786b56; }
+.daily-regen-card button { width: auto; flex: none; }
+.points-daily-link { margin-top: 10px; }
 .point-admin-grid { align-items: start; }
 .admin-point-detail { display: grid; gap: 16px; }
 .admin-point-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -75,6 +80,16 @@
 .admin-point-summary b { font-size: 20px; }
 .admin-member-pick { border: 0; background: transparent; padding: 0; text-align: left; color: inherit; }
 .admin-member-pick small { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.admin-member-pick.is-active { color: #137a43; }
+.admin-point-search { display: grid; gap: 7px; margin-bottom: 10px; font-weight: 800; }
+.admin-point-search input { width: 100%; border: 1px solid #d9d4ca; border-radius: 10px; padding: 10px 12px; }
+.admin-point-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.admin-point-quick button { border: 1px solid #d9d4ca; border-radius: 10px; padding: 10px 8px; background: #fff; font-weight: 800; cursor: pointer; }
+.admin-point-quick button:hover { border-color: #137a43; color: #137a43; }
+.admin-point-quick button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 760px) {
+  .admin-point-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 * {
   box-sizing: border-box;
@@ -4179,18 +4194,27 @@ select {
   padding: 16px;
 }
 .order-card {
+  display: block;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px 16px;
   background: var(--white);
+  overflow: hidden;
 }
-.order-card header {
+.order-card-summary {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.order-card-summary header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.order-card header b {
+.order-card-summary header b {
   font-size: 15px;
   font-weight: 900;
 }
@@ -4225,6 +4249,19 @@ select {
   background: #fff3d6;
   color: #9a6b00;
 }
+.order-report-status { display: inline-block; margin-top: 9px; font-size: 11px; font-weight: 900; }
+.order-report-status.ok { color: #137a43; }
+.order-report-status.fail { color: #b42318; }
+.order-report-status.pending { color: #9a6b00; }
+.order-detail { padding: 14px 16px 16px; border-top: 1px solid var(--line); background: #fffdf8; }
+.order-detail dl { display: grid; gap: 8px; margin: 0; }
+.order-detail dl div { display: flex; justify-content: space-between; gap: 14px; font-size: 12px; }
+.order-detail dt { color: var(--muted); }
+.order-detail dd { margin: 0; font-weight: 800; text-align: right; word-break: break-all; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.order-actions button { flex: 1 1 120px; border: 0; border-radius: 10px; padding: 11px; background: var(--jade); color: #fff; font-weight: 900; cursor: pointer; }
+.order-actions button.is-danger { background: #fff; color: #b42318; border: 1px solid #efb5b0; }
+.order-error { margin: 12px 0 0; padding: 10px; border-radius: 10px; background: #fdecec; color: #b42318; font-size: 12px; }
 
 /* ---------- 문의하기 ---------- */
 .support-lead {

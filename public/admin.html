@@ -212,25 +212,34 @@
           <div class="split-grid point-admin-grid">
             <section>
               <h3>회원 목록</h3>
+              <label class="admin-point-search">회원 검색
+                <input type="search" data-point-member-search placeholder="이름·이메일·회원 ID" />
+              </label>
               <div class="admin-table" data-admin-point-members></div>
             </section>
             <section class="admin-point-detail">
               <h3 data-admin-point-title>회원을 선택하세요</h3>
               <div class="admin-point-summary" data-admin-point-summary></div>
+              <div class="admin-point-quick" aria-label="빠른 포인트 조정">
+                <button type="button" data-point-quick data-operation="adjust" data-amount="1000" disabled>+1,000P</button>
+                <button type="button" data-point-quick data-operation="adjust" data-amount="5000" disabled>+5,000P</button>
+                <button type="button" data-point-quick data-operation="adjust" data-amount="-1000" disabled>−1,000P</button>
+                <button type="button" data-point-quick data-operation="regen" data-amount="1" disabled>재생성 +1</button>
+              </div>
               <form class="product-admin-grid is-narrow" data-point-adjust>
                 <label>포인트 조정 (+충전 / −차감)
-                  <input type="number" name="amount" step="1" placeholder="예: 5000 또는 -500" required />
+                  <input type="number" name="amount" step="1" placeholder="예: 5000 또는 -500" required disabled />
                 </label>
                 <label>관리 메모
-                  <input name="memo" maxlength="200" placeholder="예: CS 보상" />
+                  <input name="memo" maxlength="200" placeholder="예: CS 보상" disabled />
                 </label>
-                <button class="primary-action admin-save" type="submit">포인트 반영</button>
+                <button class="primary-action admin-save" type="submit" disabled>포인트 반영</button>
               </form>
               <form class="product-admin-grid is-narrow" data-regen-adjust>
                 <label>무료운세 재생성 토큰 부여
-                  <input type="number" name="amount" min="1" step="1" value="1" required />
+                  <input type="number" name="amount" min="1" step="1" value="1" required disabled />
                 </label>
-                <button class="secondary-action" type="submit">토큰 부여</button>
+                <button class="secondary-action" type="submit" disabled>토큰 부여</button>
               </form>
               <p class="form-status" data-admin-point-status></p>
               <h3>최근 거래 내역</h3>

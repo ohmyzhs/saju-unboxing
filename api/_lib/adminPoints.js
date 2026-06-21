@@ -49,25 +49,35 @@ export function normalizeAdminPointChange(body = {}) {
   return { operation, userId, amount, memo };
 }
 
+export async function listPointMembers(sb) {
+  const [{ data: pointRows, error: pointError }, { data: orderRows, error: orderError }] = await Promise.all([
+    sb.from("user_points").select("user_id, balance, regen_tokens, updated_at").order("updated_at", { ascending: false }).limit(1000),
+    sb.from("orders").select("user_id, user_label, user_provider, created_at").not("user_id", "is", null).order("created_at", { ascending: false }).limit(2000),
+  ]);
+  if (pointError || orderError) throw pointError || orderError;
+  return mergePointMembers(pointRows || [], orderRows || []);
+}
+
+export async function loadAdminPointPayload(sb, userId = "", dependencies = {}) {
+  const normalizedUserId = String(userId || "").trim();
+  const getAccount = dependencies.getAccount || getPointAccount;
+  const listMembers = dependencies.listMembers || listPointMembers;
+  if (normalizedUserId) {
+    const account = await getAccount(sb, normalizedUserId, 100);
+    return { members: null, selectedUserId: normalizedUserId, account };
+  }
+  return { members: await listMembers(sb), selectedUserId: null, account: null };
+}
+
 export async function handleAdminPoints(req, res, sb) {
   if (!sb) return sendJson(res, 503, { message: "Supabase가 설정되지 않아 포인트를 관리할 수 없습니다." });
   if (req.method === "GET") {
-    const [{ data: pointRows, error: pointError }, { data: orderRows, error: orderError }] = await Promise.all([
-      sb.from("user_points").select("user_id, balance, regen_tokens, updated_at").order("updated_at", { ascending: false }).limit(1000),
-      sb.from("orders").select("user_id, user_label, user_provider, created_at").not("user_id", "is", null).order("created_at", { ascending: false }).limit(2000),
-    ]);
-    if (pointError || orderError) return sendJson(res, 500, { message: (pointError || orderError).message });
-    const members = mergePointMembers(pointRows || [], orderRows || []);
     const userId = String(req.query?.userId || "").trim();
-    let account = null;
-    if (userId) {
-      try {
-        account = await getPointAccount(sb, userId, 100);
-      } catch (error) {
-        return sendJson(res, 500, { message: error.message });
-      }
+    try {
+      return sendJson(res, 200, await loadAdminPointPayload(sb, userId));
+    } catch (error) {
+      return sendJson(res, 500, { message: error.message });
     }
-    return sendJson(res, 200, { members, selectedUserId: userId || null, account });
   }
   if (req.method !== "POST") return sendJson(res, 405, { message: "GET/POST only" });
   try {
