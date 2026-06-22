@@ -353,6 +353,70 @@ $$;
 -- ─────────────────────────────────────────────────────
 -- 5) 챗봇 질의응답권 원자 변경과 질문 enqueue RPC
 -- ─────────────────────────────────────────────────────
+create or replace function create_chat_session(
+  p_user_id text,
+  p_archive_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  archive_data jsonb;
+  session_id uuid;
+  inserted_session_id uuid;
+  session_title text;
+  is_duplicate boolean := false;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if nullif(trim(p_archive_id), '') is null then
+    raise exception 'invalid_archive_id';
+  end if;
+
+  select data into archive_data
+  from user_data
+  where user_id = p_user_id and kind = 'archive' and id = p_archive_id
+  limit 1;
+  if not found then
+    raise exception 'archive_not_found';
+  end if;
+  if pg_column_size(archive_data) > 2097152 then
+    raise exception 'report_snapshot_too_large';
+  end if;
+
+  session_title := left(coalesce(
+    nullif(trim(archive_data->>'productName'), ''),
+    nullif(trim(archive_data->>'profileName'), ''),
+    'AI 챗봇 상담'
+  ), 160);
+
+  insert into chat_sessions(user_id, source_archive_id, report_snapshot, title)
+  values (p_user_id, p_archive_id, archive_data, session_title)
+  on conflict (user_id, source_archive_id) do nothing
+  returning id into inserted_session_id;
+
+  if inserted_session_id is null then
+    is_duplicate := true;
+    select id, title into session_id, session_title
+    from chat_sessions
+    where user_id = p_user_id and source_archive_id = p_archive_id
+    limit 1;
+  else
+    session_id := inserted_session_id;
+  end if;
+
+  return jsonb_build_object(
+    'id', session_id,
+    'sourceArchiveId', p_archive_id,
+    'title', session_title,
+    'status', 'active',
+    'duplicate', is_duplicate
+  );
+end;
+$$;
+
 create or replace function grant_chat_credits(
   p_user_id text,
   p_amount integer,
@@ -611,18 +675,106 @@ begin
 end;
 $$;
 
+create or replace function fail_chat_run(
+  p_user_id text,
+  p_run_id uuid,
+  p_error_code text,
+  p_error_message text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  user_message_id uuid;
+  assistant_message_id uuid;
+  current_status text;
+  current_credit_status text;
+  next_credit_status text;
+  next_seq integer;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_run_id is null then
+    raise exception 'invalid_chat_run_id';
+  end if;
+
+  select r.user_message_id, r.assistant_message_id, r.status, r.credit_status
+  into user_message_id, assistant_message_id, current_status, current_credit_status
+  from chat_runs r
+  join chat_sessions s on s.id = r.session_id
+  where r.id = p_run_id and s.user_id = p_user_id
+  for update of r;
+  if not found then
+    raise exception 'chat_run_not_found';
+  end if;
+  if current_status = 'completed' then
+    raise exception 'chat_run_already_completed';
+  end if;
+  if current_status = 'failed' and current_credit_status <> 'refund_pending' then
+    return jsonb_build_object('runId', p_run_id, 'creditStatus', current_credit_status);
+  end if;
+
+  next_credit_status := current_credit_status;
+  if current_credit_status in ('reserved', 'refund_pending') then
+    begin
+      perform refund_chat_credit(p_user_id, user_message_id);
+      next_credit_status := 'refunded';
+    exception when others then
+      next_credit_status := 'refund_pending';
+    end;
+  end if;
+
+  update chat_runs
+  set status = 'failed',
+      credit_status = next_credit_status,
+      completed_at = coalesce(completed_at, now())
+  where id = p_run_id;
+
+  update chat_messages
+  set status = 'failed',
+      error_code = left(coalesce(nullif(trim(p_error_code), ''), 'chat_run_failed'), 100),
+      error_message = left(coalesce(nullif(trim(p_error_message), ''), '답변 생성에 실패했습니다.'), 500),
+      completed_at = coalesce(completed_at, now())
+  where id = assistant_message_id;
+
+  select coalesce(max(seq), 0) + 1 into next_seq
+  from chat_stream_events
+  where run_id = p_run_id;
+
+  insert into chat_stream_events(run_id, seq, type, payload)
+  values (
+    p_run_id,
+    next_seq,
+    'error',
+    jsonb_build_object(
+      'code', left(coalesce(nullif(trim(p_error_code), ''), 'chat_run_failed'), 100),
+      'message', '답변 생성에 실패했습니다.',
+      'creditStatus', next_credit_status
+    )
+  );
+
+  return jsonb_build_object('runId', p_run_id, 'creditStatus', next_credit_status);
+end;
+$$;
+
 revoke all on function adjust_points(text, integer, text, text) from public;
 revoke all on function adjust_regen_tokens(text, integer) from public;
+revoke all on function create_chat_session(text, text) from public;
 revoke all on function grant_chat_credits(text, integer, text) from public;
 revoke all on function reserve_chat_credit(text, uuid) from public;
 revoke all on function refund_chat_credit(text, uuid) from public;
 revoke all on function enqueue_chat_message(text, uuid, text, text) from public;
+revoke all on function fail_chat_run(text, uuid, text, text) from public;
 grant execute on function adjust_points(text, integer, text, text) to service_role;
 grant execute on function adjust_regen_tokens(text, integer) to service_role;
+grant execute on function create_chat_session(text, text) to service_role;
 grant execute on function grant_chat_credits(text, integer, text) to service_role;
 grant execute on function reserve_chat_credit(text, uuid) to service_role;
 grant execute on function refund_chat_credit(text, uuid) to service_role;
 grant execute on function enqueue_chat_message(text, uuid, text, text) to service_role;
+grant execute on function fail_chat_run(text, uuid, text, text) to service_role;
 
 -- ─────────────────────────────────────────────────────
 -- 6) 설정 단일 행 보장
