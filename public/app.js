@@ -2377,7 +2377,7 @@ function renderAnalysisResult(productId, profile, partner = null, data = null) {
         : `<div class="section-loading"><span></span><span></span><span></span></div>`;
       return `
         <details class="report-section" data-section-id="${escapeHtml(id)}" ${index < 3 ? "open" : ""}>
-          <summary><span>${escapeHtml(section.icon)}</span>${escapeHtml(section.title)}</summary>
+          <summary><span>${escapeHtml(section.icon)}</span>${escapeHtml(section.title)}<i class="report-chevron" aria-hidden="true">›</i></summary>
           <div class="section-body">${bodyHtml}</div>
         </details>
       `;

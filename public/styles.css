@@ -2166,7 +2166,7 @@ select {
 
 .report-section summary {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) 24px;
   gap: 10px;
   align-items: center;
   padding: 16px;
@@ -2186,9 +2186,22 @@ select {
   color: var(--rose);
 }
 
+/* 접기/펼치기 chevron — 명시적 표시. 닫힘=›(오른쪽), 열림=아래로 회전 */
+.report-section summary .report-chevron {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+.report-section[open] summary .report-chevron {
+  transform: rotate(90deg);
+}
+
 .report-section p {
   margin: 0;
-  padding: 0 16px 18px 52px;
+  padding: 0 16px 18px 16px;
   color: #3d4540;
   white-space: pre-wrap;
   font-size: 16px;
@@ -4478,6 +4491,10 @@ select {
   top: 72px;
   z-index: 5;
   background: var(--white);
+  color: var(--ink); /* 흰 배경 위 — .view-title 의 흰 글자(#fff) 오버라이드 */
+}
+.daily-title button {
+  color: var(--ink); /* 뒤로(‹) 버튼도 어둡게 — 흰 배경에서 보이도록 */
 }
 .daily-body {
   display: flex;

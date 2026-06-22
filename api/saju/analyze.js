@@ -221,16 +221,21 @@ async function handleDaily({ res, profile, config, prompt, model, visitorId, ord
   const sb = getSupabase();
   const tp = { ganzhi: todayPillar.ganzhi, ko: todayPillar.ko };
   const td = { iso: today.iso, label: today.label };
+  // 보유 재생성 토큰은 일반 조회에서도 반환한다(프론트가 이 값으로 "남은 재생성권"을 표시).
+  // 실제 1 차감은 regen 요청일 때만 한다.
   let regeneration = { regenerate: false, reserved: false, remainingTokens: 0 };
-  if (regen && sb && user?.id) {
+  if (sb && user?.id) {
     try {
       const account = await getPointAccount(sb, user.id, 0);
-      regeneration = await reserveDailyRegeneration({
-        requested: true,
-        userId: user.id,
-        sb,
-        tokenBalance: account.regenTokens,
-      });
+      regeneration.remainingTokens = account.regenTokens;
+      if (regen) {
+        regeneration = await reserveDailyRegeneration({
+          requested: true,
+          userId: user.id,
+          sb,
+          tokenBalance: account.regenTokens,
+        });
+      }
     } catch {
       regeneration = { regenerate: false, reserved: false, remainingTokens: 0 };
     }
