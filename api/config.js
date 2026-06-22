@@ -40,6 +40,7 @@ export default async function handler(req, res) {
     tossMode: tossClientKey.startsWith("test_") ? "test" : "live",
     tossVariantKey: process.env.TOSS_VARIANT_KEY || "DEFAULT", // 토스 결제위젯 어드민에서 만든 결제 UI 키
     kakaoEnabled: Boolean(process.env.KAKAO_REST_API_KEY),
+    kakaoJsKey: config?.kakaoJsKey || process.env.KAKAO_JS_KEY || "", // 카카오 공유(Kakao JS SDK) 키. 비우면 링크복사 폴백.
     pointsEnabled: Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
     pointChargeTiers: POINT_CHARGE_TIERS,
     products: config?.products || {},

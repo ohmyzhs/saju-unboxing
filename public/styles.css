@@ -2199,6 +2199,41 @@ select {
   transform: rotate(90deg);
 }
 
+/* 리포트 공유 */
+.report-share {
+  padding: 22px 16px 8px;
+  text-align: center;
+}
+.report-share h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.report-share-sub {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.report-share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.report-share-buttons button {
+  flex: 1;
+  min-width: 72px;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+.report-share-buttons button:active {
+  transform: translateY(1px);
+}
+
 .report-section p {
   margin: 0;
   padding: 0 16px 18px 16px;

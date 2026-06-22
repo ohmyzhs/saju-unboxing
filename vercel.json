@@ -12,6 +12,7 @@
     { "source": "/terms", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/refund", "destination": "/index.html" },
-    { "source": "/payments/(.*)", "destination": "/index.html" }
+    { "source": "/payments/(.*)", "destination": "/index.html" },
+    { "source": "/share/(.*)", "destination": "/api/share?token=$1" }
   ]
 }

@@ -119,6 +119,14 @@ create table if not exists point_transactions (
   created_at timestamptz default now()
 );
 
+-- [9] 공유 리포트 — 공개 URL(/share/<token>)로 누구나 열람. payload 에 리포트 본문 저장.
+create table if not exists shared_reports (
+  token text primary key,
+  product_id text,
+  payload jsonb not null,
+  created_at timestamptz default now()
+);
+
 -- ─────────────────────────────────────────────────────
 -- 2) 인덱스
 -- ─────────────────────────────────────────────────────

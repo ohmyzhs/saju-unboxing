@@ -165,6 +165,8 @@ const BRANCH_COLOR = {
 
 // ---------- Runtime state ----------
 let runtimeConfig = null;
+let lastReport = null; // 마지막으로 렌더된 리포트(공유용)
+let lastShareUrl = null; // 생성된 공유 URL 캐시(한 번만 생성)
 let runtimeSession = null;
 let activeSlide = 0;
 let selectedProductId = "saju-analysis";
@@ -2387,7 +2389,92 @@ function renderAnalysisResult(productId, profile, partner = null, data = null) {
 
   document.querySelector("[data-analysis-report]").hidden = false;
   document.querySelector("[data-analysis-related]").hidden = false;
+
+  // 공유: 현재 리포트 저장 + 공유 버튼 노출
+  lastReport = { productId, profileName: partner ? `${profile.name} × ${partner.name}` : profile.name, data, sections };
+  lastShareUrl = null;
+  const shareStatus = document.querySelector("[data-share-status]");
+  if (shareStatus) shareStatus.textContent = "";
+  const shareBox = document.querySelector("[data-report-share]");
+  if (shareBox) shareBox.hidden = false;
 }
+
+// ── 리포트 공유 ──────────────────────────────────────
+async function ensureShareUrl() {
+  if (lastShareUrl) return lastShareUrl;
+  if (!lastReport?.data) throw new Error("공유할 리포트가 없습니다.");
+  const { productId, profileName, data, sections } = lastReport;
+  const { ok, body } = await adminPost("/api/share", {
+    productId,
+    productName: (PRODUCTS[productId] || {}).name || "사주 리포트",
+    profileName,
+    headline: data.headline || "",
+    sections: (sections || []).map((s) => ({ icon: s.icon, title: s.title, body: s.body })),
+    lucky: data.lucky || null,
+    score: data.score ?? null,
+    scoreLabel: data.scoreLabel || null,
+  });
+  if (!ok || !body.url) throw new Error(body.message || "공유 링크 생성에 실패했습니다.");
+  lastShareUrl = body.url;
+  return lastShareUrl;
+}
+
+function fallbackCopy(url) {
+  navigator.clipboard?.writeText(url);
+  const status = document.querySelector("[data-share-status]");
+  if (status) status.textContent = "링크를 복사했어요 (카톡에 붙여넣기)";
+}
+
+function shareKakao(url, title) {
+  const key = runtimeConfig?.kakaoJsKey;
+  if (!key) return fallbackCopy(url);
+  const send = () => {
+    try {
+      if (!Kakao.isInitialized()) Kakao.init(key);
+      Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: { title, description: "사주연구소 리포트", imageUrl: `${location.origin}/assets/generated/banners/hero-lab.jpg`, link: { mobileWebUrl: url, webUrl: url } },
+      });
+    } catch {
+      fallbackCopy(url);
+    }
+  };
+  if (window.Kakao) return send();
+  const script = document.createElement("script");
+  script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+  script.crossOrigin = "anonymous";
+  script.onload = send;
+  script.onerror = () => fallbackCopy(url);
+  document.head.appendChild(script);
+}
+
+async function shareReport(platform) {
+  const status = document.querySelector("[data-share-status]");
+  if (status) status.textContent = "공유 링크 준비 중...";
+  try {
+    const url = await ensureShareUrl();
+    const title = lastReport?.data?.headline || `${lastReport?.profileName || ""}님의 사주 리포트`;
+    if (platform === "copy") {
+      await navigator.clipboard.writeText(url);
+      if (status) status.textContent = "링크를 복사했어요";
+    } else if (platform === "x") {
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`, "_blank", "noopener");
+      if (status) status.textContent = "";
+    } else if (platform === "facebook") {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, "_blank", "noopener");
+      if (status) status.textContent = "";
+    } else if (platform === "kakao") {
+      shareKakao(url, title);
+    }
+  } catch (e) {
+    if (status) status.textContent = e.message;
+  }
+}
+
+document.querySelector("[data-report-share]")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-share]");
+  if (button) shareReport(button.dataset.share);
+});
 
 // 2단계: 섹션 본문이 도착하면 해당 아코디언 자리에 채운다(점진적 렌더)
 function fillSectionBody(id, body) {
