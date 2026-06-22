@@ -90,6 +90,7 @@ async function config(req, res) {
       images: c.images || {},
       branding: c.branding || {},
       ai_model: c.ai_model || "glm-5.2",
+      chat_model: c.chat_model || "",
       legal: c.legal || {},
       legalDefaults: LEGAL_DEFAULTS,
       business: c.business || {},
@@ -101,7 +102,7 @@ async function config(req, res) {
     if (!sb) return sendJson(res, 503, { message: "Supabase가 설정되지 않았습니다." });
     const body = await readJson(req);
     const patch = { updated_at: new Date().toISOString() };
-    ["products", "prompts", "images", "branding", "ai_model", "legal", "business", "saju"].forEach((k) => {
+    ["products", "prompts", "images", "branding", "ai_model", "chat_model", "legal", "business", "saju"].forEach((k) => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
     const { error } = await sb.from("site_config").update(patch).eq("id", 1);

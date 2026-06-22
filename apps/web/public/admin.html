@@ -300,6 +300,24 @@
             <button class="primary-action admin-save" type="submit">모델 저장</button>
           </form>
           <p class="form-status" data-model-status></p>
+
+          <h2 style="margin-top:32px">챗봇 상담 모델</h2>
+          <p class="admin-help">
+            AI 챗봇 상담이 답변에 쓰는 모델입니다. 리포트 해설 모델과 <b>별개</b>로 설정합니다.
+            비우면 위 해설 모델을 따라갑니다. 빠른 응답엔 <b>deepseek-v4-flash</b>를 권장합니다.
+          </p>
+          <form class="product-admin-grid is-narrow" data-chat-model-form>
+            <label>모델
+              <select name="chat_model" data-chat-model-select>
+                <option value="deepseek-v4-flash">deepseek-v4-flash (속도 우선 · 추천)</option>
+                <option value="glm-5.2">glm-5.2 (품질)</option>
+                <option value="kimi-k2.7-code">kimi-k2.7-code</option>
+                <option value="minimax-m3">minimax-m3</option>
+              </select>
+            </label>
+            <button class="primary-action admin-save" type="submit">챗봇 모델 저장</button>
+          </form>
+          <p class="form-status" data-chat-model-status></p>
         </section>
 
         <section class="admin-panel" data-admin-panel="settings" hidden>

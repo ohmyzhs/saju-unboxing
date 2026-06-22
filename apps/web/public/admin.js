@@ -70,7 +70,7 @@ function writeStore(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-let serverConfig = { products: {}, prompts: {}, images: {}, branding: {}, ai_model: "glm-5.2" };
+let serverConfig = { products: {}, prompts: {}, images: {}, branding: {}, ai_model: "glm-5.2", chat_model: "" };
 
 const IMAGE_SLOTS = [
   ["banner.hero", "메인 배너"],
@@ -977,6 +977,27 @@ function saveModel(event) {
   saveConfig({ ai_model }, "[data-model-status]", "AI 모델을 저장했습니다. 다음 분석부터 적용됩니다.");
 }
 
+// ── 챗봇 상담 모델 (리포트 모델과 별개) ──
+function renderChatModel() {
+  const select = document.querySelector("[data-chat-model-select]");
+  if (!select) return;
+  const current = serverConfig.chat_model || "";
+  if (current && ![...select.options].some((o) => o.value === current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = `${current} (현재)`;
+    select.insertBefore(opt, select.firstChild);
+  }
+  select.value = current || "deepseek-v4-flash";
+}
+
+function saveChatModel(event) {
+  event.preventDefault();
+  const select = event.currentTarget.querySelector("[data-chat-model-select]");
+  const chat_model = String(select?.value || "").trim();
+  saveConfig({ chat_model }, "[data-chat-model-status]", "챗봇 모델을 저장했습니다. 다음 질문부터 적용됩니다.");
+}
+
 async function testSaju() {
   const form = document.querySelector("[data-saju-form]");
   const status = document.querySelector("[data-saju-status]");
@@ -1034,6 +1055,7 @@ document.querySelector("[data-legal-form]")?.addEventListener("submit", saveLega
 document.querySelector("[data-business-form]")?.addEventListener("submit", saveBusiness);
 document.querySelector("[data-saju-form]")?.addEventListener("submit", saveSaju);
 document.querySelector("[data-model-form]")?.addEventListener("submit", saveModel);
+document.querySelector("[data-chat-model-form]")?.addEventListener("submit", saveChatModel);
 document.querySelector("[data-saju-test]")?.addEventListener("click", testSaju);
 document.querySelector("[data-password-form]")?.addEventListener("submit", changePassword);
 document.querySelector("[data-point-adjust]")?.addEventListener("submit", (event) => submitPointAdmin(event, "adjust"));
@@ -1052,6 +1074,7 @@ async function init() {
   renderBusiness();
   renderSaju();
   renderModel();
+  renderChatModel();
   loadAnalytics();
 }
 init();
