@@ -2,9 +2,9 @@
 import { createHash } from "crypto";
 
 export const PLANS = {
-  starter: { amount: 990, name: "사주연구소 기본 분석" },
-  compatibility: { amount: 990, name: "사주연구소 궁합 분석" },
-  fortune: { amount: 990, name: "사주연구소 운세 분석" },
+  starter: { amount: 990, name: "사주언박싱-mini 기본 분석" },
+  compatibility: { amount: 990, name: "사주언박싱-mini 궁합 분석" },
+  fortune: { amount: 990, name: "사주언박싱-mini 운세 분석" },
 };
 
 export function tossKeys() {

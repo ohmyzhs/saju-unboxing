@@ -269,7 +269,7 @@ function showLogin() {
   wrap.className = "admin-login";
   wrap.innerHTML = `
     <form id="admin-login-form">
-      <div class="admin-login-brand"><span>命</span><h2>사주연구소 관리자</h2></div>
+      <div class="admin-login-brand"><span>命</span><h2>사주언박싱-mini 관리자</h2></div>
       <p class="sub">관리자 비밀번호를 입력해 주세요.</p>
       <input type="password" id="admin-pw" placeholder="관리자 비밀번호" autocomplete="current-password" />
       <button type="submit">로그인</button>

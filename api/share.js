@@ -113,7 +113,7 @@ function shareKakao(){try{Kakao.Share.sendDefault({objectType:'feed',content:{ti
 
   return `<!doctype html><html lang="ko"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · 사주연구소</title>
+<title>${esc(title)} · 사주언박싱-mini</title>
 <meta property="og:type" content="article">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
@@ -140,7 +140,7 @@ function shareKakao(){try{Kakao.Share.sendDefault({objectType:'feed',content:{ti
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}.toast.on{opacity:1}
 </style></head><body>
 <div class="wrap">
-<div class="brand"><span class="m">命</span>사주연구소</div>
+<div class="brand"><span class="m">命</span>사주언박싱-mini</div>
 <p class="headline">${esc(payload.headline)}</p>
 ${scoreBar}
 ${sections}

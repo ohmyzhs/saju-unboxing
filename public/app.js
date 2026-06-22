@@ -1077,7 +1077,7 @@ function renderSupport(type) {
   const biz = runtimeConfig?.business || {};
   const email = biz.email || "";
   const tel = biz.tel || "";
-  const subject = encodeURIComponent(`[문의-${title}] 사주연구소`);
+  const subject = encodeURIComponent(`[문의-${title}] 사주언박싱-mini`);
   const body = encodeURIComponent(`문의 유형: ${title}\n\n(여기에 내용을 적어주세요)\n\n----\n주문번호:\n`);
   box.hidden = false;
   box.innerHTML = `
@@ -2133,7 +2133,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
     const successUrl = `${location.origin}/payments/success`;
     const failUrl = `${location.origin}/payments/fail`;
     const orderName = purchase ? `${context.product.name}${context.profile?.name ? ` · ${context.profile.name}` : ""}` : order.orderName;
-    const customerName = runtimeSession?.user?.nickname || context?.profile?.name || "사주연구소 고객";
+    const customerName = runtimeSession?.user?.nickname || context?.profile?.name || "사주언박싱-mini 고객";
 
     trackEvent("payment_start", { orderId: order.orderId, productId: context?.productId, amount: order.amount });
 
@@ -2180,7 +2180,7 @@ async function requestExistingOrderPayment(order, purchase) {
   const amount = Number(purchase.amount ?? order.cashAmount ?? window.OrderRecovery.cashAmount(order));
   if (!(amount > 0)) throw new Error("토스로 결제할 금액이 없습니다.");
   const orderName = purchase.orderName || `${purchase.product?.name || order.productName || "사주 리포트"}${purchase.profile?.name ? ` · ${purchase.profile.name}` : ""}`;
-  const customerName = runtimeSession?.user?.nickname || purchase.profile?.name || "사주연구소 고객";
+  const customerName = runtimeSession?.user?.nickname || purchase.profile?.name || "사주언박싱-mini 고객";
   const successUrl = `${location.origin}/payments/success`;
   const failUrl = `${location.origin}/payments/fail`;
   trackEvent("payment_resume", { orderId: order.orderId, productId: order.productId, amount });
@@ -2433,7 +2433,7 @@ function shareKakao(url, title) {
       if (!Kakao.isInitialized()) Kakao.init(key);
       Kakao.Share.sendDefault({
         objectType: "feed",
-        content: { title, description: "사주연구소 리포트", imageUrl: `${location.origin}/assets/generated/banners/hero-lab.jpg`, link: { mobileWebUrl: url, webUrl: url } },
+        content: { title, description: "사주언박싱-mini 리포트", imageUrl: `${location.origin}/assets/generated/banners/hero-lab.jpg`, link: { mobileWebUrl: url, webUrl: url } },
       });
     } catch {
       fallbackCopy(url);
