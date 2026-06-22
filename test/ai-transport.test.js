@@ -4,9 +4,34 @@ import assert from "node:assert/strict";
 import {
   extractJsonObject,
   modelProfile,
+  requestText,
   requestStructured,
   validateSchema,
 } from "../apps/api/src/legacy/_lib/aiTransport.js";
+
+test("plain text 요청은 JSON 스키마 없이 모델 사용량과 델타를 반환한다", async () => {
+  const deltas = [];
+  const result = await requestText({
+    model: "deepseek-v4-flash",
+    system: "system",
+    input: "question",
+    maxTokens: 1600,
+    onDelta: (delta) => deltas.push(delta),
+  }, {
+    request: async (options) => {
+      assert.equal(options.profile.transport, "chat");
+      assert.equal(options.schema, undefined);
+      await options.onDelta("답변");
+      return { text: "답변", usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } };
+    },
+  });
+  assert.deepEqual(result, {
+    text: "답변",
+    usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 },
+    model: "deepseek-v4-flash",
+  });
+  assert.deepEqual(deltas, ["답변"]);
+});
 
 test("routes DeepSeek to chat completions without strict schema", () => {
   assert.deepEqual(modelProfile("deepseek-v4-flash"), {

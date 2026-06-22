@@ -25,6 +25,9 @@ test("구매·예약·환원·메시지 enqueue를 원자적 RPC로 정의한다
   for (const fn of [
     "create_chat_session",
     "fail_chat_run",
+    "claim_chat_run",
+    "append_chat_draft",
+    "complete_chat_run",
     "grant_chat_credits",
     "reserve_chat_credit",
     "refund_chat_credit",

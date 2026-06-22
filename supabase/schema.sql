@@ -759,6 +759,147 @@ begin
 end;
 $$;
 
+create or replace function claim_chat_run(
+  p_run_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+  owner_user_id text;
+  assistant_message_id uuid;
+  next_seq integer;
+begin
+  if p_run_id is null then
+    raise exception 'invalid_chat_run_id';
+  end if;
+
+  select r.status, s.user_id, r.assistant_message_id
+  into current_status, owner_user_id, assistant_message_id
+  from chat_runs r
+  join chat_sessions s on s.id = r.session_id
+  where r.id = p_run_id
+  for update of r;
+  if not found then
+    raise exception 'chat_run_not_found';
+  end if;
+  if current_status <> 'queued' then
+    return jsonb_build_object('claimed', false, 'status', current_status, 'userId', owner_user_id);
+  end if;
+
+  update chat_runs
+  set status = 'running', attempt_count = attempt_count + 1, started_at = coalesce(started_at, now())
+  where id = p_run_id;
+  update chat_messages set status = 'streaming' where id = assistant_message_id;
+
+  select coalesce(max(seq), 0) + 1 into next_seq from chat_stream_events where run_id = p_run_id;
+  insert into chat_stream_events(run_id, seq, type, payload)
+  values (p_run_id, next_seq, 'status', jsonb_build_object('status', 'running'));
+
+  return jsonb_build_object('claimed', true, 'status', 'running', 'userId', owner_user_id);
+end;
+$$;
+
+create or replace function append_chat_draft(
+  p_run_id uuid,
+  p_content text,
+  p_delta text
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+  assistant_message_id uuid;
+  next_seq integer;
+  safe_content text := coalesce(p_content, '');
+  safe_delta text := coalesce(p_delta, '');
+begin
+  if p_run_id is null then
+    raise exception 'invalid_chat_run_id';
+  end if;
+  if char_length(safe_content) > 200000 then
+    raise exception 'chat_draft_too_large';
+  end if;
+
+  select status, chat_runs.assistant_message_id
+  into current_status, assistant_message_id
+  from chat_runs
+  where id = p_run_id
+  for update;
+  if not found then
+    raise exception 'chat_run_not_found';
+  end if;
+  if current_status <> 'running' then
+    raise exception 'chat_run_not_running';
+  end if;
+
+  update chat_messages
+  set content = safe_content, status = 'streaming'
+  where id = assistant_message_id;
+  select coalesce(max(seq), 0) + 1 into next_seq from chat_stream_events where run_id = p_run_id;
+  insert into chat_stream_events(run_id, seq, type, payload)
+  values (p_run_id, next_seq, 'replace', jsonb_build_object('content', safe_content, 'delta', safe_delta));
+  return next_seq;
+end;
+$$;
+
+create or replace function complete_chat_run(
+  p_run_id uuid,
+  p_content text,
+  p_model text,
+  p_usage jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+  assistant_message_id uuid;
+  next_seq integer;
+  final_content text := trim(coalesce(p_content, ''));
+begin
+  if p_run_id is null then
+    raise exception 'invalid_chat_run_id';
+  end if;
+  if char_length(final_content) < 1 or char_length(final_content) > 200000 then
+    raise exception 'invalid_chat_answer';
+  end if;
+
+  select status, chat_runs.assistant_message_id
+  into current_status, assistant_message_id
+  from chat_runs
+  where id = p_run_id
+  for update;
+  if not found then
+    raise exception 'chat_run_not_found';
+  end if;
+  if current_status = 'completed' then
+    return jsonb_build_object('runId', p_run_id, 'status', 'completed');
+  end if;
+  if current_status <> 'running' then
+    raise exception 'chat_run_not_running';
+  end if;
+
+  update chat_messages
+  set content = final_content, status = 'completed', error_code = null, error_message = null, completed_at = now()
+  where id = assistant_message_id;
+  update chat_runs
+  set status = 'completed', credit_status = 'consumed', model = p_model,
+      usage = coalesce(p_usage, '{}'::jsonb), completed_at = now()
+  where id = p_run_id;
+
+  select coalesce(max(seq), 0) + 1 into next_seq from chat_stream_events where run_id = p_run_id;
+  insert into chat_stream_events(run_id, seq, type, payload)
+  values (p_run_id, next_seq, 'complete', jsonb_build_object('content', final_content, 'status', 'completed'));
+  return jsonb_build_object('runId', p_run_id, 'status', 'completed', 'seq', next_seq);
+end;
+$$;
+
 revoke all on function adjust_points(text, integer, text, text) from public;
 revoke all on function adjust_regen_tokens(text, integer) from public;
 revoke all on function create_chat_session(text, text) from public;
@@ -767,6 +908,9 @@ revoke all on function reserve_chat_credit(text, uuid) from public;
 revoke all on function refund_chat_credit(text, uuid) from public;
 revoke all on function enqueue_chat_message(text, uuid, text, text) from public;
 revoke all on function fail_chat_run(text, uuid, text, text) from public;
+revoke all on function claim_chat_run(uuid) from public;
+revoke all on function append_chat_draft(uuid, text, text) from public;
+revoke all on function complete_chat_run(uuid, text, text, jsonb) from public;
 grant execute on function adjust_points(text, integer, text, text) to service_role;
 grant execute on function adjust_regen_tokens(text, integer) to service_role;
 grant execute on function create_chat_session(text, text) to service_role;
@@ -775,6 +919,9 @@ grant execute on function reserve_chat_credit(text, uuid) to service_role;
 grant execute on function refund_chat_credit(text, uuid) to service_role;
 grant execute on function enqueue_chat_message(text, uuid, text, text) to service_role;
 grant execute on function fail_chat_run(text, uuid, text, text) to service_role;
+grant execute on function claim_chat_run(uuid) to service_role;
+grant execute on function append_chat_draft(uuid, text, text) to service_role;
+grant execute on function complete_chat_run(uuid, text, text, jsonb) to service_role;
 
 -- ─────────────────────────────────────────────────────
 -- 6) 설정 단일 행 보장

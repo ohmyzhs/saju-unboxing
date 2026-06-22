@@ -195,3 +195,72 @@ export async function failChatRun(sb, { userId, runId, code, message }) {
   if (error) throw error;
   return data;
 }
+
+export async function claimChatRun(sb, runId) {
+  if (!sb) throw repositoryError("챗봇 상담 데이터베이스를 사용할 수 없습니다.", 503);
+  const { data, error } = await sb.rpc("claim_chat_run", { p_run_id: requiredId(runId, "run_id") });
+  if (error) throw error;
+  return {
+    claimed: Boolean(data?.claimed),
+    status: data?.status,
+    userId: data?.userId,
+  };
+}
+
+export async function persistChatDraft(sb, { runId, content, delta }) {
+  if (!sb) throw repositoryError("챗봇 상담 데이터베이스를 사용할 수 없습니다.", 503);
+  const { data, error } = await sb.rpc("append_chat_draft", {
+    p_run_id: requiredId(runId, "run_id"),
+    p_content: String(content || ""),
+    p_delta: String(delta || ""),
+  });
+  if (error) throw error;
+  return Number(data || 0);
+}
+
+export async function completeChatRun(sb, { runId, content, model, usage }) {
+  if (!sb) throw repositoryError("챗봇 상담 데이터베이스를 사용할 수 없습니다.", 503);
+  const { data, error } = await sb.rpc("complete_chat_run", {
+    p_run_id: requiredId(runId, "run_id"),
+    p_content: String(content || ""),
+    p_model: String(model || ""),
+    p_usage: usage || {},
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function loadChatRunContext(sb, runId) {
+  if (!sb) throw repositoryError("챗봇 상담 데이터베이스를 사용할 수 없습니다.", 503);
+  const id = requiredId(runId, "run_id");
+  const { data: run, error: runError } = await sb.from("chat_runs").select("*").eq("id", id).maybeSingle();
+  if (runError) throw runError;
+  if (!run) throw repositoryError("답변 실행을 찾지 못했습니다.", 404, "chat_run_not_found");
+
+  const [{ data: session, error: sessionError }, { data: question, error: questionError }, { data: config, error: configError }] = await Promise.all([
+    sb.from("chat_sessions").select("id, user_id, report_snapshot").eq("id", run.session_id).maybeSingle(),
+    sb.from("chat_messages").select("id, content, created_at").eq("id", run.user_message_id).maybeSingle(),
+    sb.from("site_config").select("ai_model").eq("id", 1).maybeSingle(),
+  ]);
+  if (sessionError) throw sessionError;
+  if (questionError) throw questionError;
+  if (configError) throw configError;
+  if (!session || !question) throw repositoryError("대화 컨텍스트를 찾지 못했습니다.", 404, "chat_context_not_found");
+
+  const { data: history, error: historyError } = await sb
+    .from("chat_messages")
+    .select("role, content, status, created_at")
+    .eq("session_id", run.session_id)
+    .lt("created_at", question.created_at)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (historyError) throw historyError;
+  return {
+    userId: session.user_id,
+    snapshot: session.report_snapshot,
+    question: question.content,
+    history: (history || []).reverse(),
+    model: config?.ai_model || process.env.OPENCODE_MODEL || "deepseek-v4-flash",
+  };
+}

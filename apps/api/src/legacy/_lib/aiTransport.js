@@ -181,6 +181,119 @@ async function requestMessages({ model, system, input, schema, maxTokens = 8192,
   }
 }
 
+function normalizeUsage(usage = {}) {
+  const promptTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? usage.promptTokens ?? 0);
+  const completionTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? usage.completionTokens ?? 0);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: Number(usage.total_tokens ?? usage.totalTokens ?? promptTokens + completionTokens),
+  };
+}
+
+async function requestPlainChat({ model, system, input, maxTokens = 1600, timeoutMs = 70000, onDelta }) {
+  const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
+  const request = {
+    model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: input },
+    ],
+  };
+  const timeout = timeoutSignal(timeoutMs);
+  try {
+    if (onDelta) {
+      const stream = await client.chat.completions.create({
+        ...request,
+        stream: true,
+        stream_options: { include_usage: true },
+      }, { signal: timeout.signal });
+      let text = "";
+      let usage = {};
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta?.content || "";
+        if (delta) {
+          text += delta;
+          await onDelta(delta);
+        }
+        if (chunk.usage) usage = chunk.usage;
+      }
+      if (!text) throw new Error("AI 응답이 비어 있습니다.");
+      return { text, usage: normalizeUsage(usage) };
+    }
+    const response = await client.chat.completions.create(request, { signal: timeout.signal });
+    const text = response.choices?.[0]?.message?.content;
+    if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    return { text, usage: normalizeUsage(response.usage) };
+  } catch (error) {
+    throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);
+  } finally {
+    timeout.clear();
+  }
+}
+
+async function requestPlainMessages({ model, system, input, maxTokens = 1600, timeoutMs = 70000, onDelta }) {
+  const timeout = timeoutSignal(timeoutMs);
+  try {
+    const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/+$/, "")}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey(),
+        "anthropic-version": "2023-06-01",
+      },
+      signal: timeout.signal,
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: input }],
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.error?.message || payload?.message || `OpenCode 요청 실패 (${response.status})`);
+      error.statusCode = response.status;
+      throw error;
+    }
+    const text = Array.isArray(payload.content)
+      ? payload.content.filter((part) => part?.type === "text").map((part) => part.text).join("\n")
+      : "";
+    if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    if (onDelta) await onDelta(text);
+    return { text, usage: normalizeUsage(payload.usage) };
+  } catch (error) {
+    throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);
+  } finally {
+    timeout.clear();
+  }
+}
+
+export async function requestText(options, dependencies = {}) {
+  const model = options.model || DEFAULT_MODEL;
+  const profile = modelProfile(model);
+  const request = dependencies.request || (profile.transport === "messages" ? requestPlainMessages : requestPlainChat);
+  const requestOptions = { ...options, model, profile };
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await request(requestOptions);
+      const result = typeof response === "string" ? { text: response, usage: {} } : response;
+      if (!String(result?.text || "").trim()) throw new Error("AI 응답이 비어 있습니다.");
+      return { text: result.text, usage: normalizeUsage(result.usage), model };
+    } catch (error) {
+      lastError = normalizeTransportError(error);
+      if (attempt === 0 && isRetryableTransport(lastError)) {
+        if (options.onReset) await options.onReset();
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError;
+}
+
 export async function requestStructured(options, dependencies = {}) {
   const model = options.model || DEFAULT_MODEL;
   const profile = modelProfile(model);
