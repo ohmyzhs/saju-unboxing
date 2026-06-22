@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { completePointOnlyOrder, resolveOrderPayment, resolveProductPrice } from "../api/orders.js";
+import { completePointOnlyOrder, resolveOrderPayment, resolveProductPrice } from "../apps/api/src/legacy/orders.js";
 
 test("서버 상품 설정 가격을 클라이언트 금액보다 우선한다", () => {
   const config = { products: { "saju-analysis": { amount: 1490 } } };

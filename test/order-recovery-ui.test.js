@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-await import("../public/order-recovery.js");
+await import("../apps/web/public/order-recovery.js");
 
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
+const app = readFileSync(new URL("../apps/web/public/app.js", import.meta.url), "utf8");
 
 test("주문 상태별 복구 행동을 구분한다", () => {
   assert.deepEqual(globalThis.OrderRecovery.capabilities({ status: "결제 진행중" }), {

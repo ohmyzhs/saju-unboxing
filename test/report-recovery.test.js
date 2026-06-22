@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-await import("../public/report-recovery.js");
+await import("../apps/web/public/report-recovery.js");
 
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
+const app = readFileSync(new URL("../apps/web/public/app.js", import.meta.url), "utf8");
 
 test("리포트 설계 응답을 즉시 보관할 초안으로 만든다", () => {
   const draft = globalThis.ReportRecovery.createDraft({

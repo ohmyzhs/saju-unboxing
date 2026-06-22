@@ -1,0 +1,12 @@
+{
+  "name": "@saju/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/write-runtime-config.mjs",
+    "dev": "vercel dev"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

@@ -11,7 +11,7 @@ import {
   ensurePointAccount,
   isInsufficientPoints,
   paymentBreakdown,
-} from "../api/_lib/points.js";
+} from "../apps/api/src/legacy/_lib/points.js";
 
 test("충전 티어는 고정 보너스를 포함한다", () => {
   assert.deepEqual(

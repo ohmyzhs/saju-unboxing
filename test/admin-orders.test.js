@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { mapOrder } from "../api/admin/[action].js";
+import { mapOrder } from "../apps/api/src/legacy/admin/[action].js";
 
-const admin = readFileSync(new URL("../public/admin.js", import.meta.url), "utf8");
+const admin = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
 
 test("관리자 주문 매핑에 현금·포인트·결제방식을 포함한다", () => {
   const mapped = mapOrder({

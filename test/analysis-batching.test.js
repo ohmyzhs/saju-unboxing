@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-await import("../public/analysis-batching.js");
+await import("../apps/web/public/analysis-batching.js");
 
 const { chunkSections } = globalThis.AnalysisBatching;
 
@@ -26,8 +26,8 @@ test("rejects invalid chunk sizes", () => {
 
 test("loads batching helper before app and keeps single-request fallback", async () => {
   const [html, app] = await Promise.all([
-    readFile(new URL("../public/index.html", import.meta.url), "utf8"),
-    readFile(new URL("../public/app.js", import.meta.url), "utf8"),
+    readFile(new URL("../apps/web/public/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../apps/web/public/app.js", import.meta.url), "utf8"),
   ]);
   assert.ok(html.indexOf("analysis-batching.js") < html.indexOf("app.js"));
   assert.match(app, /AnalysisBatching\.chunkSections\(sections\)/);

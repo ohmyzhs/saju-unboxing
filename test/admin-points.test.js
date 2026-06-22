@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { loadAdminPointPayload, mergePointMembers, normalizeAdminPointChange } from "../api/_lib/adminPoints.js";
+import { loadAdminPointPayload, mergePointMembers, normalizeAdminPointChange } from "../apps/api/src/legacy/_lib/adminPoints.js";
 
-const html = readFileSync(new URL("../public/admin.html", import.meta.url), "utf8");
-const app = readFileSync(new URL("../public/admin.js", import.meta.url), "utf8");
+const html = readFileSync(new URL("../apps/web/public/admin.html", import.meta.url), "utf8");
+const app = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
 
 test("관리자 화면에 회원 포인트 탭과 조정 폼이 있다", () => {
   assert.match(html, /data-admin-tab="points"/);

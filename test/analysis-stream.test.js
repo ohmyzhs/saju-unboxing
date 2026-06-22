@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-await import("../public/analysis-stream.js");
+await import("../apps/web/public/analysis-stream.js");
 
 const { createParser, progressForSections } = globalThis.AnalysisStream;
 
@@ -42,7 +42,7 @@ test("maps completed section counts to the real 40-95 range", () => {
 });
 
 test("loads stream helper before app", () => {
-  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
   assert.ok(html.indexOf("analysis-stream.js") >= 0);
   assert.ok(html.indexOf("analysis-stream.js") < html.indexOf("app.js"));
 });

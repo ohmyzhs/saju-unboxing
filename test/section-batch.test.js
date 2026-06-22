@@ -7,7 +7,7 @@ import {
   generatePlan,
   generateSections,
   validateSectionBatch,
-} from "../api/_lib/analysis.js";
+} from "../apps/api/src/legacy/_lib/analysis.js";
 
 test("builds a compact plan-only prompt and preserves admin instructions", () => {
   const prompt = buildPlanPrompt({

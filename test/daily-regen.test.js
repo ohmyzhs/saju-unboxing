@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { releaseDailyRegeneration, reserveDailyRegeneration } from "../api/_lib/points.js";
+import { releaseDailyRegeneration, reserveDailyRegeneration } from "../apps/api/src/legacy/_lib/points.js";
 
 test("재생성 요청과 토큰이 있으면 토큰 하나를 예약한다", async () => {
   const calls = [];

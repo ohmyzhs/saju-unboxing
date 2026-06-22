@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "echo no-build-needed",
-  "outputDirectory": "public",
+  "outputDirectory": "apps/web/public",
   "functions": {
     "api/**/*.js": { "maxDuration": 300 }
   },
@@ -13,7 +13,7 @@
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/refund", "destination": "/index.html" },
     { "source": "/payments/(.*)", "destination": "/index.html" },
-    { "source": "/share/(.*)", "destination": "/api/share?token=$1" },
-    { "source": "/api/health", "destination": "/api/config?mode=health" }
+    { "source": "/share/(.*)", "destination": "/api/gateway?path=share&token=$1" },
+    { "source": "/api/(.*)", "destination": "/api/gateway?path=$1" }
   ]
 }

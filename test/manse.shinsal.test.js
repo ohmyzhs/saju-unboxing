@@ -1,8 +1,8 @@
 // Phase 3b 골든 — 신살. 기준 1992-03-14(년지 申, 일간 己). SAJULAB 값과 대조(시주는 KST라 제외).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeInput, computeChart } from "../api/_lib/manse/calendar.js";
-import { calcShinsal } from "../api/_lib/manse/shinsal.js";
+import { normalizeInput, computeChart } from "../apps/api/src/legacy/_lib/manse/calendar.js";
+import { calcShinsal } from "../apps/api/src/legacy/_lib/manse/shinsal.js";
 
 const sh = (p) => calcShinsal(computeChart(normalizeInput(p)));
 const PROFILE = { gender: "female", birthDate: "1992-03-14", birthTime: "05:30", calendar: "solar" };

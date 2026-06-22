@@ -1,8 +1,8 @@
 // Phase 4 골든 — 대운/세운/월운. 기준 1992-03-14 여, 현재 2026-06-20. SAJULAB 대운 일치.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeInput, computeChart } from "../api/_lib/manse/calendar.js";
-import { calcLuckCycles } from "../api/_lib/manse/luckCycles.js";
+import { normalizeInput, computeChart } from "../apps/api/src/legacy/_lib/manse/calendar.js";
+import { calcLuckCycles } from "../apps/api/src/legacy/_lib/manse/luckCycles.js";
 
 const TODAY = new Date("2026-06-20T12:00:00Z");
 const luck = () => {

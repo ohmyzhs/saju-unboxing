@@ -197,7 +197,7 @@ function collectProductConfig(form) {
 // 관리자 API 공통 호출(JSON POST) → {ok, status, body}로 통일.
 // 401(미인증)은 호출부에서 showLogin()으로 처리 — 인증 흐름을 호출부에 드러낸다.
 async function adminPost(path, payload) {
-  const res = await fetch(path, {
+  const res = await window.SajuApi.fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -246,7 +246,7 @@ function saveProductBasics(event) {
 
 async function loadConfig() {
   try {
-    const res = await fetch("/api/admin/config", { cache: "no-store" });
+    const res = await window.SajuApi.fetch("/api/admin/config", { cache: "no-store" });
     if (res.status === 401) {
       showLogin();
       return false; // 미로그인 → 화면 잠금 유지
@@ -692,7 +692,7 @@ function renderDashboard() {
 
 async function loadAnalytics() {
   try {
-    const res = await fetch("/api/admin/analytics", { cache: "no-store" });
+    const res = await window.SajuApi.fetch("/api/admin/analytics", { cache: "no-store" });
     if (res.status === 401) return showLogin();
     analytics = await res.json();
   } catch {
@@ -713,7 +713,7 @@ const POINT_TYPE_LABELS = {
 
 async function loadAdminPoints() {
   try {
-    const res = await fetch("/api/admin/points", { cache: "no-store" });
+    const res = await window.SajuApi.fetch("/api/admin/points", { cache: "no-store" });
     if (res.status === 401) return showLogin();
     const body = await res.json();
     if (!res.ok) throw new Error(body.message || "포인트 정보를 불러오지 못했습니다.");
@@ -731,7 +731,7 @@ async function loadAdminPointDetail(userId) {
   const summary = document.querySelector("[data-admin-point-summary]");
   if (summary) summary.innerHTML = `<div class="empty-box is-loading"><span class="inline-spinner"></span>회원 정보를 불러오는 중…</div>`;
   try {
-    const res = await fetch(`/api/admin/points?userId=${encodeURIComponent(pointAdminData.selectedUserId)}`, { cache: "no-store" });
+    const res = await window.SajuApi.fetch(`/api/admin/points?userId=${encodeURIComponent(pointAdminData.selectedUserId)}`, { cache: "no-store" });
     if (res.status === 401) return showLogin();
     const body = await res.json();
     if (!res.ok) throw new Error(body.message || "회원 포인트 정보를 불러오지 못했습니다.");

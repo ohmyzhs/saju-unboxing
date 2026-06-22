@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { confirmOrderPayment } from "../api/payments/confirm.js";
+import { confirmOrderPayment } from "../apps/api/src/legacy/payments/confirm.js";
 
 test("혼합 결제는 포인트 차감 후 남은 금액만 토스 승인한다", async () => {
   const calls = [];

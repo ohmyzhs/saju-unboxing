@@ -1,5 +1,5 @@
 // GET /api/auth/kakao/callback — state 검증 → 토큰 교환 → 사용자 조회 → 세션 발급
-import { readCookies, cookie, cookieSecure, baseUrl, redirect } from "../../_lib/http.js";
+import { readCookies, cookie, cookieSecure, baseUrl, redirect, webBaseUrl } from "../../_lib/http.js";
 import { kakaoToken, kakaoUser } from "../../_lib/kakao.js";
 import { createSession } from "../../_lib/sessions.js";
 
@@ -8,9 +8,10 @@ export default async function handler(req, res) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookies = readCookies(req);
+  const webOrigin = webBaseUrl(req);
 
   if (!code || !state || state !== cookies.saju_kakao_state) {
-    return redirect(res, "/?auth=state-error");
+    return redirect(res, `${webOrigin}/?auth=state-error`);
   }
 
   try {
@@ -22,13 +23,13 @@ export default async function handler(req, res) {
     const user = await kakaoUser(token.access_token);
     const sessionId = await createSession(user);
 
-    return redirect(res, "/?auth=kakao-ok", {
+    return redirect(res, `${webOrigin}/?auth=kakao-ok`, {
       "Set-Cookie": [
         cookie("saju_session", sessionId, { httpOnly: true, secure: cookieSecure(), maxAge: 60 * 60 * 24 * 7 }),
         cookie("saju_kakao_state", "", { httpOnly: true, secure: cookieSecure(), maxAge: 0 }),
       ],
     });
   } catch (error) {
-    return redirect(res, `/?auth=error&reason=${encodeURIComponent(error.message)}`);
+    return redirect(res, `${webOrigin}/?auth=error&reason=${encodeURIComponent(error.message)}`);
   }
 }

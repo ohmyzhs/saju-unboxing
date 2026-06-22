@@ -1,8 +1,8 @@
 // Phase 2 골든 — 결정적 파생. 기준: 1992-03-14 05:30 여(KST → 임신/계묘/기축/정묘).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeInput, computeChart } from "../api/_lib/manse/calendar.js";
-import { deriveDetails } from "../api/_lib/manse/derive.js";
+import { normalizeInput, computeChart } from "../apps/api/src/legacy/_lib/manse/calendar.js";
+import { deriveDetails } from "../apps/api/src/legacy/_lib/manse/derive.js";
 
 const PROFILE = { gender: "female", birthDate: "1992-03-14", birthTime: "05:30", calendar: "solar" };
 const derive = (p) => deriveDetails(computeChart(normalizeInput(p)));

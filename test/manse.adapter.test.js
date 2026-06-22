@@ -1,8 +1,8 @@
 // Phase 5 — 어댑터/통합. 기존 4개 컨텍스트 빌더가 로컬 엔진 출력을 그대로 소비하는지(계약).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeManseLocal } from "../api/_lib/manse/index.js";
-import { buildSajuContext, buildCompatContext, buildCycleContext, buildYearlyContext } from "../api/_lib/sajuContext.js";
+import { computeManseLocal } from "../apps/api/src/legacy/_lib/manse/index.js";
+import { buildSajuContext, buildCompatContext, buildCycleContext, buildYearlyContext } from "../apps/api/src/legacy/_lib/sajuContext.js";
 
 const TODAY = new Date("2026-06-20T12:00:00Z");
 const PROFILE = { gender: "female", birthDate: "1992-03-14", birthTime: "05:30", calendar: "solar" };

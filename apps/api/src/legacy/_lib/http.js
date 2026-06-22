@@ -49,6 +49,17 @@ export function baseUrl(req) {
   return process.env.BASE_URL || "http://localhost:3000";
 }
 
+/** OAuth 완료 후 사용자를 돌려보낼 웹 앱 origin. 미설정 시 단일 프로젝트 주소를 사용한다. */
+export function webBaseUrl(req) {
+  const configured = String(process.env.WEB_BASE_URL || "").trim();
+  if (!configured) return baseUrl(req);
+  const parsed = new URL(configured);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("WEB_BASE_URL must use HTTP or HTTPS.");
+  }
+  return parsed.origin;
+}
+
 export function redirect(res, location, headers = {}) {
   res.statusCode = 302;
   for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);

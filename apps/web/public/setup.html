@@ -44,6 +44,8 @@
       • <b>토스/카카오</b> — 없어도 학습은 됩니다(토스는 테스트키 자동). 고객 결제·로그인 쓰려면 키 입력.
     </p>
 
+    <script src="./runtime-config.js"></script>
+    <script src="./api-client.js"></script>
     <script>
       async function load() {
         const banner = document.getElementById("banner");
@@ -51,7 +53,7 @@
         banner.className = "banner";
         banner.textContent = "불러오는 중…";
         try {
-          const res = await fetch("/api/health", { cache: "no-store" });
+          const res = await window.SajuApi.fetch("/api/health", { cache: "no-store" });
           const data = await res.json();
           const names = {
             centralApi: "중앙 만세력 API (포인트)",

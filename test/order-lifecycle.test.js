@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { cancelOwnedOrder, resumeOwnedOrder } from "../api/_lib/orderLifecycle.js";
+import { cancelOwnedOrder, resumeOwnedOrder } from "../apps/api/src/legacy/_lib/orderLifecycle.js";
 
 test("미결제 본인 주문을 취소한다", async () => {
   let patch = null;

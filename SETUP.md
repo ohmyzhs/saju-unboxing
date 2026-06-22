@@ -123,6 +123,28 @@
 
 > 📌 **받은 것**: 내 사이트 주소 (이걸로 7·8단계 카카오·도메인을 연결)
 
+## 상용 운영: 프론트엔드와 API를 두 프로젝트로 분리
+
+현재 저장소는 같은 `main` 브랜치에서 두 Vercel 프로젝트를 독립 배포할 수 있습니다.
+기존 단일 프로젝트도 전환이 끝날 때까지 루트 gateway 한 개로 계속 작동합니다.
+
+1. **웹 프로젝트**를 추가하고 Root Directory를 `apps/web`으로 설정합니다.
+   - Framework Preset: `Other`
+   - 환경변수 `SAJU_API_BASE_URL`: 아래 API 프로젝트의 HTTPS origin
+   - 비밀키는 웹 프로젝트에 넣지 않습니다.
+2. **API 프로젝트**를 추가하고 Root Directory를 `apps/api`로 설정합니다.
+   - Framework Preset: `Other`
+   - `WEB_BASE_URL`: 웹 프로젝트의 HTTPS origin
+   - `WEB_ORIGINS`: API 호출을 허용할 웹 origin 목록. 여러 개면 쉼표로 구분
+   - Supabase, OpenCode, Toss, Kakao, 관리자 비밀키는 API 프로젝트에만 입력합니다.
+3. 두 프로젝트 모두 Production Branch를 `main`으로 둡니다.
+4. API 프로젝트에 `api` 서브도메인을 연결하고 그 주소를 웹의
+   `SAJU_API_BASE_URL`에 입력한 뒤 두 프로젝트를 다시 배포합니다.
+5. 카카오 Redirect URI는 API origin의 `/api/auth/kakao/callback`으로 등록합니다.
+
+브라우저는 자격 증명을 포함해 API를 호출하고, API는 `WEB_BASE_URL`과
+`WEB_ORIGINS`에 등록된 origin만 허용합니다. 주소에는 경로를 붙이지 않습니다.
+
 ---
 
 # 6단계. 확인 + 관리자 비밀번호 변경
@@ -199,7 +221,10 @@
 | `OPENAI_MODEL` | 기본 `gpt-5.4-mini`. 더 좋은 모델로 바꾸려면 |
 | `TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | 실결제(9단계). 비우면 테스트 결제 |
 | `TOSS_VARIANT_KEY` | 토스 어드민 결제 UI 키(선택) |
-| `BASE_URL` | 내 사이트 주소(배포 후 넣으면 더 정확) |
+| `BASE_URL` | API 프로젝트 origin. 단일 프로젝트에서는 사이트 origin |
+| `SAJU_API_BASE_URL` | 웹 프로젝트 전용. 분리된 API 프로젝트 origin |
+| `WEB_BASE_URL` | API 프로젝트 전용. 로그인 후 돌아갈 웹 origin |
+| `WEB_ORIGINS` | API 프로젝트 전용. 허용할 웹 origin 목록(쉼표 구분) |
 
 ---
 
@@ -207,9 +232,9 @@
 
 | 증상 | 해결 |
 |---|---|
-| 사이트 전체 **500 / "Serverless Function crashed"** | Vercel `Settings` → **Framework Preset=`Other`**, **Output Directory=`public`** → Redeploy |
+| 사이트 전체 **500 / "Serverless Function crashed"** | 루트 호환 배포는 Output Directory=`apps/web/public`, 분리 웹 프로젝트는 Root Directory=`apps/web`·Output Directory=`public` 확인 후 Redeploy |
 | **"commit author did not have access"** 배포 차단 | GitHub·Vercel을 **같은 계정**으로. 또는 저장소를 **Public** 으로 |
-| 빌드 **"No more than 12 Serverless Functions … Hobby"** | 함수는 **최대 12개** (현재 12개). 직접 추가했다면 줄이기 |
+| 빌드 **"No more than 12 Serverless Functions … Hobby"** | 최신 구조는 공개 API를 gateway 함수 1개로 통합합니다. Root Directory와 최신 `main` 배포 여부 확인 |
 | `/setup` 에서 **Supabase ❌** | URL/키 오타 or `supabase/schema.sql` **RUN** 안 함 |
 | 고객 이름이 **"카카오 사용자"** | 카카오 **동의항목 닉네임 "필수 동의"** 켜고 다시 로그인(7단계 5번) |
 | 카카오 **KOE205** | 동의항목을 **먼저 켜고** 로그인. 안 켠 항목 요청 금지 |

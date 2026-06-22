@@ -2,12 +2,16 @@
   "name": "saju-research-lab",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vercel dev",
     "dev:legacy": "node server.mjs",
     "start": "vercel dev",
     "test": "node --test test/*.test.js",
-    "check": "node --check public/app.js && node --check public/admin.js && node --check public/analysis-stream.js && node --check public/analysis-batching.js && node --check public/order-recovery.js && node --check public/report-recovery.js && node --check public/daily-fortune-ui.js && node --check public/point-payment.js && node --check api/_lib/aiTransport.js && node --check api/_lib/analysis.js && node --check api/_lib/reportStream.js && node --check api/_lib/points.js && node --check api/_lib/adminPoints.js && node --check api/_lib/orderLifecycle.js && node --check api/orders.js && node --check api/payments/confirm.js && node --check api/session.js && node --check api/saju/analyze.js && node --check api/saju/section.js && node --check api/config.js"
+    "check": "node --check apps/web/public/app.js && node --check apps/web/public/admin.js && node --check apps/web/public/api-client.js && node --check apps/web/public/analysis-stream.js && node --check apps/web/public/analysis-batching.js && node --check apps/web/public/order-recovery.js && node --check apps/web/public/report-recovery.js && node --check apps/web/public/daily-fortune-ui.js && node --check apps/web/public/point-payment.js && node --check apps/web/scripts/write-runtime-config.mjs && node --check apps/api/src/gateway.js && node --check apps/api/src/legacy/_lib/aiTransport.js && node --check apps/api/src/legacy/_lib/analysis.js && node --check apps/api/src/legacy/_lib/reportStream.js && node --check apps/api/src/legacy/_lib/points.js && node --check apps/api/src/legacy/_lib/adminPoints.js && node --check apps/api/src/legacy/_lib/orderLifecycle.js && node --check apps/api/src/legacy/orders.js && node --check apps/api/src/legacy/payments/confirm.js && node --check apps/api/src/legacy/session.js && node --check apps/api/src/legacy/saju/analyze.js && node --check apps/api/src/legacy/saju/section.js && node --check apps/api/src/legacy/config.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",

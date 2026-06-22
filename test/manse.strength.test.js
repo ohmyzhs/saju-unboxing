@@ -1,9 +1,9 @@
 // Phase 3 골든 — 신강약/용신. 오라클: saju/tests/test_strength_yongsin.py
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeInput, computeChart } from "../api/_lib/manse/calendar.js";
-import { deriveDetails } from "../api/_lib/manse/derive.js";
-import { calcSillyeong, _johuYongsin, calcStrengthYongsin } from "../api/_lib/manse/strengthYongsin.js";
+import { normalizeInput, computeChart } from "../apps/api/src/legacy/_lib/manse/calendar.js";
+import { deriveDetails } from "../apps/api/src/legacy/_lib/manse/derive.js";
+import { calcSillyeong, _johuYongsin, calcStrengthYongsin } from "../apps/api/src/legacy/_lib/manse/strengthYongsin.js";
 
 function strengthOf(profile) {
   const chart = computeChart(normalizeInput(profile));

@@ -1,7 +1,7 @@
 // Phase 1 골든 — 달력 커널/표준 원국. 정책: 고정 KST(진태양시 미적용).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeInput, computeChart } from "../api/_lib/manse/calendar.js";
+import { normalizeInput, computeChart } from "../apps/api/src/legacy/_lib/manse/calendar.js";
 
 const chart = (profile) => computeChart(normalizeInput(profile));
 

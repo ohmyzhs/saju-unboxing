@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-const config = readFileSync(new URL("../api/config.js", import.meta.url), "utf8");
+const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
+const app = readFileSync(new URL("../apps/web/public/app.js", import.meta.url), "utf8");
+const config = readFileSync(new URL("../apps/api/src/legacy/config.js", import.meta.url), "utf8");
 
-await import("../public/point-payment.js");
+await import("../apps/web/public/point-payment.js");
 const { fullUse } = globalThis.PointPayment;
 
 test("마이페이지에 포인트 잔액과 충전 화면이 있다", () => {

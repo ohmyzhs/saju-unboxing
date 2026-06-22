@@ -6,7 +6,7 @@ import {
   modelProfile,
   requestStructured,
   validateSchema,
-} from "../api/_lib/aiTransport.js";
+} from "../apps/api/src/legacy/_lib/aiTransport.js";
 
 test("routes DeepSeek to chat completions without strict schema", () => {
   assert.deepEqual(modelProfile("deepseek-v4-flash"), {

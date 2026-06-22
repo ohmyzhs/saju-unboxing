@@ -6,9 +6,9 @@ import {
   chunkSections,
   formatSse,
   runReportStream,
-} from "../api/_lib/reportStream.js";
+} from "../apps/api/src/legacy/_lib/reportStream.js";
 
-const analyzeApi = readFileSync(new URL("../api/saju/analyze.js", import.meta.url), "utf8");
+const analyzeApi = readFileSync(new URL("../apps/api/src/legacy/saju/analyze.js", import.meta.url), "utf8");
 
 test("analyze API exposes opt-in event streaming without replacing JSON mode", () => {
   assert.match(analyzeApi, /runReportStream/);

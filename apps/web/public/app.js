@@ -262,10 +262,10 @@ function trackEvent(event, metadata = {}, options = {}) {
   };
   const body = JSON.stringify(payload);
   if (options.beacon && navigator.sendBeacon) {
-    navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
+    navigator.sendBeacon(window.SajuApi.url("/api/track"), new Blob([body], { type: "application/json" }));
     return Promise.resolve();
   }
-  return fetch("/api/track", {
+  return window.SajuApi.fetch("/api/track", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
@@ -372,7 +372,7 @@ function reloadAccountData() {
 // ── 계정 데이터 서버 동기화 — 로그인 시 Supabase가 진실, localStorage는 미러(캐시) ──
 function pushProfile(profile) {
   if (!runtimeSession?.user?.id) return; // 게스트는 서버 저장 안 함
-  fetch("/api/profiles", {
+  window.SajuApi.fetch("/api/profiles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profile }),
@@ -380,7 +380,7 @@ function pushProfile(profile) {
 }
 function removeServerProfile(id) {
   if (!runtimeSession?.user?.id) return;
-  fetch("/api/profiles", {
+  window.SajuApi.fetch("/api/profiles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "delete", id }),
@@ -389,7 +389,7 @@ function removeServerProfile(id) {
 // 보관함(archive)·주문(order) 항목을 서버에 저장(로그인 시).
 function pushUserData(kind, item) {
   if (!runtimeSession?.user?.id || !item) return Promise.resolve();
-  return fetch("/api/profiles", {
+  return window.SajuApi.fetch("/api/profiles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, item }),
@@ -401,14 +401,14 @@ async function syncKind({ resource, kind, baseKey, idField }) {
   const url = kind ? `/api/profiles?kind=${kind}` : "/api/profiles";
   const localItems = readStore(scopedKey(baseKey), []);
   const guestItems = readStore(`${baseKey}__guest`, []);
-  const first = await fetch(url);
+  const first = await window.SajuApi.fetch(url);
   const serverItems = first.ok ? (await first.json())[resource] || [] : [];
   const serverIds = new Set(serverItems.map((x) => x?.[idField]).filter(Boolean));
   const toPush = [...guestItems, ...localItems].filter((x) => x?.[idField] && !serverIds.has(x[idField]));
   if (toPush.length) {
     await Promise.all(
       toPush.map((item) =>
-        fetch("/api/profiles", {
+        window.SajuApi.fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(kind ? { kind, item } : { profile: item }),
@@ -615,7 +615,7 @@ async function getJson(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await window.SajuApi.fetch(url, { ...options, signal: controller.signal });
     const text = await response.text();
     let body = {};
     try {
@@ -695,7 +695,7 @@ function renderSession() {
           <p class="email-auth-msg" data-email-msg></p>
         </div>`;
       const loginBtn = mypageId.querySelector("[data-mypage-login]");
-      if (loginBtn) loginBtn.addEventListener("click", () => { window.location.href = "/api/auth/kakao/start"; });
+      if (loginBtn) loginBtn.addEventListener("click", () => { window.location.href = window.SajuApi.url("/api/auth/kakao/start"); });
       mypageId.querySelector("[data-email-login]")?.addEventListener("click", () => emailAuth("login"));
       mypageId.querySelector("[data-email-signup]")?.addEventListener("click", () => emailAuth("signup"));
     }
@@ -730,7 +730,7 @@ async function emailAuth(action) {
   const msg = mypageId.querySelector("[data-email-msg]");
   if (msg) msg.textContent = action === "signup" ? "가입 중..." : "로그인 중...";
   try {
-    const res = await fetch("/api/session", {
+    const res = await window.SajuApi.fetch("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, email, password }),
@@ -2672,7 +2672,7 @@ function startAnalysis(productId, profile, meta = {}) {
   // 구조화 SSE: 실제 만세력·설계·완료 섹션 이벤트만 진행률에 반영한다.
   const analysisController = new AbortController();
   activeAnalysisTimer = window.setTimeout(() => analysisController.abort(), 295000);
-  fetch("/api/saju/analyze", {
+  window.SajuApi.fetch("/api/saju/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     signal: analysisController.signal,
@@ -3488,13 +3488,13 @@ window.setInterval(() => {
 authButtons.forEach((button) => {
   button.addEventListener("click", () => {
     if (runtimeSession?.user) return;
-    window.location.href = "/api/auth/kakao/start";
+    window.location.href = window.SajuApi.url("/api/auth/kakao/start");
   });
 });
 
 logoutButtons.forEach((button) => {
   button.addEventListener("click", async () => {
-    await fetch("/api/session", {
+    await window.SajuApi.fetch("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "logout" }),

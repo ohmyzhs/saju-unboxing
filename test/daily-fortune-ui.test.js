@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-await import("../public/daily-fortune-ui.js");
+await import("../apps/web/public/daily-fortune-ui.js");
 
 const { normalizePillar } = globalThis.DailyFortuneUI;
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/styles.css", import.meta.url), "utf8");
+const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
+const app = readFileSync(new URL("../apps/web/public/app.js", import.meta.url), "utf8");
+const css = readFileSync(new URL("../apps/web/public/styles.css", import.meta.url), "utf8");
 
 test("normalizes Korean and Hanja pillar strings", () => {
   assert.deepEqual(normalizePillar("임신"), {

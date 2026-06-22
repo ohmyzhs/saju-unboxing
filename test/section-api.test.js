@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { validateSectionBatchInput } from "../api/saju/section.js";
+import { validateSectionBatchInput } from "../apps/api/src/legacy/saju/section.js";
 
 test("accepts one or two complete section descriptors", () => {
   const sections = [

@@ -1,10 +1,10 @@
 // GET /api/auth/kakao/start — 카카오 인가 시작 (state 쿠키 발급)
 import { randomBytes } from "crypto";
-import { cookie, cookieSecure, baseUrl, redirect } from "../../_lib/http.js";
+import { cookie, cookieSecure, baseUrl, redirect, webBaseUrl } from "../../_lib/http.js";
 
 export default async function handler(req, res) {
   const restApiKey = process.env.KAKAO_REST_API_KEY;
-  if (!restApiKey) return redirect(res, "/?auth=missing-kakao");
+  if (!restApiKey) return redirect(res, `${webBaseUrl(req)}/?auth=missing-kakao`);
 
   const redirectUri = process.env.KAKAO_REDIRECT_URI || `${baseUrl(req)}/api/auth/kakao/callback`;
   const state = randomBytes(24).toString("hex");
