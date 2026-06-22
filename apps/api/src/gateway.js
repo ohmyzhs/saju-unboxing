@@ -11,14 +11,21 @@ import admin from "./legacy/admin/[action].js";
 import kakaoStart from "./legacy/auth/kakao/start.js";
 import kakaoCallback from "./legacy/auth/kakao/callback.js";
 import { createChatHandler } from "./http/chat.js";
-import { startReportChatRun, resumeStuckChatRuns } from "./workflows/chatExecution.js";
+import {
+  resumeStuckChatRuns,
+  startChatRecovery,
+  startReportChatRun,
+} from "./workflows/chatExecution.js";
 import { getSupabase } from "./legacy/_lib/supabase.js";
 import { baseUrl, sendJson } from "./legacy/_lib/http.js";
 
 // 챗 실행기 주입 — 질문 전송 시 답변 생성을 즉시 트리거(백그라운드)하고 202 를 빠르게 반환한다.
-const chat = createChatHandler({ startRun: (runId) => startReportChatRun(runId) });
+const chat = createChatHandler({
+  startRun: (runId) => startReportChatRun(runId),
+  recoverRuns: (sb) => startChatRecovery(sb),
+});
 
-// 내구 실행 복구용 sweeper(크론). 시작 못 했거나 끊긴 run 을 재개한다.
+// 내구 실행 복구용 수동 엔드포인트. 시작 못 했거나 끊긴 run 을 재개한다.
 async function chatSweepHandler(req, res) {
   const secret = process.env.CRON_SECRET;
   if (secret && (req.headers?.authorization || "") !== `Bearer ${secret}`) {

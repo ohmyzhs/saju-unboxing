@@ -28,12 +28,18 @@ export async function chatCatalogPayload(sb, user) {
   };
 }
 
-export function createChatHandler({ getUser = getSessionUser, getDb = getSupabase, startRun = null } = {}) {
+export function createChatHandler({
+  getUser = getSessionUser,
+  getDb = getSupabase,
+  startRun = null,
+  recoverRuns = null,
+} = {}) {
   return async function chatHandler(req, res) {
     const path = String(req.query?.chatPath || "").replace(/^\/+|\/+$/g, "");
     try {
       const user = await getUser(req);
       const sb = getDb();
+      if (user?.id && recoverRuns) recoverRuns(sb);
       if (path === "catalog") {
         if (req.method !== "GET") return sendJson(res, 405, { message: "GET only" });
         return sendJson(res, 200, await chatCatalogPayload(sb, user));

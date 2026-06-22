@@ -66,6 +66,7 @@ test("영구 실패 처리는 환원 포함 단일 RPC를 사용한다", async (
 
 test("메시지 API는 enqueue 후 Workflow 시작을 요청하고 202를 반환한다", async () => {
   const started = [];
+  const recovered = [];
   const handler = createChatHandler({
     getUser: async () => ({ id: "u1" }),
     getDb: () => ({
@@ -75,6 +76,7 @@ test("메시지 API는 enqueue 후 Workflow 시작을 요청하고 202를 반환
       },
     }),
     startRun: async (runId) => { started.push(runId); },
+    recoverRuns: (sb) => { recovered.push(sb); },
   });
   const response = await invoke(handler, {
     method: "POST",
@@ -84,6 +86,7 @@ test("메시지 API는 enqueue 후 Workflow 시작을 요청하고 202를 반환
   assert.equal(response.status, 202);
   assert.equal(response.body.runId, "r1");
   assert.deepEqual(started, ["r1"]);
+  assert.equal(recovered.length, 1);
 });
 
 async function invoke(handler, req) {

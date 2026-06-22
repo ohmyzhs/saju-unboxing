@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { runReportAgent } from "../agent/chatAgent.js";
 import {
   claimChatRun,
@@ -82,15 +83,9 @@ export async function executeChatRun(runId, dependencies = {}) {
   }
 }
 
-// Vercel 응답 후에도 실행을 유지(best-effort). @vercel/functions 가 없으면(로컬) fire-and-forget 하고
-// 끊긴 run 은 resumeStuckChatRuns(크론)이 복구한다.
-async function keepAlive(promise) {
-  try {
-    const mod = await import("@vercel/functions");
-    if (typeof mod.waitUntil === "function") mod.waitUntil(promise);
-  } catch {
-    /* @vercel/functions 미존재 → fire-and-forget + sweeper 복구 */
-  }
+// Vercel 응답 후에도 실행을 함수 최대 실행시간까지 유지한다.
+function keepAlive(promise) {
+  waitUntil(promise);
 }
 
 // POST /messages 의 트리거. 즉시 반환(202 빠르게)하고 실행은 백그라운드로 돌린다.
@@ -99,6 +94,15 @@ export function startReportChatRun(runId, deps = {}) {
   const execute = deps.execute || executeChatRun;
   const promise = Promise.resolve().then(() => execute(runId));
   promise.catch(() => {}); // 실패는 executeChatRun 내부 fail/refund + sweeper 재개
+  (deps.keepAlive || keepAlive)(promise);
+}
+
+// Hobby 플랜에서는 분 단위 Cron을 쓸 수 없으므로, 사용자가 챗 화면을 다시 조회할 때
+// 중단된 실행을 비동기로 복구한다. 정상 실행은 startReportChatRun의 waitUntil이 계속 유지한다.
+export function startChatRecovery(sb, deps = {}) {
+  const resume = deps.resume || resumeStuckChatRuns;
+  const promise = Promise.resolve().then(() => resume(sb));
+  promise.catch(() => {});
   (deps.keepAlive || keepAlive)(promise);
 }
 
