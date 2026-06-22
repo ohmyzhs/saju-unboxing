@@ -127,6 +127,80 @@ create table if not exists shared_reports (
   created_at timestamptz default now()
 );
 
+-- [12] AI 챗봇 질의응답권 잔액과 감사 로그
+create table if not exists chat_credit_accounts (
+  user_id text primary key,
+  balance integer not null default 0 check (balance >= 0),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists chat_credit_transactions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id text not null,
+  type text not null check (type in ('purchase', 'reserve', 'refund', 'admin_adjust')),
+  amount integer not null check (amount <> 0),
+  balance_after integer not null check (balance_after >= 0),
+  ref text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (user_id, type, ref)
+);
+
+-- [13] 선택한 보관함 리포트에 고정된 AI 챗봇 대화
+create table if not exists chat_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id text not null,
+  source_archive_id text not null,
+  report_snapshot jsonb not null,
+  title text not null,
+  status text not null default 'active' check (status in ('active', 'archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_message_at timestamptz,
+  unique (user_id, source_archive_id)
+);
+
+create table if not exists chat_messages (
+  id uuid primary key default uuid_generate_v4(),
+  session_id uuid not null references chat_sessions(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null default '',
+  status text not null default 'queued' check (status in ('queued', 'streaming', 'completed', 'failed')),
+  reply_to uuid references chat_messages(id) on delete set null,
+  client_request_id text,
+  error_code text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  completed_at timestamptz,
+  unique (session_id, client_request_id)
+);
+
+create table if not exists chat_runs (
+  id uuid primary key default uuid_generate_v4(),
+  session_id uuid not null references chat_sessions(id) on delete cascade,
+  user_message_id uuid not null references chat_messages(id) on delete cascade,
+  assistant_message_id uuid not null references chat_messages(id) on delete cascade,
+  workflow_run_id text,
+  status text not null default 'queued' check (status in ('queued', 'running', 'completed', 'failed')),
+  credit_status text not null default 'reserved' check (credit_status in ('reserved', 'consumed', 'refund_pending', 'refunded')),
+  model text,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  usage jsonb not null default '{}'::jsonb,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_message_id)
+);
+
+create table if not exists chat_stream_events (
+  run_id uuid not null references chat_runs(id) on delete cascade,
+  seq integer not null check (seq > 0),
+  type text not null check (type in ('status', 'delta', 'replace', 'complete', 'error')),
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (run_id, seq)
+);
+
 -- ─────────────────────────────────────────────────────
 -- 2) 인덱스
 -- ─────────────────────────────────────────────────────
@@ -140,6 +214,14 @@ create index if not exists idx_point_transactions_user_created on point_transact
 create unique index if not exists idx_point_transactions_idempotent
   on point_transactions(user_id, type, ref)
   where ref is not null and type in ('charge', 'bonus', 'spend', 'refund');
+create index if not exists idx_chat_credit_transactions_user_created
+  on chat_credit_transactions(user_id, created_at desc);
+create index if not exists idx_chat_sessions_user_last_message
+  on chat_sessions(user_id, last_message_at desc nulls last, created_at desc);
+create index if not exists idx_chat_messages_session_created
+  on chat_messages(session_id, created_at asc);
+create index if not exists idx_chat_runs_session_created
+  on chat_runs(session_id, created_at desc);
 
 -- ─────────────────────────────────────────────────────
 -- 3) 기존(옛 스키마) DB 보강 — 예전에 테이블을 만든 분만 해당. 새 DB는 위에서 이미 생성돼 무시됨.
@@ -156,6 +238,9 @@ alter table analyses    add column if not exists user_label    text;
 alter table analyses    add column if not exists user_provider text;
 alter table orders      add column if not exists points_used integer not null default 0;
 alter table orders      add column if not exists pay_method text default 'toss';
+alter table orders      add column if not exists fulfillment_status text default 'not_required';
+alter table orders      add column if not exists fulfillment_error text;
+alter table orders      add column if not exists fulfilled_at timestamptz;
 
 -- ─────────────────────────────────────────────────────
 -- 4) 포인트 원자 변경 RPC
@@ -265,13 +350,282 @@ begin
 end;
 $$;
 
+-- ─────────────────────────────────────────────────────
+-- 5) 챗봇 질의응답권 원자 변경과 질문 enqueue RPC
+-- ─────────────────────────────────────────────────────
+create or replace function grant_chat_credits(
+  p_user_id text,
+  p_amount integer,
+  p_order_id text
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_balance integer;
+  next_balance integer;
+  existing_balance integer;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'invalid_chat_credit_amount';
+  end if;
+  if nullif(trim(p_order_id), '') is null then
+    raise exception 'invalid_order_id';
+  end if;
+
+  insert into chat_credit_accounts(user_id) values (p_user_id)
+  on conflict (user_id) do nothing;
+
+  select balance into current_balance
+  from chat_credit_accounts
+  where user_id = p_user_id
+  for update;
+
+  select balance_after into existing_balance
+  from chat_credit_transactions
+  where user_id = p_user_id and type = 'purchase' and ref = p_order_id
+  limit 1;
+  if found then
+    return existing_balance;
+  end if;
+
+  next_balance := current_balance + p_amount;
+  update chat_credit_accounts
+  set balance = next_balance, updated_at = now()
+  where user_id = p_user_id;
+
+  insert into chat_credit_transactions(user_id, type, amount, balance_after, ref, metadata)
+  values (p_user_id, 'purchase', p_amount, next_balance, p_order_id, jsonb_build_object('orderId', p_order_id));
+
+  return next_balance;
+end;
+$$;
+
+create or replace function reserve_chat_credit(
+  p_user_id text,
+  p_message_id uuid
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_balance integer;
+  next_balance integer;
+  existing_balance integer;
+  message_ref text := p_message_id::text;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_message_id is null then
+    raise exception 'invalid_message_id';
+  end if;
+
+  insert into chat_credit_accounts(user_id) values (p_user_id)
+  on conflict (user_id) do nothing;
+
+  select balance into current_balance
+  from chat_credit_accounts
+  where user_id = p_user_id
+  for update;
+
+  select balance_after into existing_balance
+  from chat_credit_transactions
+  where user_id = p_user_id and type = 'reserve' and ref = message_ref
+  limit 1;
+  if found then
+    return existing_balance;
+  end if;
+
+  if current_balance < 1 then
+    raise exception 'insufficient_chat_credits';
+  end if;
+
+  next_balance := current_balance - 1;
+  update chat_credit_accounts
+  set balance = next_balance, updated_at = now()
+  where user_id = p_user_id;
+
+  insert into chat_credit_transactions(user_id, type, amount, balance_after, ref)
+  values (p_user_id, 'reserve', -1, next_balance, message_ref);
+
+  return next_balance;
+end;
+$$;
+
+create or replace function refund_chat_credit(
+  p_user_id text,
+  p_message_id uuid
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_balance integer;
+  next_balance integer;
+  existing_balance integer;
+  reserved_amount integer;
+  message_ref text := p_message_id::text;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_message_id is null then
+    raise exception 'invalid_message_id';
+  end if;
+
+  select balance into current_balance
+  from chat_credit_accounts
+  where user_id = p_user_id
+  for update;
+  if not found then
+    raise exception 'chat_credit_account_not_found';
+  end if;
+
+  select amount into reserved_amount
+  from chat_credit_transactions
+  where user_id = p_user_id and type = 'reserve' and ref = message_ref
+  limit 1;
+  if not found then
+    raise exception 'chat_credit_reservation_not_found';
+  end if;
+
+  select balance_after into existing_balance
+  from chat_credit_transactions
+  where user_id = p_user_id and type = 'refund' and ref = message_ref
+  limit 1;
+  if found then
+    return existing_balance;
+  end if;
+
+  next_balance := current_balance + abs(reserved_amount);
+  update chat_credit_accounts
+  set balance = next_balance, updated_at = now()
+  where user_id = p_user_id;
+
+  insert into chat_credit_transactions(user_id, type, amount, balance_after, ref)
+  values (p_user_id, 'refund', abs(reserved_amount), next_balance, message_ref);
+
+  return next_balance;
+end;
+$$;
+
+create or replace function enqueue_chat_message(
+  p_user_id text,
+  p_session_id uuid,
+  p_client_request_id text,
+  p_question text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_question text := trim(coalesce(p_question, ''));
+  normalized_request_id text := trim(coalesce(p_client_request_id, ''));
+  owned_session_id uuid;
+  new_user_message_id uuid := uuid_generate_v4();
+  inserted_user_message_id uuid;
+  assistant_message_id uuid := uuid_generate_v4();
+  run_id uuid := uuid_generate_v4();
+  existing_assistant_message_id uuid;
+  existing_run_id uuid;
+  next_balance integer;
+begin
+  if nullif(trim(p_user_id), '') is null then
+    raise exception 'invalid_user_id';
+  end if;
+  if p_session_id is null then
+    raise exception 'invalid_chat_session_id';
+  end if;
+  if char_length(normalized_request_id) < 1 or char_length(normalized_request_id) > 100 then
+    raise exception 'invalid_client_request_id';
+  end if;
+  if char_length(normalized_question) < 1 or char_length(normalized_question) > 1000 then
+    raise exception 'invalid_chat_question';
+  end if;
+
+  select id into owned_session_id
+  from chat_sessions
+  where id = p_session_id and user_id = p_user_id and status = 'active'
+  for update;
+  if not found then
+    raise exception 'chat_session_not_found';
+  end if;
+
+  insert into chat_messages(id, session_id, role, content, status, client_request_id)
+  values (new_user_message_id, p_session_id, 'user', normalized_question, 'completed', normalized_request_id)
+  on conflict (session_id, client_request_id) do nothing
+  returning id into inserted_user_message_id;
+
+  if inserted_user_message_id is null then
+    select r.id, r.assistant_message_id
+    into existing_run_id, existing_assistant_message_id
+    from chat_messages m
+    join chat_runs r on r.user_message_id = m.id
+    where m.session_id = p_session_id and m.client_request_id = normalized_request_id
+    limit 1;
+
+    select balance into next_balance
+    from chat_credit_accounts
+    where user_id = p_user_id;
+
+    return jsonb_build_object(
+      'runId', existing_run_id,
+      'userMessageId', (
+        select id from chat_messages
+        where session_id = p_session_id and client_request_id = normalized_request_id
+        limit 1
+      ),
+      'assistantMessageId', existing_assistant_message_id,
+      'balance', coalesce(next_balance, 0),
+      'duplicate', true
+    );
+  end if;
+
+  insert into chat_messages(id, session_id, role, content, status, reply_to)
+  values (assistant_message_id, p_session_id, 'assistant', '', 'queued', new_user_message_id);
+
+  insert into chat_runs(id, session_id, user_message_id, assistant_message_id)
+  values (run_id, p_session_id, new_user_message_id, assistant_message_id);
+
+  next_balance := reserve_chat_credit(p_user_id, new_user_message_id);
+
+  update chat_sessions
+  set updated_at = now(), last_message_at = now()
+  where id = p_session_id;
+
+  return jsonb_build_object(
+    'runId', run_id,
+    'userMessageId', new_user_message_id,
+    'assistantMessageId', assistant_message_id,
+    'balance', next_balance,
+    'duplicate', false
+  );
+end;
+$$;
+
 revoke all on function adjust_points(text, integer, text, text) from public;
 revoke all on function adjust_regen_tokens(text, integer) from public;
+revoke all on function grant_chat_credits(text, integer, text) from public;
+revoke all on function reserve_chat_credit(text, uuid) from public;
+revoke all on function refund_chat_credit(text, uuid) from public;
+revoke all on function enqueue_chat_message(text, uuid, text, text) from public;
 grant execute on function adjust_points(text, integer, text, text) to service_role;
 grant execute on function adjust_regen_tokens(text, integer) to service_role;
+grant execute on function grant_chat_credits(text, integer, text) to service_role;
+grant execute on function reserve_chat_credit(text, uuid) to service_role;
+grant execute on function refund_chat_credit(text, uuid) to service_role;
+grant execute on function enqueue_chat_message(text, uuid, text, text) to service_role;
 
 -- ─────────────────────────────────────────────────────
--- 5) 설정 단일 행 보장
+-- 6) 설정 단일 행 보장
 -- ─────────────────────────────────────────────────────
 insert into site_config (id) values (1) on conflict (id) do nothing;
 

@@ -9,6 +9,8 @@ test("web and API have independent Vercel project roots", () => {
   assert.equal(existsSync(new URL("apps/api/vercel.json", root)), true);
   assert.equal(existsSync(new URL("apps/web/public/index.html", root)), true);
   assert.equal(existsSync(new URL("apps/api/api/gateway.js", root)), true);
+  const apiConfig = JSON.parse(readFileSync(new URL("apps/api/vercel.json", root), "utf8"));
+  assert.equal(apiConfig.outputDirectory, "public");
 });
 
 test("the root compatibility deployment exposes one gateway function", () => {

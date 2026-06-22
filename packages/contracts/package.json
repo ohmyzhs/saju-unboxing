@@ -1,0 +1,11 @@
+{
+  "name": "@saju/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./chat": "./chat.js"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

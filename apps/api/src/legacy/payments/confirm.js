@@ -3,6 +3,7 @@ import { readJson, sendJson } from "../_lib/http.js";
 import { confirmTossPayment } from "../_lib/toss.js";
 import { getSupabase } from "../_lib/supabase.js";
 import { adjustPoints, chargeTier, isInsufficientPoints } from "../_lib/points.js";
+import { settleOrderFulfillment } from "../../domain/orderFulfillment.js";
 
 function paymentError(message, statusCode = 400) {
   const error = new Error(message);
@@ -118,6 +119,7 @@ export default async function handler(req, res) {
         await sb.from("orders").update({ status: "결제 실패" }).eq("id", orderId);
       },
     });
+    const fulfillment = await settleOrderFulfillment(sb, { ...order, status: "결제 완료" });
 
     sb.from("events")
       .insert({
@@ -132,7 +134,7 @@ export default async function handler(req, res) {
         () => {},
       );
 
-    return sendJson(res, 200, result);
+    return sendJson(res, 200, { ...result, fulfillment });
   } catch (error) {
     const status = isInsufficientPoints(error) ? 400 : error.statusCode || 500;
     const payload = isInsufficientPoints(error) ? { message: "포인트가 부족합니다." } : error.payload || { message: error.message };

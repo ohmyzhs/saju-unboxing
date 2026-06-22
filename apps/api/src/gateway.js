@@ -10,6 +10,7 @@ import sajuSection from "./legacy/saju/section.js";
 import admin from "./legacy/admin/[action].js";
 import kakaoStart from "./legacy/auth/kakao/start.js";
 import kakaoCallback from "./legacy/auth/kakao/callback.js";
+import chat from "./http/chat.js";
 import { baseUrl, sendJson } from "./legacy/_lib/http.js";
 
 const ROUTES = new Map([
@@ -70,6 +71,8 @@ function applyCors(req, res) {
 export function resolveRoute(pathname) {
   const path = normalizePath(pathname);
   if (path === "/api/health") return { name: "health" };
+  const chatMatch = /^\/api\/chat\/(.+)$/.exec(path);
+  if (chatMatch) return { name: "chat", path: chatMatch[1] };
   const adminMatch = /^\/api\/admin\/([^/]+)$/.exec(path);
   if (adminMatch) return { name: "admin", action: decodeURIComponent(adminMatch[1]) };
   const route = ROUTES.get(path);
@@ -79,6 +82,7 @@ export function resolveRoute(pathname) {
 function routeHandler(route) {
   if (route.name === "health") return config;
   if (route.name === "admin") return admin;
+  if (route.name === "chat") return chat;
   for (const candidate of ROUTES.values()) {
     if (candidate.name === route.name) return candidate.handler;
   }
@@ -112,5 +116,6 @@ export default async function gateway(req, res) {
   }
   if (route.name === "health") withQuery(req, { mode: "health" });
   if (route.name === "admin") withQuery(req, { action: route.action });
+  if (route.name === "chat") withQuery(req, { chatPath: route.path });
   return routeHandler(route)(req, res);
 }

@@ -5,6 +5,8 @@ import { getSupabase, loadSiteConfig } from "./_lib/supabase.js";
 import { getSessionUser, accountFields } from "./_lib/sessions.js";
 import { adjustPoints, chargeTier, getPointAccount, isInsufficientPoints, paymentBreakdown } from "./_lib/points.js";
 import { cancelOwnedOrder, resumeOwnedOrder } from "./_lib/orderLifecycle.js";
+import { chatCreditProduct } from "@saju/contracts/chat";
+import { settleOrderFulfillment } from "../domain/orderFulfillment.js";
 
 // 주문번호: 한국시각 YYMMDDHHmmss + 4자리 랜덤 = 16자리 숫자 (예: 2606170454239218).
 // 쇼핑몰 표준식 — 시간순 정렬·식별이 쉽고, 토스 orderId 규격(6~64자 영숫자)도 충족.
@@ -28,6 +30,24 @@ export function resolveProductPrice(config, productId, plan) {
   const amount = Number(value);
   if (!Number.isInteger(amount) || amount < 0) throw new Error("상품 가격 설정이 올바르지 않습니다.");
   return amount;
+}
+
+export function resolveOrderProduct({ config = {}, productId, plan, user }) {
+  const chatProduct = chatCreditProduct(productId);
+  if (chatProduct) {
+    if (!user?.id) {
+      const error = new Error("챗봇 질의응답권 구매는 로그인이 필요합니다.");
+      error.statusCode = 401;
+      throw error;
+    }
+    return chatProduct;
+  }
+  if (!plan) {
+    const error = new Error("결제 상품을 찾지 못했습니다.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return { ...plan, amount: resolveProductPrice(config, productId, plan) };
 }
 
 export function resolveOrderPayment({ price, requestedPoints = 0, balance = 0 }) {
@@ -76,15 +96,21 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { ok: true, ...result });
     }
     const isPointCharge = productId === "point-charge";
+    const chatProduct = chatCreditProduct(productId);
     const tier = isPointCharge ? chargeTier(amount) : null;
     if (isPointCharge && !tier) return sendJson(res, 400, { message: "선택할 수 없는 포인트 충전 금액입니다." });
     if (isPointCharge && !user?.id) return sendJson(res, 401, { message: "포인트 충전은 로그인이 필요합니다." });
     if (isPointCharge && !sb) return sendJson(res, 503, { message: "포인트 기능을 사용할 수 없습니다." });
+    if (chatProduct && !user?.id) return sendJson(res, 401, { message: "챗봇 질의응답권 구매는 로그인이 필요합니다." });
+    if (chatProduct && !sb) return sendJson(res, 503, { message: "챗봇 질의응답권 기능을 사용할 수 없습니다." });
 
-    const plan = isPointCharge ? { amount: tier.amount, name: `포인트 ${tier.points.toLocaleString("ko-KR")}pt 충전` } : PLANS[planId];
+    const plan = isPointCharge
+      ? { amount: tier.amount, name: `포인트 ${tier.points.toLocaleString("ko-KR")}pt 충전` }
+      : chatProduct || PLANS[planId];
     if (!plan) return sendJson(res, 400, { message: "결제 상품을 찾지 못했습니다." });
     const config = isPointCharge ? {} : await loadSiteConfig();
-    const price = isPointCharge ? tier.amount : resolveProductPrice(config, productId, plan);
+    const resolvedProduct = isPointCharge ? plan : resolveOrderProduct({ config, productId, plan, user });
+    const price = resolvedProduct.amount;
     const requestedPoints = Number(pointsUsed || 0);
     if (!Number.isInteger(requestedPoints) || requestedPoints < 0) {
       return sendJson(res, 400, { message: "사용 포인트가 올바르지 않습니다." });
@@ -105,7 +131,8 @@ export default async function handler(req, res) {
       ? { price, pointsUsed: 0, cashAmount: price, payMethod: "toss" }
       : resolveOrderPayment({ price, requestedPoints, balance: pointAccount.balance });
     const id = makeOrderId();
-    const resolvedName = String(orderName || plan.name).slice(0, 100);
+    const resolvedName = String(chatProduct?.name || orderName || resolvedProduct.name).slice(0, 100);
+    let fulfillment = { required: false, status: "not_required" };
 
     if (sb) {
       const baseRow = {
@@ -150,6 +177,7 @@ export default async function handler(req, res) {
           if (isInsufficientPoints(error)) return sendJson(res, 400, { message: "포인트가 부족합니다." });
           throw error;
         }
+        fulfillment = await settleOrderFulfillment(sb, { ...orderRow, status: "결제 완료" });
       }
       sb.from("events")
         .insert({
@@ -175,6 +203,7 @@ export default async function handler(req, res) {
       pointBalance: pointAccount.balance,
       orderName: resolvedName,
       customerKey: makeCustomerKey(user),
+      fulfillment,
     });
   } catch (error) {
     return sendJson(res, error.statusCode || 500, { message: error.message });
