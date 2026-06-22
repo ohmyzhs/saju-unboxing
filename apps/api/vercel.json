@@ -9,5 +9,8 @@
   "rewrites": [
     { "source": "/share/(.*)", "destination": "/api/gateway?path=share&token=$1" },
     { "source": "/api/(.*)", "destination": "/api/gateway?path=$1" }
+  ],
+  "crons": [
+    { "path": "/api/internal/chat-sweep", "schedule": "*/2 * * * *" }
   ]
 }

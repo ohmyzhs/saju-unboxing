@@ -10,8 +10,23 @@ import sajuSection from "./legacy/saju/section.js";
 import admin from "./legacy/admin/[action].js";
 import kakaoStart from "./legacy/auth/kakao/start.js";
 import kakaoCallback from "./legacy/auth/kakao/callback.js";
-import chat from "./http/chat.js";
+import { createChatHandler } from "./http/chat.js";
+import { startReportChatRun, resumeStuckChatRuns } from "./workflows/chatExecution.js";
+import { getSupabase } from "./legacy/_lib/supabase.js";
 import { baseUrl, sendJson } from "./legacy/_lib/http.js";
+
+// 챗 실행기 주입 — 질문 전송 시 답변 생성을 즉시 트리거(백그라운드)하고 202 를 빠르게 반환한다.
+const chat = createChatHandler({ startRun: (runId) => startReportChatRun(runId) });
+
+// 내구 실행 복구용 sweeper(크론). 시작 못 했거나 끊긴 run 을 재개한다.
+async function chatSweepHandler(req, res) {
+  const secret = process.env.CRON_SECRET;
+  if (secret && (req.headers?.authorization || "") !== `Bearer ${secret}`) {
+    return sendJson(res, 401, { message: "unauthorized" });
+  }
+  const result = await resumeStuckChatRuns(getSupabase());
+  return sendJson(res, 200, { ok: true, ...result });
+}
 
 const ROUTES = new Map([
   ["/api/config", { name: "config", handler: config }],
@@ -71,6 +86,7 @@ function applyCors(req, res) {
 export function resolveRoute(pathname) {
   const path = normalizePath(pathname);
   if (path === "/api/health") return { name: "health" };
+  if (path === "/api/internal/chat-sweep") return { name: "chat-sweep" };
   const chatMatch = /^\/api\/chat\/(.+)$/.exec(path);
   if (chatMatch) return { name: "chat", path: chatMatch[1] };
   const adminMatch = /^\/api\/admin\/([^/]+)$/.exec(path);
@@ -114,6 +130,7 @@ export default async function gateway(req, res) {
     res.statusCode = 204;
     return res.end();
   }
+  if (route.name === "chat-sweep") return chatSweepHandler(req, res);
   if (route.name === "health") withQuery(req, { mode: "health" });
   if (route.name === "admin") withQuery(req, { action: route.action });
   if (route.name === "chat") withQuery(req, { chatPath: route.path });

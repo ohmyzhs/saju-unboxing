@@ -81,3 +81,64 @@ export async function executeChatRun(runId, dependencies = {}) {
     throw error;
   }
 }
+
+// Vercel 응답 후에도 실행을 유지(best-effort). @vercel/functions 가 없으면(로컬) fire-and-forget 하고
+// 끊긴 run 은 resumeStuckChatRuns(크론)이 복구한다.
+async function keepAlive(promise) {
+  try {
+    const mod = await import("@vercel/functions");
+    if (typeof mod.waitUntil === "function") mod.waitUntil(promise);
+  } catch {
+    /* @vercel/functions 미존재 → fire-and-forget + sweeper 복구 */
+  }
+}
+
+// POST /messages 의 트리거. 즉시 반환(202 빠르게)하고 실행은 백그라운드로 돌린다.
+// 응답 후 종료·배포로 실행이 끊겨도 sweeper 가 재개하므로 호출부는 await 해도 블로킹되지 않는다.
+export function startReportChatRun(runId, deps = {}) {
+  const execute = deps.execute || executeChatRun;
+  const promise = Promise.resolve().then(() => execute(runId));
+  promise.catch(() => {}); // 실패는 executeChatRun 내부 fail/refund + sweeper 재개
+  (deps.keepAlive || keepAlive)(promise);
+}
+
+// 내구 실행 복구: 시작 못 한 queued, 또는 배포·타임아웃으로 끊긴 stale running run 을 재개한다.
+// claim_chat_run 은 'queued' 만 청구하므로 stale running 은 queued 로 되돌린 뒤 재실행.
+export async function resumeStuckChatRuns(sb, deps = {}) {
+  if (!sb) return { scanned: 0, resumed: 0, failed: 0 };
+  const staleMs = deps.staleMs ?? 120000;
+  const maxAttempts = deps.maxAttempts ?? 3;
+  const execute = deps.execute || executeChatRun;
+  const fail = deps.fail || failChatRun;
+  const nowMs = deps.now ? deps.now() : Date.now();
+  const cutoff = new Date(nowMs - staleMs).toISOString();
+  const { data: runs, error } = await sb
+    .from("chat_runs")
+    .select("id, status, attempt_count, started_at, session_id")
+    .in("status", ["queued", "running"])
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error || !runs?.length) return { scanned: runs?.length || 0, resumed: 0, failed: 0 };
+  let resumed = 0;
+  let failed = 0;
+  for (const run of runs) {
+    const stale = run.status === "queued" || (run.started_at && run.started_at < cutoff);
+    if (!stale) continue;
+    if (Number(run.attempt_count || 0) >= maxAttempts) {
+      const { data: session } = await sb.from("chat_sessions").select("user_id").eq("id", run.session_id).maybeSingle();
+      await fail(sb, { userId: session?.user_id, runId: run.id, code: "max_attempts", message: "답변 생성을 여러 번 시도했지만 실패했습니다." }).catch(() => {});
+      failed += 1;
+      continue;
+    }
+    if (run.status === "running") {
+      await sb.from("chat_runs").update({ status: "queued" }).eq("id", run.id).eq("status", "running");
+    }
+    try {
+      await execute(run.id);
+      resumed += 1;
+    } catch {
+      /* 다음 sweep 에서 재시도 */
+    }
+  }
+  return { scanned: runs.length, resumed, failed };
+}
