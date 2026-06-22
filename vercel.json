@@ -4,7 +4,7 @@
   "buildCommand": "echo no-build-needed",
   "outputDirectory": "public",
   "functions": {
-    "api/**/*.js": { "memory": 512, "maxDuration": 300 }
+    "api/**/*.js": { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" },
@@ -13,6 +13,7 @@
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/refund", "destination": "/index.html" },
     { "source": "/payments/(.*)", "destination": "/index.html" },
-    { "source": "/share/(.*)", "destination": "/api/share?token=$1" }
+    { "source": "/share/(.*)", "destination": "/api/share?token=$1" },
+    { "source": "/api/health", "destination": "/api/config?mode=health" }
   ]
 }

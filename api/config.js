@@ -1,11 +1,58 @@
 // GET /api/config — 프론트 부팅 시 필요한 공개 설정.
 // 토스 클라이언트 키, 카카오 사용 여부, 가맹점이 어드민에서 바꾼 상품/이미지(공개분).
 import { sendJson } from "./_lib/http.js";
-import { loadSiteConfig } from "./_lib/supabase.js";
+import { getSupabase, loadSiteConfig } from "./_lib/supabase.js";
+import { fetchBalance, sajuCreds } from "./_lib/sajuApi.js";
 import { LEGAL_DEFAULTS } from "./_lib/legalDefaults.js";
 import { POINT_CHARGE_TIERS } from "./_lib/points.js";
 
+// /api/health 는 /api/config?mode=health 로 통합(Vercel Hobby 함수 12개 제한 대응).
+async function healthPayload() {
+  const checks = {};
+  const config = await loadSiteConfig().catch(() => ({}));
+  const creds = sajuCreds(config);
+  if (!creds.base || !creds.key) {
+    checks.centralApi = { ok: false, message: "만세력 API 미설정 (어드민 '만세력 API' 탭 또는 .env)" };
+  } else {
+    const bal = await fetchBalance(config);
+    checks.centralApi = bal.ok
+      ? { ok: true, message: `연결됨 · 잔액 ${bal.balance ?? "?"}P` }
+      : { ok: false, message: bal.status === 401 ? "API 키가 유효하지 않음" : `응답 오류(${bal.reason || bal.status})` };
+  }
+  const sb = getSupabase();
+  if (!sb) {
+    checks.supabase = { ok: false, message: "SUPABASE_URL / SUPABASE_SERVICE_KEY 미설정" };
+  } else {
+    try {
+      const { error } = await sb.from("site_config").select("id").limit(1);
+      checks.supabase = error
+        ? { ok: false, message: `쿼리 실패: ${error.message} (schema.sql 실행했나요?)` }
+        : { ok: true, message: "연결됨" };
+    } catch (e) {
+      checks.supabase = { ok: false, message: e.message };
+    }
+  }
+  checks.openai = process.env.OPENCODE_API_KEY
+    ? { ok: true, message: `키 설정됨 · 모델 ${process.env.OPENCODE_MODEL || "glm-5.2"}` }
+    : { ok: false, message: "OPENCODE_API_KEY 미설정" };
+  const tossLive = process.env.TOSS_CLIENT_KEY && !process.env.TOSS_CLIENT_KEY.startsWith("test_");
+  checks.toss = { ok: true, message: tossLive ? "실결제 키" : "테스트 키(실제 결제 안 됨) — 학습용으로 OK" };
+  checks.kakao = process.env.KAKAO_REST_API_KEY
+    ? { ok: true, message: "설정됨" }
+    : { ok: false, message: "KAKAO_REST_API_KEY 미설정 (고객 로그인 비활성)" };
+  checks.admin = process.env.ADMIN_PASSWORD
+    ? {
+        ok: process.env.ADMIN_PASSWORD !== "changeme-1234",
+        message: process.env.ADMIN_PASSWORD === "changeme-1234" ? "기본 비밀번호 그대로 — 꼭 변경하세요" : "설정됨",
+      }
+    : { ok: false, message: "ADMIN_PASSWORD 미설정" };
+  return { ready: checks.centralApi.ok && checks.supabase.ok && checks.openai.ok, checks };
+}
+
 export default async function handler(req, res) {
+  const mode = req.query?.mode || (() => { try { return new URL(req.url, "http://x").searchParams.get("mode"); } catch { return null; } })();
+  if (mode === "health") return sendJson(res, 200, await healthPayload());
+
   const tossClientKey =
     process.env.TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
   let config = {};
