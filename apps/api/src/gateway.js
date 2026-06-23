@@ -11,6 +11,7 @@ import admin from "./legacy/admin/[action].js";
 import kakaoStart from "./legacy/auth/kakao/start.js";
 import kakaoCallback from "./legacy/auth/kakao/callback.js";
 import { createChatHandler } from "./http/chat.js";
+import chatEvents from "./http/chatEvents.js";
 import {
   resumeStuckChatRuns,
   startChatRecovery,
@@ -94,6 +95,8 @@ export function resolveRoute(pathname) {
   const path = normalizePath(pathname);
   if (path === "/api/health") return { name: "health" };
   if (path === "/api/internal/chat-sweep") return { name: "chat-sweep" };
+  const chatEventsMatch = /^\/api\/chat\/runs\/([^/]+)\/events$/.exec(path);
+  if (chatEventsMatch) return { name: "chat-events", runId: decodeURIComponent(chatEventsMatch[1]) };
   const chatMatch = /^\/api\/chat\/(.+)$/.exec(path);
   if (chatMatch) return { name: "chat", path: chatMatch[1] };
   const adminMatch = /^\/api\/admin\/([^/]+)$/.exec(path);
@@ -105,6 +108,7 @@ export function resolveRoute(pathname) {
 function routeHandler(route) {
   if (route.name === "health") return config;
   if (route.name === "admin") return admin;
+  if (route.name === "chat-events") return chatEvents;
   if (route.name === "chat") return chat;
   for (const candidate of ROUTES.values()) {
     if (candidate.name === route.name) return candidate.handler;
@@ -140,6 +144,7 @@ export default async function gateway(req, res) {
   if (route.name === "chat-sweep") return chatSweepHandler(req, res);
   if (route.name === "health") withQuery(req, { mode: "health" });
   if (route.name === "admin") withQuery(req, { action: route.action });
+  if (route.name === "chat-events") withQuery(req, { chatRunId: route.runId });
   if (route.name === "chat") withQuery(req, { chatPath: route.path });
   return routeHandler(route)(req, res);
 }

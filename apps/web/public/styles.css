@@ -611,6 +611,10 @@ button {
   align-content: center;
 }
 
+.chat-product-card .product-image span {
+  font-size: clamp(26px, 8vw, 38px);
+}
+
 .home-story {
   padding: 28px 18px 44px;
   background: linear-gradient(180deg, #fffdf8, #fff4d7);
@@ -1007,6 +1011,321 @@ select {
 .qa-a b {
   color: var(--jade);
   margin-right: 5px;
+}
+
+/* ---------- AI 챗봇 상담(질의응답권형) ---------- */
+.chat-view {
+  word-break: keep-all;
+}
+
+.chat-poster {
+  background: linear-gradient(135deg, #eaf7f2, #e8e1ff);
+}
+
+.chat-login-gate {
+  margin: 20px 16px;
+  padding: 24px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: center;
+}
+
+.chat-login-gate h2,
+.chat-products-panel h2,
+.chat-conversation h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.chat-login-gate p,
+.chat-credit-card p,
+.chat-report-panel p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.chat-workspace {
+  display: grid;
+  gap: 14px;
+  padding: 16px 16px 32px;
+}
+
+.chat-workspace[hidden] {
+  display: none !important;
+}
+
+.chat-credit-card {
+  padding: 18px;
+  border-radius: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #16584d, #463c83);
+  box-shadow: 0 12px 28px rgba(36, 49, 69, 0.14);
+}
+
+.chat-credit-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-credit-card span {
+  font-weight: 800;
+}
+
+.chat-credit-card strong {
+  font-size: 28px;
+}
+
+.chat-credit-card p {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.chat-products-panel,
+.chat-report-panel,
+.chat-conversation {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.chat-products-panel > header,
+.chat-report-panel,
+.chat-conversation > header {
+  padding: 16px;
+}
+
+.chat-products-panel small,
+.chat-conversation header small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--jade);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.chat-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 0 14px 16px;
+}
+
+.chat-credit-product {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 13px 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: #fffaf0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-credit-product b {
+  font-size: 15px;
+}
+
+.chat-credit-product span {
+  color: var(--rose);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.chat-credit-product del,
+.chat-credit-product small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.chat-credit-product small {
+  color: #9d4965;
+  font-weight: 800;
+}
+
+.chat-report-panel label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.chat-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.chat-report-row select,
+.chat-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+}
+
+.chat-report-row select {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.chat-report-row button,
+.chat-composer button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 14px;
+  color: #fff;
+  background: var(--ink);
+  font-weight: 900;
+}
+
+.chat-report-panel p {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+}
+
+.chat-session-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chat-session-list button {
+  max-width: 220px;
+  flex: 0 0 auto;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: #f4f2ec;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.chat-session-list button.is-active {
+  border-color: var(--ink);
+  color: #fff;
+  background: var(--ink);
+}
+
+.chat-conversation > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-conversation > header > span {
+  flex: 0 0 auto;
+  color: var(--jade);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.chat-messages {
+  min-height: 220px;
+  max-height: 52vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 16px;
+  background: #faf8f3;
+}
+
+.chat-bubble {
+  max-width: 86%;
+  padding: 11px 13px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble.is-user {
+  align-self: flex-end;
+  border-bottom-right-radius: 5px;
+  color: #fff;
+  background: var(--ink);
+}
+
+.chat-bubble.is-assistant {
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+  background: #fff;
+}
+
+.chat-bubble.is-pending::after {
+  content: " · 답변 작성 중";
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat-bubble.is-error {
+  color: #a62f49;
+  background: #fff0f3;
+}
+
+.chat-empty-message {
+  margin: auto;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.chat-composer {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.chat-composer textarea {
+  min-height: 78px;
+  padding: 11px 12px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.chat-composer > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-composer span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-composer button:disabled,
+.chat-report-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.chat-status {
+  min-height: 18px;
+  margin: 0;
+  text-align: center;
 }
 .qa-a {
   line-height: 1.75;
@@ -3952,7 +4271,8 @@ select {
 }
 
 .archive-card[data-archive-id] {
-  width: 100%;
+  width: calc(100% - 32px);
+  box-sizing: border-box;
   text-align: left;
   border: 0;
   border-top: 1px solid var(--line);

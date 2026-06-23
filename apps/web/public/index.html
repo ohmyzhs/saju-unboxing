@@ -152,6 +152,21 @@
               </footer>
             </div>
           </article>
+
+          <article class="product-card product-card-wide chat-product-card" data-category="consult">
+            <button class="product-image" data-view-target="chat">
+              <img src="./assets/generated/thumbnails/consult-chat.jpg" alt="AI 챗봇 상담 썸네일" loading="lazy" decoding="async" />
+              <span>AI챗봇</span>
+            </button>
+            <div class="product-copy">
+              <h2>AI 챗봇 상담</h2>
+              <p>선택한 리포트만 바탕으로 이어서 묻고 답하는 전용 대화 상담입니다.</p>
+              <footer>
+                <strong>질의응답권 1건 500원부터</strong>
+                <button data-view-target="chat">챗봇 열기</button>
+              </footer>
+            </div>
+          </article>
         </section>
 
         <section class="home-story">
@@ -431,6 +446,43 @@
         </section>
       </section>
 
+      <section class="view chat-view" data-view="chat">
+        <header class="slim-poster chat-poster"><p>선택한 리포트 안에서 깊이 묻기</p><h1>AI 챗봇 상담</h1></header>
+        <section class="chat-login-gate" data-chat-login hidden>
+          <h2>로그인 후 이용할 수 있어요</h2>
+          <p>질의응답권과 대화 기록은 로그인 계정에 안전하게 보관됩니다.</p>
+          <button class="kakao-action" type="button" data-auth-button>카카오로 로그인</button>
+        </section>
+        <div class="chat-workspace" data-chat-workspace hidden>
+          <section class="chat-credit-card">
+            <div><span>남은 질의응답권</span><strong data-chat-balance>0건</strong></div>
+            <p>질문을 보낼 때마다 1건이 차감되며, 실패하면 자동으로 돌아옵니다.</p>
+          </section>
+          <section class="chat-products-panel">
+            <header><div><small>질의응답권 구매</small><h2>필요한 만큼 먼저 충전하세요</h2></div></header>
+            <div class="chat-product-grid" data-chat-products></div>
+          </section>
+          <section class="chat-report-panel">
+            <label for="chat-report-select">상담할 리포트 선택</label>
+            <div class="chat-report-row">
+              <select id="chat-report-select" data-chat-report-select></select>
+              <button type="button" data-chat-session-create>대화 시작</button>
+            </div>
+            <p data-chat-report-help>보관함에 저장된 분석 하나를 골라 전용 대화방을 만듭니다.</p>
+          </section>
+          <nav class="chat-session-list" aria-label="챗봇 상담 목록" data-chat-sessions></nav>
+          <section class="chat-conversation" data-chat-conversation hidden>
+            <header><div><small>선택 리포트 전용 상담</small><h2 data-chat-title>AI 챗봇 상담</h2></div><span data-chat-run-status></span></header>
+            <div class="chat-messages" data-chat-messages aria-live="polite"></div>
+            <form class="chat-composer" data-chat-composer>
+              <textarea rows="3" maxlength="1000" placeholder="리포트에서 더 알고 싶은 내용을 질문해보세요." data-chat-input></textarea>
+              <div><span data-chat-composer-balance>남은 질문 0건</span><button type="submit" data-chat-send>질문 보내기</button></div>
+            </form>
+          </section>
+          <p class="form-status chat-status" data-chat-status></p>
+        </div>
+      </section>
+
       <section class="view followup-view" data-view="followup">
         <header class="slim-poster followup-poster"><p>이미 받은 분석에 대해</p><h1>한 가지 더 물어보기</h1></header>
         <p class="support-lead">질문할 분석을 고르고 궁금한 점을 적어주세요. 그 사주를 그대로 활용해 답해드려요.</p>
@@ -542,6 +594,7 @@
           <nav class="mypage-menu">
             <button type="button" data-view-target="points" data-mypage-close><span>🪙 포인트 충전</span><i>›</i></button>
             <button type="button" data-view-target="people" data-mypage-close><span>👤 사주 인원 관리</span><i>›</i></button>
+            <button type="button" data-view-target="chat" data-mypage-close><span>🤖 AI 챗봇 상담</span><i>›</i></button>
             <button type="button" data-view-target="followup" data-mypage-close><span>💬 추가 질문 상담</span><i>›</i></button>
             <button type="button" data-view-target="orders" data-mypage-close><span>🧾 결제 내역</span><i>›</i></button>
             <button type="button" data-view-target="library" data-mypage-close><span>🗄️ 보관함</span><i>›</i></button>
@@ -582,7 +635,7 @@
         <button class="is-active" data-view-target="home"><img src="./assets/ui/icon-home.svg" alt="" /><span>홈</span></button>
         <button data-view-target="people"><img src="./assets/ui/icon-profile.svg" alt="" /><span>인원관리</span></button>
         <button class="fortune-fab" data-view-target="fortune"><span><img src="./assets/ui/icon-fortune.svg" alt="" /></span><em>무료운세</em></button>
-        <button data-view-target="followup"><img src="./assets/ui/icon-chat.svg" alt="" /><span>추가질문</span></button>
+        <button data-view-target="chat"><img src="./assets/ui/icon-chat.svg" alt="" /><span>AI챗봇</span></button>
         <button data-view-target="library"><img src="./assets/ui/icon-vault.svg" alt="" /><span>보관함</span></button>
       </nav>
     </main>
@@ -594,6 +647,7 @@
     <script src="./report-recovery.js"></script>
     <script src="./daily-fortune-ui.js"></script>
     <script src="./point-payment.js"></script>
+    <script src="./chat-stream.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

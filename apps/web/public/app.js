@@ -178,6 +178,15 @@ let currentViewStartedAt = Date.now();
 let paymentReturn = false;
 let activeDailyProfile = null;
 let analysisDraftSync = Promise.resolve();
+let chatState = {
+  catalog: null,
+  sessions: [],
+  activeSessionId: null,
+  detail: null,
+  stream: null,
+  streamRunId: null,
+  requestVersion: 0,
+};
 // Calendar state for 택일
 let calendarState = {
   year: new Date().getFullYear(),
@@ -275,6 +284,7 @@ function trackEvent(event, metadata = {}, options = {}) {
 
 // ---------- View routing ----------
 function showView(nextView) {
+  if (currentViewName === "chat" && nextView !== "chat") stopChatStream();
   if (currentViewName && currentViewName !== nextView) {
     trackEvent("view_exit", {
       fromView: currentViewName,
@@ -312,6 +322,7 @@ function showView(nextView) {
     renderPrimaryProfileLabel();
     renderCalendar();
   }
+  if (nextView === "chat") loadChatView();
   if (nextView === "followup") renderFollowup();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -360,6 +371,7 @@ function migrateLegacyData() {
 }
 // 로그인/로그아웃으로 계정이 바뀌면 화면 데이터를 새 계정 기준으로 다시 읽어 렌더.
 function reloadAccountData() {
+  resetChatState();
   setAccountScope();
   selectedProfileId = getProfiles()[0]?.id || null;
   renderProfileSelects();
@@ -1955,7 +1967,15 @@ document.querySelector("[data-pay-confirm]")?.addEventListener("click", () => {
   beginTossPayment(currentCheckout.product.planId, document.querySelector("[data-pay-confirm]"), currentCheckout);
 });
 document.querySelector("[data-pay-back]")?.addEventListener("click", () =>
-  showView(currentCheckout?.productId === "followup" ? "followup" : currentCheckout?.productId === "point-charge" ? "points" : "checkout"),
+  showView(
+    currentCheckout?.productId === "followup"
+      ? "followup"
+      : currentCheckout?.productId === "point-charge"
+        ? "points"
+        : isChatCreditProductId(currentCheckout?.productId)
+          ? "chat"
+          : "checkout",
+  ),
 );
 
 document.querySelector("[data-checkout-free]")?.addEventListener("click", () => {
@@ -2101,7 +2121,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
         orderId: order.orderId,
         productId: context.productId,
         productName: context.product.name,
-        profileName: context.profile?.name || "포인트 충전",
+        profileName: context.profile?.name || (isChatCreditProductId(context.productId) ? "AI 챗봇 상담" : "포인트 충전"),
         amount: order.price,
         cashAmount: order.amount,
         pointsUsed: order.pointsUsed,
@@ -2116,7 +2136,9 @@ async function beginTossPayment(planId, sourceButton, context = null) {
       if (runtimeSession?.points) runtimeSession.points.balance = Number(order.pointBalance || 0);
       renderSession();
       clearPendingPurchase();
-      if (purchase.productId === "followup") {
+      if (isChatCreditProductId(purchase.productId)) {
+        await completeChatCreditPurchase({ purchase, orderId: order.orderId, fulfillment: order.fulfillment });
+      } else if (purchase.productId === "followup") {
         await runFollowupAnswer(purchase);
       } else {
         startAnalysis(purchase.productId, purchase.profile, {
@@ -2404,7 +2426,10 @@ async function ensureShareUrl() {
   if (lastShareUrl) return lastShareUrl;
   if (!lastReport?.data) throw new Error("공유할 리포트가 없습니다.");
   const { productId, profileName, data, sections } = lastReport;
-  const { ok, body } = await adminPost("/api/share", {
+  const body = await getJson("/api/share", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
     productId,
     productName: (PRODUCTS[productId] || {}).name || "사주 리포트",
     profileName,
@@ -2413,8 +2438,9 @@ async function ensureShareUrl() {
     lucky: data.lucky || null,
     score: data.score ?? null,
     scoreLabel: data.scoreLabel || null,
+    }),
   });
-  if (!ok || !body.url) throw new Error(body.message || "공유 링크 생성에 실패했습니다.");
+  if (!body.url) throw new Error(body.message || "공유 링크 생성에 실패했습니다.");
   lastShareUrl = body.url;
   return lastShareUrl;
 }
@@ -2896,7 +2922,11 @@ function setPaymentResult(title, message, detail, ok = false, icon) {
   }
   view?.classList.toggle("is-success", ok);
   view?.classList.toggle("is-loading", loading);
-  if (paymentContinueButton) paymentContinueButton.hidden = true;
+  if (paymentContinueButton) {
+    paymentContinueButton.hidden = true;
+    paymentContinueButton.textContent = "결제 확인됨, 분석 시작";
+    paymentContinueButton.onclick = null;
+  }
   showView("payment");
 }
 
@@ -2999,6 +3029,11 @@ async function confirmReturnedPayment() {
         paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주세요`;
       }
       await runFollowupAnswer({ ...pending, orderId });
+      return;
+    }
+
+    if (isChatCreditProductId(pending?.productId)) {
+      await completeChatCreditPurchase({ purchase: pending, orderId, fulfillment: result.fulfillment });
       return;
     }
 
@@ -3343,6 +3378,360 @@ function bindFollowup() {
   // 진입 시 렌더는 showView("followup")에서 처리. 여기선 별도 바인딩 없음(이벤트는 renderFollowup에서).
 }
 
+// ---------- AI 챗봇 상담(질의응답권형) ----------
+function isChatCreditProductId(productId) {
+  return /^chat-qa-(1|3|5|10)$/.test(String(productId || ""));
+}
+
+function stopChatStream() {
+  chatState.stream?.close?.();
+  chatState.stream = null;
+  chatState.streamRunId = null;
+}
+
+function resetChatState() {
+  stopChatStream();
+  chatState = {
+    catalog: null,
+    sessions: [],
+    activeSessionId: null,
+    detail: null,
+    stream: null,
+    streamRunId: null,
+    requestVersion: Number(chatState?.requestVersion || 0) + 1,
+  };
+}
+
+function setChatStatus(message, error = false) {
+  const node = document.querySelector("[data-chat-status]");
+  if (!node) return;
+  node.textContent = message || "";
+  node.classList.toggle("is-error", Boolean(error));
+}
+
+function chatRunStatusLabel(status) {
+  return status === "queued"
+    ? "답변 준비 중"
+    : status === "running"
+      ? "답변 작성 중"
+      : status === "failed"
+        ? "답변 실패 · 질문권 환원"
+        : status === "completed"
+          ? "답변 완료"
+          : "";
+}
+
+function activeChatRun() {
+  const runs = chatState.detail?.runs || [];
+  return [...runs].reverse().find((run) => run.status === "queued" || run.status === "running") || null;
+}
+
+function renderChatState() {
+  const loggedIn = Boolean(runtimeSession?.user?.id);
+  const login = document.querySelector("[data-chat-login]");
+  const workspace = document.querySelector("[data-chat-workspace]");
+  if (login) login.hidden = loggedIn;
+  if (workspace) workspace.hidden = !loggedIn;
+  if (!loggedIn) return;
+
+  const balance = Number(chatState.catalog?.balance ?? chatState.detail?.balance ?? 0);
+  document.querySelectorAll("[data-chat-balance]").forEach((node) => {
+    node.textContent = `${balance.toLocaleString("ko-KR")}건`;
+  });
+  const composerBalance = document.querySelector("[data-chat-composer-balance]");
+  if (composerBalance) composerBalance.textContent = `남은 질문 ${balance.toLocaleString("ko-KR")}건`;
+
+  const productsHost = document.querySelector("[data-chat-products]");
+  if (productsHost) {
+    const products = chatState.catalog?.products || [];
+    productsHost.innerHTML = products.length
+      ? products.map((product) => {
+          const discounted = Number(product.discountRate || 0) > 0;
+          return `
+            <button class="chat-credit-product" type="button" data-chat-buy="${escapeHtml(product.id)}">
+              <b>${escapeHtml(product.name)}</b>
+              <span>${escapeHtml(formatWon(product.amount))}</span>
+              ${discounted ? `<del>${escapeHtml(formatWon(product.regularAmount))}</del><small>${escapeHtml(product.discountRate)}% 할인</small>` : `<small>건당 500원</small>`}
+            </button>`;
+        }).join("")
+      : `<div class="empty-box">구매 가능한 질의응답권을 불러오지 못했습니다.</div>`;
+  }
+
+  const reports = followupArchive();
+  const reportSelect = document.querySelector("[data-chat-report-select]");
+  const createButton = document.querySelector("[data-chat-session-create]");
+  const reportHelp = document.querySelector("[data-chat-report-help]");
+  if (reportSelect) {
+    reportSelect.innerHTML = reports.length
+      ? reports.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.productName)} · ${escapeHtml(item.profileName)} (${escapeHtml(shortDate(item.createdAt))})</option>`).join("")
+      : `<option value="">상담 가능한 보관함 리포트가 없습니다</option>`;
+  }
+  if (createButton) createButton.disabled = !reports.length;
+  if (reportHelp) {
+    reportHelp.textContent = reports.length
+      ? "보관함 리포트 하나마다 별도의 대화방이 만들어집니다."
+      : "먼저 유료 사주 리포트를 생성해 보관함에 저장해주세요.";
+  }
+
+  const sessionsHost = document.querySelector("[data-chat-sessions]");
+  if (sessionsHost) {
+    sessionsHost.innerHTML = chatState.sessions.length
+      ? chatState.sessions.map((session) => `
+          <button type="button" class="${session.id === chatState.activeSessionId ? "is-active" : ""}" data-chat-session-id="${escapeHtml(session.id)}">
+            ${escapeHtml(session.title)}${session.latestRun?.status === "running" || session.latestRun?.status === "queued" ? " · 답변 중" : ""}
+          </button>`).join("")
+      : "";
+  }
+
+  const conversation = document.querySelector("[data-chat-conversation]");
+  if (!chatState.detail?.session) {
+    if (conversation) conversation.hidden = true;
+    return;
+  }
+  if (conversation) conversation.hidden = false;
+  const title = document.querySelector("[data-chat-title]");
+  if (title) title.textContent = chatState.detail.session.title || "AI 챗봇 상담";
+  const running = activeChatRun();
+  const status = document.querySelector("[data-chat-run-status]");
+  if (status) status.textContent = chatRunStatusLabel(running?.status);
+
+  const messagesHost = document.querySelector("[data-chat-messages]");
+  if (messagesHost) {
+    const messages = chatState.detail.messages || [];
+    messagesHost.innerHTML = messages.length
+      ? messages.map((message) => {
+          const failed = message.status === "failed";
+          const pending = message.role === "assistant" && (message.status === "queued" || message.status === "streaming");
+          const content = failed
+            ? message.errorMessage || "답변 생성에 실패했습니다. 사용한 질문권은 자동으로 돌아옵니다."
+            : message.content || (pending ? "답변을 준비하고 있어요" : "");
+          return `<article class="chat-bubble ${message.role === "user" ? "is-user" : "is-assistant"}${pending ? " is-pending" : ""}${failed ? " is-error" : ""}">${escapeHtml(content).replace(/\n/g, "<br />")}</article>`;
+        }).join("")
+      : `<p class="chat-empty-message">이 리포트에 대해 궁금한 점을 물어보세요.<br />외부 정보 없이 선택한 리포트만 근거로 답합니다.</p>`;
+    messagesHost.scrollTop = messagesHost.scrollHeight;
+  }
+
+  const input = document.querySelector("[data-chat-input]");
+  const send = document.querySelector("[data-chat-send]");
+  const blocked = Boolean(running) || balance < 1;
+  if (input) input.disabled = Boolean(running);
+  if (send) {
+    send.disabled = blocked;
+    send.textContent = running ? "답변 작성 중" : balance < 1 ? "질의응답권 구매 필요" : "질문 보내기";
+  }
+}
+
+async function loadChatView(preferredSessionId = chatState.activeSessionId) {
+  renderChatState();
+  if (!runtimeSession?.user?.id) {
+    setChatStatus("로그인하면 질의응답권 구매와 대화를 시작할 수 있습니다.");
+    return;
+  }
+  const version = Number(chatState.requestVersion || 0) + 1;
+  chatState.requestVersion = version;
+  setChatStatus("챗봇 상담 정보를 불러오는 중...");
+  try {
+    const [catalog, sessionPayload] = await Promise.all([
+      getJson("/api/chat/catalog"),
+      getJson("/api/chat/sessions"),
+    ]);
+    if (version !== chatState.requestVersion) return;
+    chatState.catalog = catalog;
+    chatState.sessions = sessionPayload.sessions || [];
+    const activeId = preferredSessionId && chatState.sessions.some((session) => session.id === preferredSessionId)
+      ? preferredSessionId
+      : chatState.sessions[0]?.id || null;
+    chatState.activeSessionId = activeId;
+    chatState.detail = activeId ? await getJson(`/api/chat/sessions/${encodeURIComponent(activeId)}`) : null;
+    if (version !== chatState.requestVersion) return;
+    if (chatState.detail && chatState.catalog) chatState.catalog.balance = Number(chatState.detail.balance || 0);
+    renderChatState();
+    setChatStatus("");
+    resumeActiveChatStream();
+  } catch (error) {
+    if (version !== chatState.requestVersion) return;
+    setChatStatus(error.message || "챗봇 상담 정보를 불러오지 못했습니다.", true);
+    renderChatState();
+  }
+}
+
+function updateChatStreamRecord(runId, record) {
+  const detail = chatState.detail;
+  if (!detail) return;
+  const run = (detail.runs || []).find((item) => item.id === runId);
+  if (!run) return;
+  let message = (detail.messages || []).find((item) => item.id === run.assistantMessageId);
+  if (!message) {
+    message = { id: run.assistantMessageId, role: "assistant", content: "", status: "queued" };
+    detail.messages.push(message);
+  }
+  if (record.event === "status") {
+    run.status = record.data.status || "running";
+    message.status = "streaming";
+  } else if (record.event === "replace" || record.event === "delta") {
+    message.content = record.data.content ?? `${message.content || ""}${record.data.delta || ""}`;
+    message.status = record.data.status === "completed" ? "completed" : "streaming";
+    run.status = record.data.status || "running";
+  } else if (record.event === "complete") {
+    message.content = record.data.content || message.content;
+    message.status = "completed";
+    run.status = "completed";
+  } else if (record.event === "error") {
+    message.status = "failed";
+    message.errorMessage = record.data.message || "답변 생성에 실패했습니다.";
+    run.status = "failed";
+  }
+  renderChatState();
+  if (record.event === "complete" || record.event === "error") {
+    stopChatStream();
+    loadChatView(chatState.activeSessionId);
+  }
+}
+
+function resumeActiveChatStream() {
+  const run = activeChatRun();
+  if (!run || chatState.streamRunId === run.id || !window.ChatStream) return;
+  stopChatStream();
+  chatState.streamRunId = run.id;
+  chatState.stream = window.ChatStream.connect({
+    runId: run.id,
+    onEvent: (record) => updateChatStreamRecord(run.id, record),
+    onDisconnect: () => setChatStatus("실시간 연결을 다시 시도하고 있습니다..."),
+  });
+}
+
+async function createChatSession() {
+  const archiveId = document.querySelector("[data-chat-report-select]")?.value;
+  if (!archiveId) {
+    setChatStatus("상담할 보관함 리포트를 먼저 선택해주세요.", true);
+    return;
+  }
+  setChatStatus("선택한 리포트로 대화방을 만드는 중...");
+  try {
+    const payload = await getJson("/api/chat/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archiveId }),
+    });
+    await loadChatView(payload.session.id);
+  } catch (error) {
+    setChatStatus(error.message || "대화방을 만들지 못했습니다.", true);
+  }
+}
+
+async function sendChatMessage() {
+  const input = document.querySelector("[data-chat-input]");
+  const question = String(input?.value || "").trim();
+  if (!chatState.activeSessionId || !chatState.detail) return;
+  if (Number(chatState.catalog?.balance || 0) < 1) {
+    setChatStatus("질문을 보내려면 위에서 질의응답권을 먼저 구매해주세요.", true);
+    return;
+  }
+  if (!question) {
+    setChatStatus("질문 내용을 입력해주세요.", true);
+    input?.focus();
+    return;
+  }
+  const requestId = `chat-${crypto.randomUUID()}`;
+  const optimisticUserId = `local-user-${requestId}`;
+  const optimisticAssistantId = `local-assistant-${requestId}`;
+  chatState.detail.messages.push(
+    { id: optimisticUserId, role: "user", content: question, status: "completed", clientRequestId: requestId },
+    { id: optimisticAssistantId, role: "assistant", content: "", status: "queued" },
+  );
+  if (input) input.value = "";
+  renderChatState();
+  setChatStatus("");
+  try {
+    const result = await getJson(`/api/chat/sessions/${encodeURIComponent(chatState.activeSessionId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientRequestId: requestId, question }),
+    });
+    const userMessage = chatState.detail.messages.find((message) => message.id === optimisticUserId);
+    const assistantMessage = chatState.detail.messages.find((message) => message.id === optimisticAssistantId);
+    if (userMessage) userMessage.id = result.userMessageId;
+    if (assistantMessage) assistantMessage.id = result.assistantMessageId;
+    chatState.detail.runs.push({
+      id: result.runId,
+      sessionId: chatState.activeSessionId,
+      userMessageId: result.userMessageId,
+      assistantMessageId: result.assistantMessageId,
+      status: "queued",
+      creditStatus: "reserved",
+    });
+    chatState.catalog.balance = Number(result.balance || 0);
+    renderChatState();
+    resumeActiveChatStream();
+  } catch (error) {
+    setChatStatus(error.message || "질문을 보내지 못했습니다.", true);
+    await loadChatView(chatState.activeSessionId);
+  }
+}
+
+function startChatCreditCheckout(productId) {
+  const row = (chatState.catalog?.products || []).find((product) => product.id === productId);
+  if (!row) {
+    setChatStatus("선택한 질의응답권 상품을 찾지 못했습니다.", true);
+    return;
+  }
+  const product = {
+    ...row,
+    price: formatWon(row.amount),
+    amountLabel: formatWon(row.amount),
+    paid: true,
+    planId: null,
+    category: "AI 챗봇 상담",
+    description: `${row.questions}개의 질문을 선택한 리포트 기반 AI 챗봇에서 사용할 수 있습니다.`,
+  };
+  currentCheckout = { productId: row.id, product, profile: null, partner: null, pointsUsed: 0 };
+  showView("pay");
+  setupPayView(product);
+}
+
+async function completeChatCreditPurchase({ purchase, orderId, fulfillment }) {
+  clearPendingPurchase();
+  const fulfilled = fulfillment?.status === "fulfilled";
+  if (fulfilled && chatState.catalog) chatState.catalog.balance = Number(fulfillment.balance || 0);
+  setPaymentResult(
+    fulfilled ? "질의응답권 구매 완료!" : "결제 완료 · 질의응답권 적립 확인 중",
+    fulfilled
+      ? `${Number(fulfillment.creditsAdded || purchase.product?.questions || 0).toLocaleString("ko-KR")}건이 계정에 적립되었습니다.`
+      : "결제는 완료됐지만 질문권 적립을 재확인하고 있습니다. 결제 내역은 안전하게 보관됩니다.",
+    [
+      ["상품", purchase.product?.name || "AI 챗봇 질의응답권"],
+      ["결제 금액", formatWon(purchase.price ?? purchase.product?.amount ?? 0)],
+      ["적립 상태", fulfilled ? "적립 완료" : "확인 중"],
+    ],
+    fulfilled,
+    fulfilled ? "🤖" : "⏳",
+  );
+  if (paymentRef) {
+    paymentRef.hidden = false;
+    paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주세요`;
+  }
+  if (paymentContinueButton) {
+    paymentContinueButton.hidden = false;
+    paymentContinueButton.textContent = "AI 챗봇 상담으로 이동";
+    paymentContinueButton.onclick = () => showView("chat");
+  }
+}
+
+function bindChat() {
+  const view = document.querySelector('[data-view="chat"]');
+  view?.addEventListener("click", (event) => {
+    const buy = event.target.closest("[data-chat-buy]");
+    if (buy) return startChatCreditCheckout(buy.dataset.chatBuy);
+    if (event.target.closest("[data-chat-session-create]")) return createChatSession();
+    const sessionButton = event.target.closest("[data-chat-session-id]");
+    if (sessionButton) loadChatView(sessionButton.dataset.chatSessionId);
+  });
+  document.querySelector("[data-chat-composer]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendChatMessage();
+  });
+}
+
 // ---------- Year / cycle interactions ----------
 function bindYearAndCycle() {
   // Year buttons toggle
@@ -3575,6 +3964,7 @@ async function boot() {
   bindCalendar();
   bindFortuneMood();
   bindFollowup();
+  bindChat();
   bindYearAndCycle();
   bindCompatibility();
   bindBirthDateMask();
