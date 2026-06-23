@@ -13,11 +13,11 @@ export function modelProfile(model) {
 }
 
 export function chatMessageText(message = {}) {
-  return String(message.content || message.reasoning_content || "");
+  return String(message.content || "");
 }
 
 export function chatDeltaText(delta = {}) {
-  return String(delta.content || delta.reasoning_content || "");
+  return String(delta.content || "");
 }
 
 export function extractJsonObject(text) {

@@ -11,9 +11,9 @@ import {
   validateSchema,
 } from "../apps/api/src/legacy/_lib/aiTransport.js";
 
-test("reads DeepSeek reasoning_content when chat content is empty", () => {
-  assert.equal(chatMessageText({ content: "", reasoning_content: "추론 응답" }), "추론 응답");
-  assert.equal(chatDeltaText({ content: null, reasoning_content: "스트림 응답" }), "스트림 응답");
+test("does not expose DeepSeek reasoning_content as user-visible chat text", () => {
+  assert.equal(chatMessageText({ content: "", reasoning_content: "추론 응답" }), "");
+  assert.equal(chatDeltaText({ content: null, reasoning_content: "스트림 응답" }), "");
 });
 
 test("plain text 요청은 JSON 스키마 없이 모델 사용량과 델타를 반환한다", async () => {
