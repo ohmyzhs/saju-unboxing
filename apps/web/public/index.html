@@ -171,17 +171,19 @@
 
         <section class="home-story">
           <h2>처음이어도 막히지 않게</h2>
-          <p>
-            이미 등록한 프로필이 있으면 다시 입력하라고 돌려보내지 않고, 저장된 사람 선택 창이 먼저 열립니다.
-            상품을 고르면 주문 내용을 확인하고 결제를 진행한 뒤, 승인된 주문만 분석으로 이어집니다.
-            분석이 끝난 결과는 보관함에서 다시 열어볼 수 있어요.
-          </p>
-          <div class="story-points">
-            <span>저장된 프로필 선택</span>
-            <span>주문 내용 확인</span>
-            <span>결제 승인</span>
-            <span>결과 보관</span>
+          <p class="home-guide-intro">처음 이용한다면 아래 순서대로 눌러보세요. 각 단계에서 바로 필요한 화면으로 이동할 수 있습니다.</p>
+          <div class="story-points" role="tablist" aria-label="이용 순서">
+            <button type="button" class="is-active" data-guide-step="profile">1. 프로필</button>
+            <button type="button" data-guide-step="product">2. 상품 선택</button>
+            <button type="button" data-guide-step="orders">3. 결제 확인</button>
+            <button type="button" data-guide-step="library">4. 결과 보관</button>
           </div>
+          <article class="home-guide-panel" data-guide-panel>
+            <small data-guide-count>1 / 4</small>
+            <h3 data-guide-title>분석할 사람을 먼저 등록하세요</h3>
+            <p data-guide-copy>이름과 생년월일, 태어난 시간을 한 번 저장하면 다른 상품에서도 다시 입력할 필요가 없습니다.</p>
+            <button type="button" data-guide-action>프로필 등록하기</button>
+          </article>
         </section>
       </section>
 
@@ -397,8 +399,14 @@
           <button data-view-target="home" aria-label="닫기">×</button>
         </div>
         <form class="stack-form compatibility-form" data-compatibility-form>
-          <label>첫 번째 프로필 <select data-profile-select data-compat-select="a"></select></label>
-          <label>두 번째 프로필 <select data-profile-select data-compat-select="b"></select></label>
+          <div class="compat-profile-field">
+            <label>첫 번째 프로필 <select data-profile-select data-compat-select="a"></select></label>
+            <button type="button" data-compat-add="a">+ 새 프로필 추가</button>
+          </div>
+          <div class="compat-profile-field">
+            <label>두 번째 프로필 <select data-profile-select data-compat-select="b"></select></label>
+            <button type="button" data-compat-add="b">+ 새 프로필 추가</button>
+          </div>
           <p class="form-status" data-compat-status></p>
           <button class="primary-action" type="button" data-compat-checkout>궁합 결제하기</button>
         </form>
@@ -442,7 +450,12 @@
           <label>오늘의 주인공 <select data-profile-select></select></label>
           <h3>지금 가장 가까운 마음은?</h3>
           <div class="answer-chips" data-fortune-mood><button class="is-active" data-mood="생각 정리 중">생각 정리 중</button><button data-mood="일에 몰입">일에 몰입</button><button data-mood="관계가 신경 쓰임">관계가 신경 쓰임</button><button data-mood="직접 입력">직접 입력</button></div>
-          <button class="primary-action" type="button" data-product-id="daily-fortune">오늘 운세 확인</button>
+          <label class="fortune-mood-custom" data-fortune-mood-custom hidden>
+            지금 마음을 직접 적어주세요
+            <input type="text" maxlength="80" data-fortune-mood-input placeholder="예: 배우자와 대화가 자꾸 엇갈려요" />
+          </label>
+          <p class="form-status" data-fortune-status></p>
+          <button class="primary-action" type="button" data-fortune-start>오늘 운세 확인</button>
         </section>
       </section>
 
@@ -454,6 +467,7 @@
           <button class="kakao-action" type="button" data-auth-button>카카오로 로그인</button>
         </section>
         <div class="chat-workspace" data-chat-workspace hidden>
+          <div class="chat-lobby" data-chat-lobby>
           <section class="chat-credit-card">
             <div><span>남은 질의응답권</span><strong data-chat-balance>0건</strong></div>
             <p>질문을 보낼 때마다 1건이 차감되며, 실패하면 자동으로 돌아옵니다.</p>
@@ -470,9 +484,17 @@
             </div>
             <p data-chat-report-help>보관함에 저장된 분석 하나를 골라 전용 대화방을 만듭니다.</p>
           </section>
-          <nav class="chat-session-list" aria-label="챗봇 상담 목록" data-chat-sessions></nav>
+          <section class="chat-history-panel">
+            <header><small>이전 상담</small><h2>대화방 다시 열기</h2></header>
+            <nav class="chat-session-list" aria-label="챗봇 상담 목록" data-chat-sessions></nav>
+          </section>
+          </div>
           <section class="chat-conversation" data-chat-conversation hidden>
-            <header><div><small>선택 리포트 전용 상담</small><h2 data-chat-title>AI 챗봇 상담</h2></div><span data-chat-run-status></span></header>
+            <header class="chat-room-header">
+              <button type="button" class="chat-room-back" data-chat-room-back aria-label="상담 목록으로 돌아가기">‹</button>
+              <div><small>선택 리포트 전용 상담</small><h2 data-chat-title>AI 챗봇 상담</h2><p data-chat-report-context></p></div>
+              <span data-chat-run-status></span>
+            </header>
             <div class="chat-messages" data-chat-messages aria-live="polite"></div>
             <form class="chat-composer" data-chat-composer>
               <textarea rows="3" maxlength="1000" placeholder="리포트에서 더 알고 싶은 내용을 질문해보세요." data-chat-input></textarea>

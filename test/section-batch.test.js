@@ -57,8 +57,9 @@ test("caps plan output and passes a plan-specific timeout", async () => {
     },
   });
 
-  assert.equal(requestOptions.maxTokens, 8192);
-  assert.equal(requestOptions.timeoutMs, 70000);
+  assert.equal(requestOptions.maxTokens, 2400);
+  assert.equal(requestOptions.timeoutMs, 18000);
+  assert.equal(requestOptions.maxAttempts, 1);
   assert.equal(plan.sections.length, 7);
 });
 
@@ -148,12 +149,13 @@ test("generates two section bodies with one structured request", async () => {
     otherTitles: sections.map((section) => section.title),
     model: "deepseek-v4-flash",
   }, {
-    requestStructured: async ({ model, name, schema, maxTokens, timeoutMs }) => {
+    requestStructured: async ({ model, name, schema, maxTokens, timeoutMs, maxAttempts }) => {
       calls += 1;
       assert.equal(model, "deepseek-v4-flash");
       assert.equal(name, "saju_sections");
-      assert.equal(maxTokens, 8192);
-      assert.equal(timeoutMs, 90000);
+      assert.equal(maxTokens, 3200);
+      assert.equal(timeoutMs, 40000);
+      assert.equal(maxAttempts, 1);
       assert.equal(schema.properties.sections.minItems, 2);
       return {
         sections: [

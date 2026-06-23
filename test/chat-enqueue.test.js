@@ -49,6 +49,17 @@ test("질문 길이와 질의권 부족 오류를 HTTP 계약으로 변환한다
   );
 });
 
+test("DB migration 누락 오류를 실행 가능한 안내로 변환한다", async () => {
+  await assert.rejects(
+    () => enqueueReportChatMessage({
+      rpc: async () => ({ data: null, error: { code: "42883", message: "function uuid_generate_v4() does not exist" } }),
+    }, { userId: "u1", sessionId: "s1", clientRequestId: "c1", question: "질문" }),
+    (error) => error.statusCode === 503
+      && error.code === "chat_database_migration_required"
+      && /데이터베이스 업데이트/.test(error.message),
+  );
+});
+
 test("영구 실패 처리는 환원 포함 단일 RPC를 사용한다", async () => {
   const calls = [];
   const sb = { async rpc(name, args) { calls.push({ name, args }); return { data: { refunded: true }, error: null }; } };

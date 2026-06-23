@@ -106,43 +106,15 @@ export async function runReportStream(options, dependencies) {
     stage = "plan_ready";
     await emit("plan_ready", { progress: 40, total: plan.sections.length, data });
 
-    const otherTitles = plan.sections.map((section) => section.title);
-    let completed = 0;
-    const generatedById = new Map();
-    const batches = chunkSections(plan.sections, 2);
-    await Promise.all(batches.map(async (sections) => {
-      const generated = await generateBatchWithFallback({
-        productId,
-        extra,
-        profile,
-        partner,
-        context: plan.context,
-        sections,
-        otherTitles,
-        model,
-      }, generateSections);
-      for (const section of generated) {
-        generatedById.set(section.id, section);
-        completed += 1;
-        stage = "section_ready";
-        await emit("section_ready", {
-          section,
-          completed,
-          total: plan.sections.length,
-        });
-      }
-    }));
-
-    const finalSections = plan.sections.map((section) => ({
-      ...section,
-      body: generatedById.get(section.id)?.body || "",
-    }));
-    const result = { ...data, sections: finalSections };
+    // Vercel 함수 하나가 모든 본문 생성을 기다리지 않는다. 브라우저가 plan을 받은 뒤
+    // /api/saju/section을 독립적으로 병렬 호출해 각 함수의 실행시간을 분리한다.
+    const result = data;
     stage = "complete";
     await emit("complete", {
-      progress: 100,
-      completed: finalSections.length,
-      total: finalSections.length,
+      progress: 40,
+      completed: 0,
+      total: plan.sections.length,
+      planOnly: true,
     });
     return result;
   } finally {

@@ -30,7 +30,7 @@ test("chunks sections without mutating their order", () => {
   assert.deepEqual(sections, ["a", "b", "c"]);
 });
 
-test("streams real stages and falls back only the failed batch", async () => {
+test("SSE는 plan까지만 반환해 section 생성을 별도 함수 요청으로 분리한다", async () => {
   const events = [];
   const calls = [];
   const sections = [
@@ -57,25 +57,18 @@ test("streams real stages and falls back only the failed batch", async () => {
       lucky: { color: "초록" },
       context: { 기준: "테스트" },
     }),
-    generateSections: async ({ sections: requested }) => {
-      calls.push(requested.map((section) => section.id));
-      if (requested.length === 2) throw new Error("batch failed");
-      return requested.map((section) => ({ id: section.id, body: `${section.id} 본문` }));
-    },
+    generateSections: async ({ sections: requested }) => { calls.push(requested); throw new Error("호출되면 안 됨"); },
     heartbeatMs: 0,
   });
 
-  assert.deepEqual(calls, [["s0", "s1"], ["s2"], ["s0"], ["s1"]]);
+  assert.deepEqual(calls, []);
   assert.deepEqual(
     events.filter(({ event }) => event !== "section_ready").map(({ event }) => event),
     ["started", "manse_ready", "plan_started", "plan_ready", "complete"],
   );
-  assert.equal(events.filter(({ event }) => event === "section_ready").length, 3);
-  assert.deepEqual(result.sections.map(({ id, body }) => [id, body]), [
-    ["s0", "s0 본문"],
-    ["s1", "s1 본문"],
-    ["s2", "s2 본문"],
-  ]);
+  assert.equal(events.filter(({ event }) => event === "section_ready").length, 0);
+  assert.equal(events.at(-1).data.planOnly, true);
+  assert.ok(result.sections.every((section) => !section.body));
 });
 
 test("streams compatibility metadata with the shared pipeline", async () => {

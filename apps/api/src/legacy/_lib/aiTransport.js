@@ -301,13 +301,14 @@ export async function requestStructured(options, dependencies = {}) {
   const requestOptions = { ...options, model, profile };
 
   let lastError;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  const maxAttempts = Math.max(1, Math.min(2, Number(options.maxAttempts) || 2));
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     let text;
     try {
       text = await request(requestOptions);
     } catch (error) {
       lastError = normalizeTransportError(error);
-      if (attempt === 0 && isRetryableTransport(lastError)) continue;
+      if (attempt + 1 < maxAttempts && isRetryableTransport(lastError)) continue;
       throw lastError;
     }
     try {

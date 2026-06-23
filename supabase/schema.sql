@@ -5,7 +5,7 @@
 -- 가맹점 1명 = Supabase 프로젝트 1개. 서버리스 함수가 service_role 키로만 접근 → RLS 미사용(단순화).
 -- =====================================================
 
-create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 -- ─────────────────────────────────────────────────────
 -- 1) 테이블 (새 DB는 여기서 전부 생성)
@@ -46,7 +46,7 @@ create table if not exists orders (
 
 -- [3] 방문/행동 이벤트 (통계 원천)
 create table if not exists events (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   event text, page text, view text,
   visitor_id text, session_id text,
   referrer text, utm jsonb, device jsonb, metadata jsonb,
@@ -56,7 +56,7 @@ create table if not exists events (
 
 -- [4] 분석 결과(보관함). ※ 1개월 후 자동삭제는 앱(서버 코드)이 처리.
 create table if not exists analyses (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   product_id text,
   profile_name text,
   manse jsonb, summary jsonb, headline text, sections jsonb, lucky jsonb,
@@ -75,7 +75,7 @@ create table if not exists sessions (
 
 -- [6] 이메일 로그인 사용자 (비밀번호는 scrypt 해시 salt:hash 로만 저장)
 create table if not exists users (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   email text unique not null,
   password_hash text not null,
   nickname text,
@@ -110,7 +110,7 @@ create table if not exists user_points (
 
 -- [10] 포인트 변경 감사 로그
 create table if not exists point_transactions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id text not null,
   type text not null check (type in ('charge', 'bonus', 'spend', 'refund', 'admin_adjust')),
   amount integer not null check (amount <> 0),
@@ -135,7 +135,7 @@ create table if not exists chat_credit_accounts (
 );
 
 create table if not exists chat_credit_transactions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id text not null,
   type text not null check (type in ('purchase', 'reserve', 'refund', 'admin_adjust')),
   amount integer not null check (amount <> 0),
@@ -148,7 +148,7 @@ create table if not exists chat_credit_transactions (
 
 -- [13] 선택한 보관함 리포트에 고정된 AI 챗봇 대화
 create table if not exists chat_sessions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id text not null,
   source_archive_id text not null,
   report_snapshot jsonb not null,
@@ -161,7 +161,7 @@ create table if not exists chat_sessions (
 );
 
 create table if not exists chat_messages (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   session_id uuid not null references chat_sessions(id) on delete cascade,
   role text not null check (role in ('user', 'assistant')),
   content text not null default '',
@@ -176,7 +176,7 @@ create table if not exists chat_messages (
 );
 
 create table if not exists chat_runs (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   session_id uuid not null references chat_sessions(id) on delete cascade,
   user_message_id uuid not null references chat_messages(id) on delete cascade,
   assistant_message_id uuid not null references chat_messages(id) on delete cascade,
@@ -242,6 +242,16 @@ alter table orders      add column if not exists pay_method text default 'toss';
 alter table orders      add column if not exists fulfillment_status text default 'not_required';
 alter table orders      add column if not exists fulfillment_error text;
 alter table orders      add column if not exists fulfilled_at timestamptz;
+
+-- 기존 DB의 uuid-ossp 기본값도 pgcrypto 기반으로 교체한다.
+alter table events                   alter column id set default gen_random_uuid();
+alter table analyses                 alter column id set default gen_random_uuid();
+alter table users                    alter column id set default gen_random_uuid();
+alter table point_transactions       alter column id set default gen_random_uuid();
+alter table chat_credit_transactions alter column id set default gen_random_uuid();
+alter table chat_sessions            alter column id set default gen_random_uuid();
+alter table chat_messages            alter column id set default gen_random_uuid();
+alter table chat_runs                alter column id set default gen_random_uuid();
 
 -- ─────────────────────────────────────────────────────
 -- 4) 포인트 원자 변경 RPC
@@ -595,10 +605,10 @@ declare
   normalized_question text := trim(coalesce(p_question, ''));
   normalized_request_id text := trim(coalesce(p_client_request_id, ''));
   owned_session_id uuid;
-  new_user_message_id uuid := uuid_generate_v4();
+  new_user_message_id uuid := gen_random_uuid();
   inserted_user_message_id uuid;
-  assistant_message_id uuid := uuid_generate_v4();
-  run_id uuid := uuid_generate_v4();
+  assistant_message_id uuid := gen_random_uuid();
+  run_id uuid := gen_random_uuid();
   existing_assistant_message_id uuid;
   existing_run_id uuid;
   next_balance integer;

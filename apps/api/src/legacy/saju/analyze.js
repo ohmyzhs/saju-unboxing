@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
-    const { productId = "saju-analysis", profile, partner, orderId, visitorId, regen = false, stream = false } = await readJson(req);
+    const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false } = await readJson(req);
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     if (productId === "daily-fortune") {
       // await 필수: 안 하면 handleDaily 내부 에러가 위 try/catch 를 못 거치고
       // FUNCTION_INVOCATION_FAILED(비-JSON "A server error...") 로 떨어진다.
-      return await handleDaily({ res, profile, config, prompt: extra, model, visitorId, orderId, acct, user: sessionUser, regen: Boolean(regen) });
+      return await handleDaily({ res, profile, mood, config, prompt: extra, model, visitorId, orderId, acct, user: sessionUser, regen: Boolean(regen) });
     }
 
     const wantsStream = stream === true && String(req.headers.accept || "").includes("text/event-stream");
@@ -207,17 +207,18 @@ export default async function handler(req, res) {
 }
 
 // 사람 식별키(이름+생년월일+시각+성별) — 같은 사람의 같은 날 중복 계산을 막는 서버 캐시 키
-function personKey(profile) {
+export function personKey(profile, mood = "") {
   return createHash("sha256")
-    .update(`${profile.name}|${profile.birthDate}|${profile.birthTime || ""}|${profile.gender || ""}`)
+    .update(`${profile.name}|${profile.birthDate}|${profile.birthTime || ""}|${profile.gender || ""}|${String(mood || "").trim().slice(0, 80)}`)
     .digest("hex")
     .slice(0, 32);
 }
 
-async function handleDaily({ res, profile, config, prompt, model, visitorId, orderId, acct = {}, user, regen = false }) {
+async function handleDaily({ res, profile, mood = "", config, prompt, model, visitorId, orderId, acct = {}, user, regen = false }) {
   const today = todayKST();
   const todayPillar = dayPillar(today.y, today.m, today.d);
-  const pk = personKey(profile);
+  const normalizedMood = String(mood || "").trim().slice(0, 80);
+  const pk = personKey(profile, normalizedMood);
   const sb = getSupabase();
   const tp = { ganzhi: todayPillar.ganzhi, ko: todayPillar.ko };
   const td = { iso: today.iso, label: today.label };
@@ -269,7 +270,7 @@ async function handleDaily({ res, profile, config, prompt, model, visitorId, ord
   let daily;
   try {
     manse = await computeManse(profile, config);
-    daily = await generateDailyFortune({ profile, summary: manse.summary, model, prompt, today: td, todayPillar: tp });
+    daily = await generateDailyFortune({ profile, summary: manse.summary, mood: normalizedMood, model, prompt, today: td, todayPillar: tp });
   } catch (error) {
     await releaseDailyRegeneration({ reserved: regeneration.reserved, userId: user?.id, sb }).catch(() => {});
     throw error;

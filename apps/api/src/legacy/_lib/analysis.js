@@ -412,6 +412,71 @@ const PLAN_PRODUCT_FOCUS = {
   "yearly-fortune": "해당 연도의 총운과 계절·월별 흐름, 조심할 때와 행동 방향을 7~10개 섹션으로 설계한다.",
 };
 
+const FALLBACK_PLAN_SECTIONS = Object.freeze({
+  "saju-analysis": [
+    ["🧭", "나를 움직이는 기본 리듬", "타고난 반응 방식과 에너지의 방향"],
+    ["✨", "잘할수록 더 빛나는 강점", "반복해서 성과로 이어지는 기질과 활용법"],
+    ["🌗", "힘이 빠질 때 나타나는 신호", "부담이 커질 때의 패턴과 회복 기준"],
+    ["💼", "일에서 성과를 만드는 방식", "업무 환경과 역할 선택의 기준"],
+    ["💰", "돈을 지키고 키우는 습관", "재물 흐름에서 유리한 선택과 주의점"],
+    ["🤝", "관계를 편안하게 만드는 거리", "가까운 사람과의 소통 및 경계 설정"],
+    ["🌱", "지금부터 적용할 생활 보완", "현재 흐름에 맞춘 구체적인 실천"],
+  ],
+  cycle: [
+    ["🗺️", "지나온 흐름이 남긴 것", "이전 전환점에서 반복된 선택 패턴"],
+    ["📍", "지금 서 있는 운의 구간", "현재 대운의 핵심 과제와 기회"],
+    ["🚦", "속도를 내도 좋은 신호", "확장과 실행에 유리한 조건"],
+    ["🧱", "기반을 먼저 다질 때", "무리한 확장보다 준비가 필요한 조건"],
+    ["💼", "일과 역할의 전환점", "직업과 책임 변화에 대응하는 기준"],
+    ["🤝", "사람이 바뀌는 시기의 관계", "인연과 협업 흐름을 다루는 방법"],
+    ["🌱", "다음 10년을 위한 준비", "앞으로의 흐름을 살리는 실천"],
+  ],
+  "yearly-fortune": [
+    ["☀️", "올해 전체 흐름 한눈에 보기", "한 해의 중심 기조와 우선순위"],
+    ["🌱", "초반에 기반을 만드는 법", "상반기 시작 구간의 실행 포인트"],
+    ["🔥", "기회가 커질 때의 선택", "확장 구간에서 잡을 것과 놓을 것"],
+    ["🌧️", "흔들릴 때 지켜야 할 기준", "변수가 생길 때의 위험 관리"],
+    ["💼", "일과 재물의 현실적인 흐름", "성과와 지출을 다루는 기준"],
+    ["💞", "관계의 온도를 맞추는 시기", "가까운 관계에서 필요한 소통"],
+    ["🧭", "올해를 남기는 마무리", "하반기 정리와 다음 해 준비"],
+  ],
+  compatibility: [
+    ["💞", "두 사람이 끌리는 이유", "서로에게 자연스럽게 매력을 느끼는 지점"],
+    ["🧩", "다름이 힘이 되는 순간", "상호 보완되는 기질과 역할"],
+    ["⚡", "부딪히기 쉬운 장면", "갈등이 반복되는 조건과 신호"],
+    ["💬", "말이 통하게 만드는 대화법", "오해를 줄이는 표현과 타이밍"],
+    ["🏠", "함께 지낼 때의 생활 호흡", "일상과 책임을 나누는 기준"],
+    ["🌿", "오래 가는 관계의 사용법", "관계를 성장시키는 구체적인 실천"],
+  ],
+});
+
+function fallbackPlan({ productId, profile, partner, context }) {
+  const rows = FALLBACK_PLAN_SECTIONS[productId] || FALLBACK_PLAN_SECTIONS["saju-analysis"];
+  const sections = rows.map(([icon, title, angle], index) => ({ id: `s${index}`, icon, title, angle }));
+  if (productId === "compatibility") {
+    return {
+      headline: `${profile.name}님과 ${partner?.name || "상대"}님의 관계 리듬을 차분히 읽어봅니다`,
+      score: 75,
+      scoreLabel: "다름을 이해할수록 편안해지는 관계",
+      hashtags: ["대화", "균형", "성장"],
+      sections,
+      context,
+      fallback: true,
+    };
+  }
+  return {
+    headline: `${profile.name}님의 흐름을 현실적인 선택 기준으로 풀어봅니다`,
+    sections,
+    lucky: luckyFromContext(context, {
+      why: "부족한 리듬을 일상에서 무리 없이 보완하는 방향입니다.",
+      whyKeywords: ["균형", "회복"],
+      personalNote: "작게 반복할 수 있는 선택부터 시작해보세요.",
+    }),
+    context,
+    fallback: true,
+  };
+}
+
 export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner }) {
   const isCompat = productId === "compatibility";
   const subject = isCompat
@@ -460,15 +525,21 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
       : { name: profile.name, gender: profile.gender, birthDate: profile.birthDate, product: productName, manse: context },
   );
   const request = dependencies.requestStructured || requestStructured;
-  const plan = await request({
-    model,
-    system: instructions,
-    input,
-    name: isCompat ? "compat_plan" : "saju_plan",
-    schema: isCompat ? COMPAT_PLAN_SCHEMA : PLAN_SCHEMA,
-    maxTokens: 8192,
-    timeoutMs: 70000,
-  });
+  let plan;
+  try {
+    plan = await request({
+      model,
+      system: instructions,
+      input,
+      name: isCompat ? "compat_plan" : "saju_plan",
+      schema: isCompat ? COMPAT_PLAN_SCHEMA : PLAN_SCHEMA,
+      maxTokens: 2400,
+      timeoutMs: 18000,
+      maxAttempts: 1,
+    });
+  } catch {
+    return fallbackPlan({ productId, profile, partner, context });
+  }
   const sections = (plan.sections || []).map((s, i) => ({ id: `s${i}`, icon: s.icon, title: s.title, angle: s.angle }));
   if (isCompat) {
     return {
@@ -478,9 +549,10 @@ export async function generatePlan({ productId = "saju-analysis", productName = 
       hashtags: Array.isArray(plan.hashtags) ? plan.hashtags : [],
       sections,
       context,
+      fallback: false,
     };
   }
-  return { headline: plan.headline, sections, lucky: luckyFromContext(context, plan.lucky), context };
+  return { headline: plan.headline, sections, lucky: luckyFromContext(context, plan.lucky), context, fallback: false };
 }
 
 function sectionBatchSchema(sections) {
@@ -558,8 +630,9 @@ export async function generateSections({ productId = "saju-analysis", extra, pro
       input,
       name: "saju_sections",
       schema,
-      maxTokens: 8192,
-      timeoutMs: 90000,
+      maxTokens: 3200,
+      timeoutMs: 40000,
+      maxAttempts: 1,
     });
 
   let out = validateSectionBatch(sections, (await callOnce()).sections);
@@ -745,27 +818,33 @@ const DAILY_DEFAULT_PROMPT =
  * 오늘의 무료운세 리치 생성.
  * @param {object} args { profile, summary, model, prompt, today, todayPillar }
  */
-export async function generateDailyFortune({ profile, summary, model, prompt, today, todayPillar }) {
+export function buildDailyFortuneInput({ profile, summary, today, todayPillar, mood = "" }) {
+  return {
+    name: profile.name,
+    gender: profile.gender,
+    birthDate: profile.birthDate,
+    currentMood: String(mood || "").trim().slice(0, 80),
+    today,
+    todayPillar,
+    manse: summary,
+  };
+}
+
+export async function generateDailyFortune({ profile, summary, mood = "", model, prompt, today, todayPillar }) {
 
   const instructions = `${prompt || DAILY_DEFAULT_PROMPT}
 
 [작성 규칙]
 - 반드시 한국어. 주어진 사주 원국(manse)과 오늘 일진(today)에 근거해 작성한다.
 - "${profile.name}"님을 자연스럽게 부르되 과하게 반복하지 않는다.
+- currentMood가 있으면 오늘 운세 전체를 그 고민과 연결하되, 사용자의 현재 상황을 사주보다 우선해 존중한다.
 - 단정적 재난/질병/투자 확언 금지. 리스크는 생활 조언으로 바꾼다.
 - sections 의 title 은 진부한 표현을 피하고 매번 신선하게 직접 짓는다.
 - 점수(overallScore, categories.score)는 0~100, 너무 극단적이지 않게.
 - 럭키 컬러/넘버/아이템과 음식 추천은 오행 균형(부족/과다)을 근거로 고른다.
 - 분량은 간결하게: 섹션 2~3개, 각 분야·섹션 본문은 1~2문장으로. 군더더기 금지(속도·가독성 우선).`;
 
-  const input = JSON.stringify({
-    name: profile.name,
-    gender: profile.gender,
-    birthDate: profile.birthDate,
-    today, // { iso, label }
-    todayPillar, // { ganzhi, ko }
-    manse: summary,
-  });
+  const input = JSON.stringify(buildDailyFortuneInput({ profile, summary, today, todayPillar, mood }));
 
   const text = await chatJSON({
     model,

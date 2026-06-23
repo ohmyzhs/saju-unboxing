@@ -71,10 +71,14 @@ export function createReportTools({ snapshot, history = [] }) {
       });
     },
     get_conversation_history() {
-      return clone((history || []).slice(-20).map((message) => ({
-        role: message.role,
-        content: String(message.content || "").slice(0, 4000),
-      })));
+      return clone((history || [])
+        .filter((message) => message?.status === undefined || message.status === "completed")
+        .filter((message) => message?.role === "user" || message?.role === "assistant")
+        .slice(-20)
+        .map((message) => ({
+          role: message.role,
+          content: String(message.content || "").slice(0, 4000),
+        })));
     },
   };
 }

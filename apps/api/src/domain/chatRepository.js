@@ -15,6 +15,13 @@ function requiredId(value, name) {
 
 function throwDatabase(error) {
   const text = String(error?.message || error || "");
+  if (error?.code === "PGRST202" || error?.code === "42883" || /uuid_generate_v4|does not exist|schema cache/i.test(text)) {
+    throw repositoryError(
+      "챗봇 데이터베이스 업데이트가 필요합니다. 운영자에게 잠시 후 다시 시도해 달라고 알려주세요.",
+      503,
+      "chat_database_migration_required",
+    );
+  }
   if (text.includes("archive_not_found")) throw repositoryError("선택한 보관함 리포트를 찾지 못했습니다.", 404, "archive_not_found");
   if (text.includes("report_snapshot_too_large")) throw repositoryError("리포트 데이터가 너무 커서 대화를 열 수 없습니다.", 413, "report_snapshot_too_large");
   throw error;
@@ -65,6 +72,16 @@ function mapMessage(row) {
     createdAt: row.created_at ?? row.createdAt ?? null,
     completedAt: row.completed_at ?? row.completedAt ?? null,
   };
+}
+
+export function buildChatTurns(messages = [], runs = []) {
+  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  return runs.map((run) => ({
+    id: run.id,
+    run,
+    user: messagesById.get(run.userMessageId) || null,
+    assistant: messagesById.get(run.assistantMessageId) || null,
+  }));
 }
 
 export async function createReportChatSession(sb, { userId, archiveId }) {
@@ -126,11 +143,14 @@ export async function getReportChatSession(sb, { userId, sessionId }) {
   if (messageError) throw messageError;
   if (runError) throw runError;
 
+  const mappedMessages = (messages || []).map(mapMessage);
+  const mappedRuns = (runs || []).map(mapRun);
   return {
     session: mapSession(session),
     report: session.report_snapshot,
-    messages: (messages || []).map(mapMessage),
-    runs: (runs || []).map(mapRun),
+    messages: mappedMessages,
+    runs: mappedRuns,
+    turns: buildChatTurns(mappedMessages, mappedRuns),
     balance: account.balance,
   };
 }
@@ -173,7 +193,7 @@ export async function enqueueReportChatMessage(sb, {
     if (message.includes("chat_session_not_found")) {
       throw repositoryError("대화방을 찾지 못했습니다.", 404, "chat_session_not_found");
     }
-    throw error;
+    throwDatabase(error);
   }
   return {
     runId: data?.runId,

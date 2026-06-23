@@ -177,6 +177,7 @@ let currentViewName = "home";
 let currentViewStartedAt = Date.now();
 let paymentReturn = false;
 let activeDailyProfile = null;
+let activeDailyMood = "";
 let analysisDraftSync = Promise.resolve();
 let chatState = {
   catalog: null,
@@ -197,6 +198,7 @@ let calendarState = {
 // Library filter state
 let libraryFilter = "all";
 const FORTUNE_MOOD_KEY = "saju_lab_fortune_mood";
+const FORTUNE_MOOD_CUSTOM_KEY = "saju_lab_fortune_mood_custom";
 
 // ---------- Storage helpers ----------
 function readStore(key, fallback) {
@@ -285,6 +287,9 @@ function trackEvent(event, metadata = {}, options = {}) {
 // ---------- View routing ----------
 function showView(nextView) {
   if (currentViewName === "chat" && nextView !== "chat") stopChatStream();
+  if (currentViewName === "profile" && nextView !== "profile" && profileReturnContext) {
+    profileReturnContext = null;
+  }
   if (currentViewName && currentViewName !== nextView) {
     trackEvent("view_exit", {
       fromView: currentViewName,
@@ -1115,15 +1120,78 @@ function gz(ch) {
   return GANZHI_INFO[ch] || [ch, "earth"];
 }
 
-function dailyCacheKey(profileId) {
+function dailyCacheKey(profileId, mood = "") {
   const d = new Date();
   const iso = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  return `saju_lab_daily_${accountScopeId}_${profileId}_${iso}`;
+  const moodKey = encodeURIComponent(String(mood || "").trim()).slice(0, 100) || "default";
+  return `saju_lab_daily_${accountScopeId}_${profileId}_${iso}_${moodKey}`;
+}
+
+const HOME_GUIDE_STEPS = Object.freeze({
+  profile: {
+    count: "1 / 4",
+    title: "분석할 사람을 먼저 등록하세요",
+    copy: "이름과 생년월일, 태어난 시간을 한 번 저장하면 다른 상품에서도 다시 입력할 필요가 없습니다.",
+    action: "프로필 등록하기",
+    view: "profile",
+  },
+  product: {
+    count: "2 / 4",
+    title: "궁금한 주제에 맞는 상품을 고르세요",
+    copy: "기본 사주, 궁합, 대운, 연도운 중 원하는 분석을 선택하면 저장한 프로필을 고르는 화면이 열립니다.",
+    action: "상품 둘러보기",
+    view: "home",
+    selector: ".product-grid",
+  },
+  orders: {
+    count: "3 / 4",
+    title: "결제 상태는 언제든 다시 확인할 수 있어요",
+    copy: "진행 중인 주문은 이어서 결제하거나 취소할 수 있고, 완료된 주문은 상세 내역과 분석 상태를 확인할 수 있습니다.",
+    action: "결제 내역 보기",
+    view: "orders",
+  },
+  library: {
+    count: "4 / 4",
+    title: "완성된 결과는 보관함에 남습니다",
+    copy: "페이지를 나갔다 돌아와도 같은 계정의 보관함에서 리포트를 다시 열고 챗봇 상담으로 이어갈 수 있습니다.",
+    action: "보관함 열기",
+    view: "library",
+  },
+});
+
+function bindHomeGuide() {
+  const panel = document.querySelector("[data-guide-panel]");
+  if (!panel) return;
+  let activeKey = "profile";
+  const render = (key) => {
+    const step = HOME_GUIDE_STEPS[key] || HOME_GUIDE_STEPS.profile;
+    activeKey = key;
+    document.querySelectorAll("[data-guide-step]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.guideStep === key);
+    });
+    panel.querySelector("[data-guide-count]").textContent = step.count;
+    panel.querySelector("[data-guide-title]").textContent = step.title;
+    panel.querySelector("[data-guide-copy]").textContent = step.copy;
+    panel.querySelector("[data-guide-action]").textContent = step.action;
+  };
+  document.querySelectorAll("[data-guide-step]").forEach((button) => {
+    button.addEventListener("click", () => render(button.dataset.guideStep));
+  });
+  panel.querySelector("[data-guide-action]")?.addEventListener("click", () => {
+    const step = HOME_GUIDE_STEPS[activeKey];
+    showView(step.view);
+    if (step.selector) {
+      window.setTimeout(() => document.querySelector(step.selector)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  });
+  render(activeKey);
 }
 
 function startDailyFortune(profile, options = {}) {
   if (!profile) return;
+  const mood = String(options.mood || "").trim().slice(0, 80);
   activeDailyProfile = profile;
+  activeDailyMood = mood;
   showView("daily");
   const body = document.querySelector("[data-daily-body]");
   if (!body) return;
@@ -1134,7 +1202,7 @@ function startDailyFortune(profile, options = {}) {
   renderDailyRegeneration();
 
   // 같은 날 + 같은 사람 → 캐시(즉시, 포인트 추가 없음)
-  const cached = readStore(dailyCacheKey(profile.id), null);
+  const cached = readStore(dailyCacheKey(profile.id, mood), null);
   if (cached && !options.regen) {
     renderDailyFortune(profile, cached);
     return;
@@ -1151,7 +1219,7 @@ function startDailyFortune(profile, options = {}) {
   getJson("/api/saju/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ productId: "daily-fortune", profile, visitorId: visitorId(), regen: Boolean(options.regen) }),
+    body: JSON.stringify({ productId: "daily-fortune", profile, mood, visitorId: visitorId(), regen: Boolean(options.regen) }),
   })
     .then((data) => {
       if (options.regen && !data.regenerated) {
@@ -1161,7 +1229,7 @@ function startDailyFortune(profile, options = {}) {
         runtimeSession.points.regenTokens = data.regenTokens;
         renderSession();
       }
-      writeStore(dailyCacheKey(profile.id), data);
+      writeStore(dailyCacheKey(profile.id, mood), data);
       renderDailyFortune(profile, data);
       trackEvent("analysis_complete", { productId: "daily-fortune", profileId: profile.id, profileName: profile.name });
     })
@@ -1372,7 +1440,7 @@ function renderDailyRegeneration() {
 document.querySelector("[data-daily-regenerate]")?.addEventListener("click", () => {
   if (!activeDailyProfile || Number(runtimeSession?.points?.regenTokens || 0) <= 0) return;
   if (!window.confirm("재생성권 1개를 사용해 오늘의 무료운세를 새로 만들까요?")) return;
-  startDailyFortune(activeDailyProfile, { regen: true });
+  startDailyFortune(activeDailyProfile, { regen: true, mood: activeDailyMood });
 });
 
 document.querySelector("[data-points-daily]")?.addEventListener("click", () => showView("fortune"));
@@ -1667,6 +1735,7 @@ function readProfileFromForm() {
 // ---------- 프로필 추가/수정 ----------
 let editingProfileId = null;
 let openingEditProfile = false;
+let profileReturnContext = null;
 
 function setSegmented(name, value) {
   const group = document.querySelector(`[data-segmented="${name}"]`);
@@ -1774,6 +1843,19 @@ profileForm?.addEventListener("submit", (event) => {
   renderPrimaryProfileLabel();
   if (profileStatus) profileStatus.textContent = "프로필이 저장되었어요. 홈에서 상품을 선택해 분석을 시작할 수 있어요.";
   trackEvent("profile_save", { profileId: profile.id, profileName: profile.name, gender: profile.gender });
+  const returnContext = profileReturnContext;
+  profileReturnContext = null;
+  if (returnContext?.view === "compatibility") {
+    setTimeout(() => {
+      showView("compatibility");
+      renderProfileSelects();
+      const select = document.querySelector(`[data-compat-select="${returnContext.compatSlot}"]`);
+      if (select) select.value = profile.id;
+      const status = document.querySelector("[data-compat-status]");
+      if (status) status.textContent = `${profile.name}님을 추가했습니다. 다른 한 분도 확인해주세요.`;
+    }, 200);
+    return;
+  }
   // After save: open member modal for previously chosen product (or saju-analysis) on home
   setTimeout(() => {
     showView("home");
@@ -2695,12 +2777,13 @@ function startAnalysis(productId, profile, meta = {}) {
     }
   };
 
-  // 구조화 SSE: 실제 만세력·설계·완료 섹션 이벤트만 진행률에 반영한다.
+  // plan 요청과 section 요청을 함수별로 분리한다. 한 Vercel 함수가 전체 리포트를
+  // 끝까지 기다리지 않아 공급자 지연이 전체 타임아웃으로 번지지 않는다.
   const analysisController = new AbortController();
-  activeAnalysisTimer = window.setTimeout(() => analysisController.abort(), 295000);
+  activeAnalysisTimer = window.setTimeout(() => analysisController.abort(), 30000);
   window.SajuApi.fetch("/api/saju/analyze", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    headers: { "Content-Type": "application/json" },
     signal: analysisController.signal,
     body: JSON.stringify({
       productId,
@@ -2708,7 +2791,7 @@ function startAnalysis(productId, profile, meta = {}) {
       partner,
       orderId: meta.orderId || null,
       visitorId: visitorId(),
-      stream: true,
+      stream: false,
     }),
   })
     .then(async (response) => {
@@ -2731,7 +2814,7 @@ function startAnalysis(productId, profile, meta = {}) {
     .then(async (data) => {
       if (!data) return;
       finishLoading();
-      setProgress(100);
+      setProgress(40);
 
       // ── 2단계(plan): 제목·개운 먼저 그리고, 본문은 섹션별 병렬 호출로 채운다(점진적 UX) ──
       if (data.mode === "plan" && Array.isArray(data.sections)) {
@@ -2754,17 +2837,24 @@ function startAnalysis(productId, profile, meta = {}) {
         const sections = analysisDraft.analysis.sections.map((s) => ({ ...s }));
         const batches = window.AnalysisBatching.chunkSections(sections);
         let sectionFailures = 0;
+        let sectionsCompleted = 0;
+        const markSectionCompleted = () => {
+          sectionsCompleted += 1;
+          setProgress(window.AnalysisStream.progressForSections(sectionsCompleted, sections.length));
+          if (message) message.textContent = `해설 ${sectionsCompleted}/${sections.length}개를 완성해 보관함에 저장했습니다.`;
+        };
         const requestSingleSection = (s) =>
           getJson("/api/saju/section", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ productId, profile, partner, context: data.context, section: s, otherTitles: allTitles }),
-          }, 30000)
+          }, 45000)
             .then((r) => {
               s.body = r.body || "";
               fillSectionBody(s.id, s.body);
               analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, s.id, s.body);
               saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
+              markSectionCompleted();
             })
             .catch((error) => {
               sectionFailures += 1;
@@ -2773,6 +2863,7 @@ function startAnalysis(productId, profile, meta = {}) {
               analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, s.id, s.body);
               analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", error.message);
               saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: error.message });
+              markSectionCompleted();
             });
 
         await Promise.all(
@@ -2782,7 +2873,7 @@ function startAnalysis(productId, profile, meta = {}) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ productId, profile, partner, context: data.context, sections: batch, otherTitles: allTitles }),
-              }, 30000);
+              }, 45000);
               const bodies = new Map((result.sections || []).map((item) => [item.id, item.body]));
               for (const section of batch) {
                 const body = bodies.get(section.id);
@@ -2791,6 +2882,7 @@ function startAnalysis(productId, profile, meta = {}) {
                 fillSectionBody(section.id, body);
                 analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, section.id, body);
                 saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
+                markSectionCompleted();
               }
             } catch {
               await Promise.all(batch.map((s) => requestSingleSection(s)));
@@ -2802,6 +2894,8 @@ function startAnalysis(productId, profile, meta = {}) {
           analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", "일부 리포트 생성이 완료되지 않았습니다.");
           saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: analysisDraft.generationError });
         } else {
+          setProgress(100);
+          if (message) message.textContent = "리포트 생성을 완료했습니다.";
           analysisDraft = window.ReportRecovery.finish(analysisDraft);
           saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
           complete();
@@ -3213,20 +3307,58 @@ function bindCalendar() {
 function bindFortuneMood() {
   const group = document.querySelector("[data-fortune-mood]");
   if (!group) return;
+  const custom = document.querySelector("[data-fortune-mood-custom]");
+  const customInput = document.querySelector("[data-fortune-mood-input]");
+  const status = document.querySelector("[data-fortune-status]");
   // Restore last selected mood
   const saved = sessionStorage.getItem(FORTUNE_MOOD_KEY);
+  const savedCustom = sessionStorage.getItem(FORTUNE_MOOD_CUSTOM_KEY) || "";
+  if (customInput) customInput.value = savedCustom;
   if (saved) {
     group.querySelectorAll("button").forEach((item) => {
       item.classList.toggle("is-active", item.dataset.mood === saved);
     });
+    if (custom) custom.hidden = saved !== "직접 입력";
   }
   group.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       group.querySelectorAll("button").forEach((item) => item.classList.remove("is-active"));
       button.classList.add("is-active");
-      sessionStorage.setItem(FORTUNE_MOOD_KEY, button.dataset.mood || button.textContent.trim());
+      const mood = button.dataset.mood || button.textContent.trim();
+      sessionStorage.setItem(FORTUNE_MOOD_KEY, mood);
+      if (custom) custom.hidden = mood !== "직접 입력";
+      if (mood === "직접 입력") customInput?.focus();
+      if (status) status.textContent = "";
     });
   });
+  customInput?.addEventListener("input", () => {
+    sessionStorage.setItem(FORTUNE_MOOD_CUSTOM_KEY, customInput.value.trim().slice(0, 80));
+    if (status) status.textContent = "";
+  });
+  document.querySelector("[data-fortune-start]")?.addEventListener("click", () => {
+    const profileId = document.querySelector('[data-view="fortune"] [data-profile-select]')?.value;
+    const profile = getProfiles().find((item) => item.id === profileId);
+    const mood = fortuneMoodValue();
+    if (!profile) {
+      if (status) status.textContent = "오늘 운세를 볼 프로필을 먼저 추가해주세요.";
+      return;
+    }
+    if (!mood) {
+      if (status) status.textContent = "지금 가장 가까운 마음을 선택하거나 직접 입력해주세요.";
+      customInput?.focus();
+      return;
+    }
+    startDailyFortune(profile, { mood });
+  });
+}
+
+function fortuneMoodValue() {
+  const active = document.querySelector("[data-fortune-mood] .is-active");
+  const mood = active?.dataset.mood || "";
+  if (mood === "직접 입력") {
+    return String(document.querySelector("[data-fortune-mood-input]")?.value || "").trim().slice(0, 80);
+  }
+  return mood;
 }
 
 // ---------- 추가 질문 상담(결제형) ----------
@@ -3426,6 +3558,29 @@ function activeChatRun() {
   return [...runs].reverse().find((run) => run.status === "queued" || run.status === "running") || null;
 }
 
+function buildClientChatTurns(detail = chatState.detail) {
+  const messages = detail?.messages || [];
+  const runs = detail?.runs || [];
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const turns = runs.map((run) => ({
+    id: run.id,
+    run,
+    user: byId.get(run.userMessageId) || null,
+    assistant: byId.get(run.assistantMessageId) || null,
+  }));
+  const linked = new Set(turns.flatMap((turn) => [turn.user?.id, turn.assistant?.id]).filter(Boolean));
+  const localMessages = messages.filter((message) => !linked.has(message.id) && String(message.id || "").startsWith("local-"));
+  for (let index = 0; index < localMessages.length; index += 2) {
+    turns.push({
+      id: localMessages[index]?.clientRequestId || `local-turn-${index}`,
+      run: null,
+      user: localMessages[index] || null,
+      assistant: localMessages[index + 1] || null,
+    });
+  }
+  return turns;
+}
+
 function renderChatState() {
   const loggedIn = Boolean(runtimeSession?.user?.id);
   const login = document.querySelector("[data-chat-login]");
@@ -3433,6 +3588,12 @@ function renderChatState() {
   if (login) login.hidden = loggedIn;
   if (workspace) workspace.hidden = !loggedIn;
   if (!loggedIn) return;
+
+  const view = document.querySelector('[data-view="chat"]');
+  const roomOpen = Boolean(chatState.detail?.session);
+  view?.classList.toggle("is-room-open", roomOpen);
+  const lobby = document.querySelector("[data-chat-lobby]");
+  if (lobby) lobby.hidden = roomOpen;
 
   const balance = Number(chatState.catalog?.balance ?? chatState.detail?.balance ?? 0);
   document.querySelectorAll("[data-chat-balance]").forEach((node) => {
@@ -3491,21 +3652,31 @@ function renderChatState() {
   if (conversation) conversation.hidden = false;
   const title = document.querySelector("[data-chat-title]");
   if (title) title.textContent = chatState.detail.session.title || "AI 챗봇 상담";
+  const reportContext = document.querySelector("[data-chat-report-context]");
+  if (reportContext) {
+    const report = chatState.detail.report || {};
+    reportContext.textContent = [report.productName, report.profileName].filter(Boolean).join(" · ") || "선택한 보관함 리포트";
+  }
   const running = activeChatRun();
   const status = document.querySelector("[data-chat-run-status]");
   if (status) status.textContent = chatRunStatusLabel(running?.status);
 
   const messagesHost = document.querySelector("[data-chat-messages]");
   if (messagesHost) {
-    const messages = chatState.detail.messages || [];
-    messagesHost.innerHTML = messages.length
-      ? messages.map((message) => {
-          const failed = message.status === "failed";
-          const pending = message.role === "assistant" && (message.status === "queued" || message.status === "streaming");
-          const content = failed
-            ? message.errorMessage || "답변 생성에 실패했습니다. 사용한 질문권은 자동으로 돌아옵니다."
-            : message.content || (pending ? "답변을 준비하고 있어요" : "");
-          return `<article class="chat-bubble ${message.role === "user" ? "is-user" : "is-assistant"}${pending ? " is-pending" : ""}${failed ? " is-error" : ""}">${escapeHtml(content).replace(/\n/g, "<br />")}</article>`;
+    const turns = buildClientChatTurns();
+    messagesHost.innerHTML = turns.length
+      ? turns.map((turn) => {
+          const user = turn.user;
+          const assistant = turn.assistant;
+          const failed = assistant?.status === "failed";
+          const pending = assistant && (assistant.status === "queued" || assistant.status === "streaming");
+          const answer = failed
+            ? assistant.errorMessage || "답변 생성에 실패했습니다. 차감된 질문권은 자동으로 돌아옵니다."
+            : assistant?.content || (pending ? "답변을 준비하고 있어요" : "");
+          return `<article class="chat-turn" data-chat-turn="${escapeHtml(turn.id)}">
+            ${user ? `<div class="chat-bubble is-user">${escapeHtml(user.content || "").replace(/\n/g, "<br />")}</div>` : ""}
+            ${assistant ? `<div class="chat-bubble is-assistant${pending ? " is-pending" : ""}${failed ? " is-error" : ""}">${escapeHtml(answer).replace(/\n/g, "<br />")}</div>` : ""}
+          </article>`;
         }).join("")
       : `<p class="chat-empty-message">이 리포트에 대해 궁금한 점을 물어보세요.<br />외부 정보 없이 선택한 리포트만 근거로 답합니다.</p>`;
     messagesHost.scrollTop = messagesHost.scrollHeight;
@@ -3540,7 +3711,7 @@ async function loadChatView(preferredSessionId = chatState.activeSessionId) {
     chatState.sessions = sessionPayload.sessions || [];
     const activeId = preferredSessionId && chatState.sessions.some((session) => session.id === preferredSessionId)
       ? preferredSessionId
-      : chatState.sessions[0]?.id || null;
+      : null;
     chatState.activeSessionId = activeId;
     chatState.detail = activeId ? await getJson(`/api/chat/sessions/${encodeURIComponent(activeId)}`) : null;
     if (version !== chatState.requestVersion) return;
@@ -3553,6 +3724,14 @@ async function loadChatView(preferredSessionId = chatState.activeSessionId) {
     setChatStatus(error.message || "챗봇 상담 정보를 불러오지 못했습니다.", true);
     renderChatState();
   }
+}
+
+function closeChatRoom() {
+  stopChatStream();
+  chatState.activeSessionId = null;
+  chatState.detail = null;
+  renderChatState();
+  setChatStatus("");
 }
 
 function updateChatStreamRecord(runId, record) {
@@ -3664,8 +3843,13 @@ async function sendChatMessage() {
     renderChatState();
     resumeActiveChatStream();
   } catch (error) {
+    const assistantMessage = chatState.detail.messages.find((message) => message.id === optimisticAssistantId);
+    if (assistantMessage) {
+      assistantMessage.status = "failed";
+      assistantMessage.errorMessage = error.message || "질문을 보내지 못했습니다. 다시 시도해주세요.";
+    }
     setChatStatus(error.message || "질문을 보내지 못했습니다.", true);
-    await loadChatView(chatState.activeSessionId);
+    renderChatState();
   }
 }
 
@@ -3723,6 +3907,7 @@ function bindChat() {
     const buy = event.target.closest("[data-chat-buy]");
     if (buy) return startChatCreditCheckout(buy.dataset.chatBuy);
     if (event.target.closest("[data-chat-session-create]")) return createChatSession();
+    if (event.target.closest("[data-chat-room-back]")) return closeChatRoom();
     const sessionButton = event.target.closest("[data-chat-session-id]");
     if (sessionButton) loadChatView(sessionButton.dataset.chatSessionId);
   });
@@ -3758,6 +3943,13 @@ function bindYearAndCycle() {
 
 // ---------- Compatibility checkout ----------
 function bindCompatibility() {
+  document.querySelector('[data-view="compatibility"]')?.addEventListener("click", (event) => {
+    const add = event.target.closest("[data-compat-add]");
+    if (!add) return;
+    profileReturnContext = { view: "compatibility", compatSlot: add.dataset.compatAdd };
+    selectedProductId = "compatibility";
+    showView("profile");
+  });
   document.querySelector("[data-compat-checkout]")?.addEventListener("click", () => {
     const selectA = document.querySelector('[data-compat-select="a"]');
     const selectB = document.querySelector('[data-compat-select="b"]');
@@ -3963,6 +4155,7 @@ async function boot() {
   applySegmentedDependencies();
   bindCalendar();
   bindFortuneMood();
+  bindHomeGuide();
   bindFollowup();
   bindChat();
   bindYearAndCycle();
