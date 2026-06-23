@@ -12,6 +12,14 @@ export function modelProfile(model) {
   return MODEL_PROFILES[model] || DEFAULT_PROFILE;
 }
 
+export function chatMessageText(message = {}) {
+  return String(message.content || message.reasoning_content || "");
+}
+
+export function chatDeltaText(delta = {}) {
+  return String(delta.content || delta.reasoning_content || "");
+}
+
 export function extractJsonObject(text) {
   const clean = String(text || "")
     .trim()
@@ -135,7 +143,7 @@ async function requestChat({ model, system, input, name, schema, profile, maxTok
   const timeout = timeoutSignal(timeoutMs);
   try {
     const response = await client.chat.completions.create(request, { signal: timeout.signal });
-    const text = response.choices?.[0]?.message?.content;
+    const text = chatMessageText(response.choices?.[0]?.message);
     if (!text) throw new Error("AI 응답이 비어 있습니다.");
     return text;
   } catch (error) {
@@ -212,7 +220,7 @@ async function requestPlainChat({ model, system, input, maxTokens = 1600, timeou
       let text = "";
       let usage = {};
       for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta?.content || "";
+        const delta = chatDeltaText(chunk.choices?.[0]?.delta);
         if (delta) {
           text += delta;
           await onDelta(delta);
@@ -223,7 +231,7 @@ async function requestPlainChat({ model, system, input, maxTokens = 1600, timeou
       return { text, usage: normalizeUsage(usage) };
     }
     const response = await client.chat.completions.create(request, { signal: timeout.signal });
-    const text = response.choices?.[0]?.message?.content;
+    const text = chatMessageText(response.choices?.[0]?.message);
     if (!text) throw new Error("AI 응답이 비어 있습니다.");
     return { text, usage: normalizeUsage(response.usage) };
   } catch (error) {
