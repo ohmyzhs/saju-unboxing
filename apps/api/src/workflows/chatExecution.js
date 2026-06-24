@@ -9,13 +9,15 @@ import {
 } from "../domain/chatRepository.js";
 import { getSupabase } from "../legacy/_lib/supabase.js";
 
-export function createDraftAccumulator({ persist, threshold = 300 }) {
+export function createDraftAccumulator({ persist, threshold = 120 }) {
   let content = "";
   let pending = "";
+  let hasPersisted = false;
   async function flush() {
     if (!pending) return;
     const delta = pending;
     pending = "";
+    hasPersisted = true;
     await persist(content, delta);
   }
   return {
@@ -24,7 +26,7 @@ export function createDraftAccumulator({ persist, threshold = 300 }) {
       if (!value) return;
       content += value;
       pending += value;
-      if (Array.from(pending).length >= threshold) await flush();
+      if (!hasPersisted || Array.from(pending).length >= threshold) await flush();
     },
     async flush() {
       await flush();
@@ -32,6 +34,7 @@ export function createDraftAccumulator({ persist, threshold = 300 }) {
     async reset() {
       content = "";
       pending = "";
+      hasPersisted = false;
       await persist("", "");
     },
     get content() {

@@ -13,13 +13,15 @@ test("답변 델타는 누적 정본과 함께 묶어서 저장한다", async ()
     persist: async (content, delta) => saved.push({ content, delta }),
   });
   await draft.push("가나다");
-  assert.equal(saved.length, 0);
+  assert.deepEqual(saved, [
+    { content: "가나다", delta: "가나다" },
+  ]);
   await draft.push("라마");
   await draft.push("바사");
   await draft.flush();
   assert.deepEqual(saved, [
-    { content: "가나다라마", delta: "가나다라마" },
-    { content: "가나다라마바사", delta: "바사" },
+    { content: "가나다", delta: "가나다" },
+    { content: "가나다라마바사", delta: "라마바사" },
   ]);
 });
 
