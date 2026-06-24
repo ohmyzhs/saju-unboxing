@@ -699,14 +699,16 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 0 18px;
-  color: #fff;
+  color: var(--ink);
 }
 
 .view-title.emerald {
+  color: #fff;
   background: var(--jade);
 }
 
 .view-title.rose {
+  color: #fff;
   background: var(--rose);
 }
 
@@ -722,7 +724,7 @@ button {
   width: 36px;
   height: 36px;
   border: 0;
-  color: #fff;
+  color: currentColor;
   background: transparent;
   font-size: 31px;
   line-height: 1;

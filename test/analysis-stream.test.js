@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 await import("../apps/web/public/analysis-stream.js");
 
-const { createParser, progressForSections } = globalThis.AnalysisStream;
+const { createParser, progressForPlanWait, progressForSections } = globalThis.AnalysisStream;
 
 test("parses an SSE event split across arbitrary chunks", () => {
   const events = [];
@@ -39,6 +39,13 @@ test("maps completed section counts to the real 40-95 range", () => {
   assert.equal(progressForSections(4, 8), 68);
   assert.equal(progressForSections(8, 8), 95);
   assert.equal(progressForSections(99, 0), 40);
+});
+
+test("plan 응답 대기 중 진행률은 5%에서 움직이되 35%를 넘지 않는다", () => {
+  assert.equal(progressForPlanWait(0), 5);
+  assert.equal(progressForPlanWait(1), 8);
+  assert.equal(progressForPlanWait(5), 20);
+  assert.equal(progressForPlanWait(99), 35);
 });
 
 test("loads stream helper before app", () => {

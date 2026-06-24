@@ -28,6 +28,12 @@ const DEFAULT_PRODUCTS = {
     description: "특정 연도의 총운, 계절별 포인트, 월별 흐름을 봅니다.",
     prompt: "세운과 원국의 작용을 기준으로 해당 연도의 총운, 월별 포인트, 조심할 시기와 실행 조언을 작성한다.",
   },
+  "auspicious-date": {
+    name: "목적별 택일 리포트",
+    amount: 990,
+    description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위를 정리합니다.",
+    prompt: "사용자가 고른 목적과 후보 날짜만 비교해 날짜별 적합도, 우선순위, 활용법과 주의점을 구체적으로 작성한다.",
+  },
   "daily-fortune": {
     name: "오늘의 무료운세",
     amount: 0,

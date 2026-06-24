@@ -89,6 +89,17 @@ const PRODUCTS = {
     category: "연도 운세",
     description: "특정 연도의 총운과 계절별 흐름, 조심할 타이밍과 행동 조언을 미리 짚습니다.",
   },
+  "auspicious-date": {
+    name: "목적별 택일 리포트",
+    subtitle: "어떤 분의 일정에 맞는 날짜인지 선택해주세요.",
+    price: "990원",
+    amountLabel: "990원",
+    amount: 990,
+    paid: true,
+    planId: "fortune",
+    category: "택일해설",
+    description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위와 활용법을 정리합니다.",
+  },
   "daily-fortune": {
     name: "오늘의 무료운세",
     subtitle: "누구의 오늘을 볼까요?",
@@ -179,6 +190,7 @@ let selectedProductId = "saju-analysis";
 let selectedProfileId = null;
 let currentCheckout = null;
 let activeAnalysisTimer = null;
+let analysisLoadingHideTimer = null;
 let currentViewName = "home";
 let currentViewStartedAt = Date.now();
 let paymentReturn = false;
@@ -1092,6 +1104,7 @@ function retryOrderReport(orderId) {
     paymentStatus: "결제 완료",
     partner: purchase.partner || null,
     targetYear: purchase.targetYear || null,
+    calendarPick: purchase.calendarPick || null,
     retry: true,
   });
 }
@@ -2005,9 +2018,29 @@ function closeMemberModal() {
 }
 
 // ---------- Checkout ----------
+function selectedCalendarPick() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem("saju_lab_calendar_pick") || "null");
+    const purpose = String(parsed?.purpose || "").trim();
+    const dates = Array.isArray(parsed?.dates)
+      ? [...new Set(parsed.dates.map(String))].filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort()
+      : [];
+    return purpose && dates.length >= 2 && dates.length <= 10 ? { purpose, dates } : null;
+  } catch {
+    return null;
+  }
+}
+
 function prepareCheckout(productId, profile, partner = null) {
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
-  currentCheckout = { productId, product, profile, partner, targetYear: productId === "yearly-fortune" ? selectedYearlyTarget() : null };
+  currentCheckout = {
+    productId,
+    product,
+    profile,
+    partner,
+    targetYear: productId === "yearly-fortune" ? selectedYearlyTarget() : null,
+    calendarPick: productId === "auspicious-date" ? selectedCalendarPick() : null,
+  };
   closeMemberModal();
   trackEvent("checkout_view", {
     productId,
@@ -2026,7 +2059,12 @@ function prepareCheckout(productId, profile, partner = null) {
   if (productEl) productEl.textContent = currentCheckout.targetYear ? `${product.name} · ${currentCheckout.targetYear}년` : product.name;
   if (priceEl) priceEl.textContent = product.price;
   if (amountEl) amountEl.textContent = product.amountLabel;
-  if (descEl) descEl.textContent = product.description;
+  if (descEl) {
+    const selection = currentCheckout.calendarPick;
+    descEl.textContent = selection
+      ? `${product.description} · ${selection.purpose} · ${selection.dates.join(", ")}`
+      : product.description;
+  }
   if (profileEl) {
     const renderOne = (p) => `
       <span class="avatar" style="background:${colorForText(p.name)}">${escapeHtml(profileInitial(p.name))}</span>
@@ -2158,6 +2196,7 @@ document.querySelector("[data-checkout-free]")?.addEventListener("click", () => 
     paymentStatus: "무료",
     partner: currentCheckout.partner || null,
     targetYear: currentCheckout.targetYear || null,
+    calendarPick: currentCheckout.calendarPick || null,
   });
 });
 
@@ -2275,6 +2314,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           profile: context.profile || null,
           partner: context.partner || null,
           targetYear: context.targetYear || null,
+          calendarPick: context.calendarPick || null,
           orderId: order.orderId,
           orderName: order.orderName,
           amount: order.amount,
@@ -2322,6 +2362,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           paymentStatus: "포인트 결제 완료",
           partner: purchase.partner || null,
           targetYear: purchase.targetYear || null,
+          calendarPick: purchase.calendarPick || null,
         });
       }
       return;
@@ -2854,7 +2895,9 @@ function startAnalysis(productId, profile, meta = {}) {
     profileName: profile.name,
     orderId: meta.orderId || null,
   });
-  window.clearInterval(activeAnalysisTimer);
+  window.clearTimeout(activeAnalysisTimer);
+  window.clearTimeout(analysisLoadingHideTimer);
+  analysisLoadingHideTimer = null;
   paymentReturn = Boolean(meta.paymentReturn);
   showView("analysis");
 
@@ -2878,11 +2921,34 @@ function startAnalysis(productId, profile, meta = {}) {
   document.querySelector("[data-analysis-kicker]").textContent = product.category;
   document.querySelector("[data-analysis-manse]").innerHTML = "";
   setProgress(5);
-  if (message) message.textContent = "분석 요청을 확인하는 중입니다...";
+  if (message) message.textContent = "만세력과 리포트 구성을 준비하는 중입니다...";
+
+  let planProgressTicks = 0;
+  let planProgressTimer = window.setInterval(() => {
+    planProgressTicks += 1;
+    setProgress(window.AnalysisStream.progressForPlanWait(planProgressTicks));
+  }, 1000);
 
   const finishLoading = () => {
-    window.clearInterval(activeAnalysisTimer);
+    window.clearTimeout(activeAnalysisTimer);
     activeAnalysisTimer = null;
+    window.clearInterval(planProgressTimer);
+    planProgressTimer = null;
+  };
+
+  const hideAnalysisLoading = () => {
+    if (loading) loading.hidden = true;
+    if (scrollHint) scrollHint.hidden = true;
+  };
+
+  const completeAnalysisLoading = (finalMessage = "리포트 생성을 완료했습니다.") => {
+    setProgress(100);
+    if (message) message.textContent = finalMessage;
+    window.clearTimeout(analysisLoadingHideTimer);
+    analysisLoadingHideTimer = window.setTimeout(() => {
+      hideAnalysisLoading();
+      analysisLoadingHideTimer = null;
+    }, 300);
   };
 
   const complete = () =>
@@ -2942,14 +3008,10 @@ function startAnalysis(productId, profile, meta = {}) {
     if (event === "complete") {
       if (!analysisDraft) throw new Error("리포트 설계 결과를 받지 못했습니다.");
       streamCompleted = true;
-      setProgress(100);
-      if (message) message.textContent = "리포트 생성을 완료했습니다.";
       analysisDraft = window.ReportRecovery.finish(analysisDraft);
       saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
       finishLoading();
-      if (loading) loading.hidden = true;
-      const hint = document.querySelector("[data-scroll-hint]");
-      if (hint) hint.hidden = true;
+      completeAnalysisLoading();
       complete();
       paymentReturn = false;
     }
@@ -2970,6 +3032,7 @@ function startAnalysis(productId, profile, meta = {}) {
       orderId: meta.orderId || null,
       visitorId: visitorId(),
       targetYear: meta.targetYear || null,
+      calendarPick: meta.calendarPick || null,
       stream: false,
     }),
   })
@@ -3008,9 +3071,6 @@ function startAnalysis(productId, profile, meta = {}) {
         });
         saveAnalysisDraft(analysisDraft, { reportStatus: "generating" });
         renderAnalysisResult(productId, profile, partner, data); // 제목 placeholder 표시
-        if (loading) loading.hidden = true;
-        const hint = document.querySelector("[data-scroll-hint]");
-        if (hint) hint.hidden = true;
 
         const allTitles = data.sections.map((s) => s.title);
         const sections = analysisDraft.analysis.sections.map((s) => ({ ...s }));
@@ -3071,11 +3131,11 @@ function startAnalysis(productId, profile, meta = {}) {
         if (sectionFailures > 0) {
           analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", "일부 리포트 생성이 완료되지 않았습니다.");
           saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: analysisDraft.generationError });
+          completeAnalysisLoading("리포트 작성을 마쳤습니다. 실패한 해설은 다시 생성할 수 있습니다.");
         } else {
-          setProgress(100);
-          if (message) message.textContent = "리포트 생성을 완료했습니다.";
           analysisDraft = window.ReportRecovery.finish(analysisDraft);
           saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
+          completeAnalysisLoading();
           complete();
         }
         paymentReturn = false;
@@ -3084,9 +3144,6 @@ function startAnalysis(productId, profile, meta = {}) {
 
       // ── 기존 1샷(궁합·대운 등 / 폴백): 섹션에 body 포함 ──
       renderAnalysisResult(productId, profile, partner, data);
-      if (loading) loading.hidden = true;
-      const hint = document.querySelector("[data-scroll-hint]");
-      if (hint) hint.hidden = true;
       analysisDraft = createAnalysisDraft({
         productId,
         product,
@@ -3098,6 +3155,7 @@ function startAnalysis(productId, profile, meta = {}) {
       });
       analysisDraft = window.ReportRecovery.finish(analysisDraft);
       saveAnalysisDraft(analysisDraft, { reportStatus: "complete", reportError: null });
+      completeAnalysisLoading();
       complete();
       paymentReturn = false;
     })
@@ -3338,6 +3396,7 @@ async function confirmReturnedPayment() {
           paymentStatus: "결제 완료",
           partner: purchase.partner || null,
           targetYear: purchase.targetYear || null,
+          calendarPick: purchase.calendarPick || null,
           paymentReturn: true,
         });
       };
@@ -3478,7 +3537,7 @@ function bindCalendar() {
       "saju_lab_calendar_pick",
       JSON.stringify({ purpose: calendarState.purpose, dates: [...calendarState.picked].sort() }),
     );
-    openMemberModal("saju-analysis");
+    openMemberModal("auspicious-date");
   });
 }
 

@@ -19,14 +19,29 @@ const PRODUCT_NAMES = {
   compatibility: "관계 궁합 분석",
   cycle: "대운의 흐름",
   "yearly-fortune": "연도별 운세",
+  "auspicious-date": "목적별 택일 리포트",
   "daily-fortune": "오늘의 무료운세",
 };
+
+export function normalizeCalendarPick(value) {
+  const purpose = String(value?.purpose || "").trim().slice(0, 40);
+  const dates = Array.isArray(value?.dates)
+    ? [...new Set(value.dates.map(String))]
+        .filter((date) => {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+          const parsed = new Date(`${date}T00:00:00Z`);
+          return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+        })
+        .sort()
+    : [];
+  return purpose && dates.length >= 2 && dates.length <= 10 ? { purpose, dates } : null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
-    const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false, targetYear = null } = await readJson(req);
+    const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false, targetYear = null, calendarPick = null } = await readJson(req);
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -37,6 +52,10 @@ export default async function handler(req, res) {
 
     const productName = PRODUCT_NAMES[productId] || PRODUCT_NAMES["saju-analysis"];
     const normalizedTargetYear = Number.isInteger(Number(targetYear)) ? Number(targetYear) : null;
+    const normalizedCalendarPick = normalizeCalendarPick(calendarPick);
+    if (productId === "auspicious-date" && !normalizedCalendarPick) {
+      return sendJson(res, 400, { message: "택일 목적과 후보 날짜를 2~10개 선택해주세요." });
+    }
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침(코드 base 위에 append)
     const model = config?.ai_model || undefined;
@@ -85,6 +104,7 @@ export default async function handler(req, res) {
           extra,
           model,
           targetYear: normalizedTargetYear,
+          calendarPick: normalizedCalendarPick,
         }, {
           emit: (event, payload) => sendSse(res, event, payload),
           computeManse,
@@ -152,8 +172,8 @@ export default async function handler(req, res) {
     }
 
     // 2') 단일 인물 2단계 상품(기본 사주·대운·연도운): '설계'만 빠르게. 본문은 /api/saju/section 병렬.
-    if (productId === "saju-analysis" || productId === "cycle" || productId === "yearly-fortune") {
-      const plan = await generatePlan({ productId, productName, extra, profile, manse, model, targetYear: normalizedTargetYear });
+    if (productId === "saju-analysis" || productId === "cycle" || productId === "yearly-fortune" || productId === "auspicious-date") {
+      const plan = await generatePlan({ productId, productName, extra, profile, manse, model, targetYear: normalizedTargetYear, calendarPick: normalizedCalendarPick });
       sbInsert({
         product_id: productId,
         profile_name: profile.name,

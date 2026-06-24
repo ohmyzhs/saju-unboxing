@@ -55,6 +55,11 @@
     return Math.min(95, Math.round(40 + (55 * Math.min(count, size)) / size));
   }
 
+  function progressForPlanWait(ticks) {
+    const count = Math.max(0, Number(ticks) || 0);
+    return Math.min(35, Math.round(5 + count * 3));
+  }
+
   async function consume(response, onEvent) {
     const contentType = response.headers?.get?.("content-type") || "";
     if (!response.ok || !contentType.includes("text/event-stream")) {
@@ -80,5 +85,5 @@
     parser.end();
   }
 
-  root.AnalysisStream = { createParser, consume, progressForSections };
+  root.AnalysisStream = { createParser, consume, progressForPlanWait, progressForSections };
 })(typeof window !== "undefined" ? window : globalThis);

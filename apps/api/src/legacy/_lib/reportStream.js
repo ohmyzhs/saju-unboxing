@@ -78,6 +78,7 @@ export async function runReportStream(options, dependencies) {
     extra,
     model,
     targetYear,
+    calendarPick,
   } = options;
   let stage = "started";
   const heartbeat = heartbeatMs > 0
@@ -104,6 +105,7 @@ export async function runReportStream(options, dependencies) {
       manseB,
       model,
       targetYear,
+      calendarPick,
     });
     const data = planPayload({ productId, plan, manse, manseB });
     stage = "plan_ready";

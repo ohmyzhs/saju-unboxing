@@ -399,10 +399,20 @@ function luckyFromContext(manseContext, w) {
 }
 
 // 제품별 컨텍스트 빌더 선택(단일 인물 상품)
-function contextFor(productId, manse, targetYear = null) {
+function contextFor(productId, manse, targetYear = null, calendarPick = null) {
   if (productId === "cycle") return buildCycleContext(manse);
   if (productId === "yearly-fortune") return buildYearlyContext(manse, targetYear);
-  return buildSajuContext(manse);
+  const context = buildSajuContext(manse);
+  if (productId === "auspicious-date" && calendarPick) {
+    return {
+      ...context,
+      택일요청: {
+        목적: calendarPick.purpose,
+        후보날짜: calendarPick.dates,
+      },
+    };
+  }
+  return context;
 }
 
 const PLAN_PRODUCT_FOCUS = {
@@ -410,6 +420,7 @@ const PLAN_PRODUCT_FOCUS = {
   compatibility: "두 사람의 끌림, 잘 맞는 결, 충돌, 대화법, 생활 호흡, 오래 가는 방법을 6~8개 섹션과 점수로 설계한다.",
   cycle: "지나온 흐름과 앞으로의 10년 단위 전환점, 준비 구간, 기회와 주의점을 7~10개 섹션으로 설계한다.",
   "yearly-fortune": "선택한 한 해의 총운과 계절·월별 흐름, 조심할 때와 행동 방향을 7~10개 섹션으로 설계한다.",
+  "auspicious-date": "선택한 목적에 맞춰 후보 날짜를 서로 비교하고, 추천 순위와 날짜별 장단점, 실행 시간대와 준비 기준을 7~10개 섹션으로 설계한다.",
 };
 
 const FALLBACK_PLAN_SECTIONS = Object.freeze({
@@ -439,6 +450,15 @@ const FALLBACK_PLAN_SECTIONS = Object.freeze({
     ["💼", "일과 재물의 현실적인 흐름", "성과와 지출을 다루는 기준"],
     ["💞", "관계의 온도를 맞추는 시기", "가까운 관계에서 필요한 소통"],
     ["🧭", "올해를 남기는 마무리", "하반기 정리와 다음 해 준비"],
+  ],
+  "auspicious-date": [
+    ["🏆", "후보 날짜 추천 순위", "선택한 목적에 가장 잘 맞는 날짜부터 비교"],
+    ["📅", "첫 번째 추천일 활용법", "가장 유리한 날짜의 강점과 실행 기준"],
+    ["🥈", "두 번째 추천일 활용법", "차선 날짜가 더 적합해지는 조건"],
+    ["⚖️", "후보별 장점과 부담", "각 날짜의 기회와 주의 요소 비교"],
+    ["⏰", "당일 움직이기 좋은 시간", "일정을 시작하고 마무리할 시간대 기준"],
+    ["🧰", "미리 준비할 체크리스트", "선택한 목적을 살리는 사전 준비"],
+    ["🧭", "최종 선택 기준", "현실 조건까지 반영해 날짜를 확정하는 방법"],
   ],
   compatibility: [
     ["💞", "두 사람이 끌리는 이유", "서로에게 자연스럽게 매력을 느끼는 지점"],
@@ -477,7 +497,7 @@ function fallbackPlan({ productId, profile, partner, context }) {
   };
 }
 
-export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner, targetYear = null }) {
+export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner, targetYear = null, calendarPick = null }) {
   const isCompat = productId === "compatibility";
   const subject = isCompat
     ? `"${profile.name}"님과 "${partner?.name || "상대"}"님의 관계`
@@ -491,12 +511,15 @@ export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, p
   const yearlyTarget = productId === "yearly-fortune" && targetYear
     ? `\n- 대상 연도: ${targetYear}년. 다른 해를 모두 해설하지 말고 이 한 해의 총운·계절·월별 흐름에만 집중한다.`
     : "";
+  const auspiciousTarget = productId === "auspicious-date" && calendarPick
+    ? `\n- 택일 목적: ${calendarPick.purpose}\n- 후보 날짜: ${calendarPick.dates.join(", ")}\n- 후보 날짜 밖의 날짜를 새로 추천하지 말고, 주어진 후보끼리만 비교해 명확한 순위를 정한다.`
+    : "";
 
   return `너는 사람의 마음과 삶을 따뜻하고 구체적인 일상 언어로 읽는 명리 상담가다.
 [이번 작업 — 리포트 설계만]
 - 대상: ${subject}
 - ${PLAN_PRODUCT_FOCUS[productId] || PLAN_PRODUCT_FOCUS["saju-analysis"]}
-- 선택 범위: ${productId === "yearly-fortune" ? "선택한 한 해" : "상품 초점에 맞는 기간"}
+- 선택 범위: ${productId === "yearly-fortune" ? "선택한 한 해" : productId === "auspicious-date" ? "선택한 후보 날짜" : "상품 초점에 맞는 기간"}
 - ${output}
 - 주어진 만세력 데이터에만 근거하고, 누구에게나 맞는 칭찬이나 막연한 일반론을 피한다.
 - 한자와 사주 전문용어를 headline·title·angle·lucky의 화면 문구에 쓰지 않는다. 분석 근거는 쉬운 사람 이야기로 번역한다.
@@ -504,24 +527,24 @@ export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, p
 - 같은 종결어미와 '~한 사람' 결말을 반복하지 않는다. 관계의 온도·거리, '돈은~', '지금은~', 이름+사용법 같은 상투 제목을 쓰지 않는다.
 - 각 angle은 해당 만세력에서만 나오는 구체적인 긴장·강점·삶의 장면을 한 줄로 적고 다른 섹션과 중복하지 않는다.
 - 재난·질병·이혼·파산·투자 결과를 단정하거나 공포를 조장하지 않는다. 약점은 관리 방향과 강점의 이면까지 제시한다.
-- 한국어 존댓말로 자연스럽게 쓰고, 본문(body)은 절대 작성하지 않는다.${yearlyTarget}${custom}`;
+- 한국어 존댓말로 자연스럽게 쓰고, 본문(body)은 절대 작성하지 않는다.${yearlyTarget}${auspiciousTarget}${custom}`;
 }
 
 /**
  * 1단계 — 설계(제품별). 단일 인물(사주/대운/연도운)은 {headline,sections,lucky}, 궁합은 {headline,score,scoreLabel,hashtags,sections}.
  * @returns {Promise<object>} 공통으로 { sections:[{id,icon,title,angle}], context } 포함
  */
-export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model, targetYear = null }, dependencies = {}) {
+export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model, targetYear = null, calendarPick = null }, dependencies = {}) {
   const isCompat = productId === "compatibility";
   const partnerName = partner?.name || "상대";
 
   const context = isCompat
     ? buildCompatContext(manse, manseB, profile.name, partnerName)
     : manse && (manse.summary || manse.full)
-      ? contextFor(productId, manse, targetYear)
+      ? contextFor(productId, manse, targetYear, calendarPick)
       : manse;
 
-  const instructions = buildPlanPrompt({ productId, extra, profile, partner, targetYear: context?.대상연도 || targetYear });
+  const instructions = buildPlanPrompt({ productId, extra, profile, partner, targetYear: context?.대상연도 || targetYear, calendarPick });
 
   const input = JSON.stringify(
     isCompat
@@ -588,6 +611,7 @@ const SECTION_PRODUCT_FOCUS = {
   compatibility: "두 사람의 끌림·충돌·대화·생활 호흡과 오래 가는 방법을 균형 있게 다루며 어느 한쪽도 깎아내리지 않는다.",
   cycle: "10년 단위 흐름의 전환점·준비 구간·기회·주의점을 현재 삶의 선택과 연결한다.",
   "yearly-fortune": "선택한 한 해의 전체 흐름과 계절·월별 타이밍, 조심할 때와 행동 조언을 구체적으로 연결한다.",
+  "auspicious-date": "택일요청의 목적과 후보 날짜만 비교해 추천 순위, 날짜별 장단점, 실행 시간대와 준비 기준을 구체적으로 연결한다.",
 };
 
 export function buildSectionPrompt({ productId = "saju-analysis", extra, profile, partner, sections, otherTitles = [] }) {
