@@ -21,6 +21,14 @@ test("챗봇 스트림 모듈은 앱보다 먼저 로드된다", () => {
   assert.ok(html.indexOf("chat-stream.js") < html.indexOf("app.js"));
 });
 
+test("챗봇 Markdown 렌더러는 앱보다 먼저 로드되고 assistant 응답에만 사용된다", () => {
+  assert.ok(html.indexOf("chat-markdown.js") >= 0);
+  assert.ok(html.indexOf("chat-markdown.js") < html.indexOf("app.js"));
+  assert.match(app, /renderChatAssistantContent/);
+  assert.match(app, /ChatMarkdown\.render/);
+  assert.match(css, /\.chat-markdown/);
+});
+
 test("챗봇 UI는 상품·대화방·질문 API와 결제 완료 복귀를 연결한다", () => {
   assert.match(app, /\/api\/chat\/catalog/);
   assert.match(app, /\/api\/chat\/sessions/);

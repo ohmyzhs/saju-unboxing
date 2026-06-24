@@ -3553,6 +3553,11 @@ function chatRunStatusLabel(status) {
           : "";
 }
 
+function renderChatAssistantContent(content) {
+  if (window.ChatMarkdown?.render) return window.ChatMarkdown.render(content || "");
+  return escapeHtml(content || "").replace(/\n/g, "<br />");
+}
+
 function activeChatRun() {
   const runs = chatState.detail?.runs || [];
   return [...runs].reverse().find((run) => run.status === "queued" || run.status === "running") || null;
@@ -3675,7 +3680,7 @@ function renderChatState() {
             : assistant?.content || (pending ? "답변을 준비하고 있어요" : "");
           return `<article class="chat-turn" data-chat-turn="${escapeHtml(turn.id)}">
             ${user ? `<div class="chat-bubble is-user">${escapeHtml(user.content || "").replace(/\n/g, "<br />")}</div>` : ""}
-            ${assistant ? `<div class="chat-bubble is-assistant${pending ? " is-pending" : ""}${failed ? " is-error" : ""}">${escapeHtml(answer).replace(/\n/g, "<br />")}</div>` : ""}
+            ${assistant ? `<div class="chat-bubble is-assistant${pending ? " is-pending" : ""}${failed ? " is-error" : ""}">${renderChatAssistantContent(answer)}</div>` : ""}
           </article>`;
         }).join("")
       : `<p class="chat-empty-message">이 리포트에 대해 궁금한 점을 물어보세요.<br />외부 정보 없이 선택한 리포트만 근거로 답합니다.</p>`;
