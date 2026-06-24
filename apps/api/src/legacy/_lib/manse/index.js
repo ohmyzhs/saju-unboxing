@@ -105,6 +105,9 @@ export function computeManseLocal(profile, today = new Date()) {
     daeun: luck.daeun.map(hLuck),
     nyunun: luck.nyunun.map(hLuck),
     wolun: luck.wolun.map(hLuck),
+    wolunByYear: Object.fromEntries(
+      Object.entries(luck.wolunByYear || {}).map(([year, rows]) => [year, rows.map(hLuck)]),
+    ),
   };
 
   return {

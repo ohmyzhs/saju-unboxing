@@ -31,6 +31,7 @@ function planPayload({ productId, plan, manse, manseB }) {
     headline: plan.headline,
     sections: plan.sections,
     context: plan.context,
+    targetYear: plan.context?.대상연도 || null,
     summary: manse.summary,
     manse: manse.full,
     cost: (manse.cost || 0) + (manseB?.cost || 0),
@@ -76,6 +77,7 @@ export async function runReportStream(options, dependencies) {
     config,
     extra,
     model,
+    targetYear,
   } = options;
   let stage = "started";
   const heartbeat = heartbeatMs > 0
@@ -101,6 +103,7 @@ export async function runReportStream(options, dependencies) {
       manse,
       manseB,
       model,
+      targetYear,
     });
     const data = planPayload({ productId, plan, manse, manseB });
     stage = "plan_ready";

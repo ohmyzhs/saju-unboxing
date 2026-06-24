@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
-    const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false } = await readJson(req);
+    const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false, targetYear = null } = await readJson(req);
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     }
 
     const productName = PRODUCT_NAMES[productId] || PRODUCT_NAMES["saju-analysis"];
+    const normalizedTargetYear = Number.isInteger(Number(targetYear)) ? Number(targetYear) : null;
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침(코드 base 위에 append)
     const model = config?.ai_model || undefined;
@@ -83,6 +84,7 @@ export default async function handler(req, res) {
           config,
           extra,
           model,
+          targetYear: normalizedTargetYear,
         }, {
           emit: (event, payload) => sendSse(res, event, payload),
           computeManse,
@@ -151,7 +153,7 @@ export default async function handler(req, res) {
 
     // 2') 단일 인물 2단계 상품(기본 사주·대운·연도운): '설계'만 빠르게. 본문은 /api/saju/section 병렬.
     if (productId === "saju-analysis" || productId === "cycle" || productId === "yearly-fortune") {
-      const plan = await generatePlan({ productId, productName, extra, profile, manse, model });
+      const plan = await generatePlan({ productId, productName, extra, profile, manse, model, targetYear: normalizedTargetYear });
       sbInsert({
         product_id: productId,
         profile_name: profile.name,
@@ -171,6 +173,7 @@ export default async function handler(req, res) {
         sections: plan.sections,
         lucky: plan.lucky,
         context: plan.context,
+        targetYear: plan.context?.대상연도 || normalizedTargetYear || null,
         summary: manse.summary,
         manse: manse.full,
         cost: manse.cost,

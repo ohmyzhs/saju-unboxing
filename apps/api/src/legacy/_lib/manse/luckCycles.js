@@ -43,6 +43,19 @@ function attach(dayStem, stem, branch, personYearBranch) {
   };
 }
 
+function calcMonthlyLuck(dayStem, personYearBranch, targetYear) {
+  const yearStem = yearGanji(targetYear).stem;
+  const monStem = KO_STEMS.indexOf(TIGER_START[yearStem]);
+  const wolun = [];
+  const MONTH_BRANCH_ORDER = ["인", "묘", "진", "사", "오", "미", "신", "유", "술", "해", "자", "축"];
+  for (let i = 0; i < 12; i++) {
+    const stem = KO_STEMS[(monStem + i) % 10];
+    const branch = MONTH_BRANCH_ORDER[i];
+    wolun.push({ month: i + 1, ...attach(dayStem, stem, branch, personYearBranch) });
+  }
+  return wolun;
+}
+
 /**
  * 대운/세운/월운. chart=computeChart, birthYear, today(KST 기준 현재).
  */
@@ -74,16 +87,11 @@ export function calcLuckCycles(chart, birthYear, today = new Date()) {
     nyunun.push({ year: y, age: y - birthYear + 1, ...attach(dayStem, g.stem, g.branch, personYearBranch) });
   }
 
-  // 월운 — 올해 12개월(절기 기준 寅월=입춘~). 五虎遁으로 寅월 천간.
-  const yearStem = yearGanji(curYear).stem;
-  let monStem = KO_STEMS.indexOf(TIGER_START[yearStem]);
-  const wolun = [];
-  const MONTH_BRANCH_ORDER = ["인", "묘", "진", "사", "오", "미", "신", "유", "술", "해", "자", "축"];
-  for (let i = 0; i < 12; i++) {
-    const stem = KO_STEMS[(monStem + i) % 10];
-    const branch = MONTH_BRANCH_ORDER[i];
-    wolun.push({ month: i + 1, ...attach(dayStem, stem, branch, personYearBranch) });
-  }
+  // 월운 — 절기 기준 寅월=입춘~. 五虎遁으로 寅월 천간.
+  const wolun = calcMonthlyLuck(dayStem, personYearBranch, curYear);
+  const wolunByYear = Object.fromEntries(
+    nyunun.map(({ year }) => [year, calcMonthlyLuck(dayStem, personYearBranch, year)]),
+  );
 
   const thisYearG = yearGanji(curYear);
   return {
@@ -91,6 +99,7 @@ export function calcLuckCycles(chart, birthYear, today = new Date()) {
     currentDaeun: currentDaeun ? { age: currentDaeun.age, stemTenGod: currentDaeun.stemTenGod, branchTenGod: currentDaeun.branchTenGod } : null,
     nyunun,
     wolun,
+    wolunByYear,
     thisYear: { year: curYear, ganzhi: `${thisYearG.stem}${thisYearG.branch}`, age: koreanAge, samjae: samjaeOf(personYearBranch, thisYearG.branch) },
   };
 }

@@ -35,7 +35,8 @@ test("buildCycleContext — 대운 타임라인", () => {
 
 test("buildYearlyContext — 세운 + 올해월운", () => {
   const c = buildYearlyContext(manse);
-  assert.equal(c.세운.length, 10);
+  assert.equal(c.대상연도, 2026);
+  assert.equal(c.세운.length, 1);
   assert.equal(c.세운[0].간지, "丙午");
   assert.equal(c.올해월운.length, 12);
 });

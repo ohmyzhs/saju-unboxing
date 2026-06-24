@@ -264,11 +264,11 @@ export function buildCycleContext(manse) {
 }
 
 // ── 연도별 운세(세운+월운) ─────────────────────────────────────
-/** 다가오는 연운(세운) + 올해 월운. */
-export function buildYearlyContext(manse) {
+/** 선택한 한 해의 연운(세운) + 해당 연도 월운. */
+export function buildYearlyContext(manse, targetYear = null) {
   const base = buildSajuContext(manse);
   const full = (manse && manse.full) || {};
-  const yearly = (full.nyunun || []).map((y) => ({
+  const allYearly = (full.nyunun || []).map((y) => ({
     연도: y.year,
     나이: y.age,
     간지: `${y.stem}${y.branch}`,
@@ -278,7 +278,14 @@ export function buildYearlyContext(manse) {
     주요신살: Array.isArray(y.bojoShinsal) ? y.bojoShinsal : [],
     삼재: y.samjae || null,
   }));
-  const monthly = (full.wolun || []).map((m) => ({
+  const requestedYear = Number(targetYear);
+  const firstYear = allYearly[0]?.연도 || base.올해?.year || null;
+  const focusYear = Number.isInteger(requestedYear) && allYearly.some((y) => y.연도 === requestedYear)
+    ? requestedYear
+    : firstYear;
+  const yearly = focusYear ? allYearly.filter((y) => y.연도 === focusYear) : allYearly.slice(0, 1);
+  const monthlySource = full.wolunByYear?.[focusYear] || full.wolunByYear?.[String(focusYear)] || (focusYear === firstYear ? full.wolun : []);
+  const monthly = (monthlySource || []).map((m) => ({
     월: m.month,
     간지: `${m.stem}${m.branch}`,
     천간십성: m.stemTenGod,
@@ -292,7 +299,8 @@ export function buildYearlyContext(manse) {
     용신체계: base.용신체계,
     개운파생근거: base.개운파생근거,
     현재대운: base.대운.현재,
-    세운: yearly, // 다가오는 ~10년
-    올해월운: monthly, // 12개월
+    대상연도: focusYear,
+    세운: yearly, // 선택한 한 해
+    올해월운: monthly, // 선택 연도 12개월
   };
 }

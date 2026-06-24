@@ -11,6 +11,8 @@
   --gold: #ffc447;
   --lavender: #8c76ff;
   --shadow: 0 18px 48px rgba(29, 24, 16, 0.14);
+  --shell-max: 1180px;
+  --content-max: 980px;
 }
 
 /* 포인트 충전·결제 */
@@ -127,7 +129,7 @@ button {
 }
 
 .app-shell {
-  width: min(100%, 430px);
+  width: min(100%, var(--shell-max));
   min-height: 100vh;
   margin: 0 auto;
   overflow: hidden;
@@ -1804,7 +1806,7 @@ select {
   z-index: 30;
   left: 50%;
   bottom: 0;
-  width: min(100%, 430px);
+  width: min(100%, var(--shell-max));
   transform: translateX(-50%);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -2851,6 +2853,41 @@ select {
 @keyframes section-dot {
   0%, 100% { opacity: 0.25; transform: translateY(0); }
   50% { opacity: 0.9; transform: translateY(-3px); }
+}
+
+.section-error {
+  margin: 0 16px 18px 52px;
+  padding: 14px;
+  border: 1px solid rgba(255, 82, 130, 0.28);
+  border-radius: 14px;
+  background: #fff4f7;
+}
+.report-section .section-error p {
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--ink);
+  font-weight: 850;
+  line-height: 1.5;
+}
+.section-error small {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.section-retry-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.section-retry-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 /* 해설 리드 한 줄 */
@@ -5826,4 +5863,127 @@ select {
 }
 .import-guest .primary-action {
   width: 100%;
+}
+
+/* ---------- Responsive shell for foldables/tablets ---------- */
+.wide-content {
+  width: calc(100% - 32px);
+  max-width: var(--content-max);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+@media (min-width: 760px) {
+  .app-shell {
+    min-height: 100dvh;
+  }
+
+  .topbar {
+    padding-inline: clamp(18px, 3vw, 34px);
+  }
+
+  .bottom-nav {
+    left: 50%;
+  }
+
+  .banner-carousel {
+    height: clamp(320px, 34vw, 420px);
+  }
+
+  .banner-copy {
+    width: min(44%, 430px);
+    left: clamp(28px, 5vw, 68px);
+  }
+
+  .banner-copy-right {
+    right: clamp(28px, 5vw, 68px);
+  }
+
+  .product-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .product-card,
+  .product-card:nth-child(2n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .product-card-wide {
+    grid-column: span 2;
+  }
+
+  .home-story,
+  .checkout-panel,
+  .checkout-actions,
+  .orders-list,
+  .people-list,
+  .archive-list,
+  .library-filters,
+  .point-tier-grid,
+  .point-history,
+  .points-balance-card,
+  .report-view > .year-panel,
+  .report-view > .primary-action,
+  .support-card,
+  .calendar-panel,
+  .fortune-card,
+  .daily-card,
+  .followup-panel {
+    width: calc(100% - 32px);
+    max-width: var(--content-max);
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .orders-list,
+  .archive-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    align-items: start;
+  }
+
+  .archive-card[data-archive-id] {
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    justify-self: center;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+
+  .checkout-view,
+  .pay-view,
+  .payment-view,
+  .people-view,
+  .orders-view,
+  .points-view,
+  .support-view,
+  .library-view,
+  .report-view,
+  .calendar-view,
+  .fortune-view,
+  .daily-view,
+  .followup-view {
+    padding-inline: clamp(0px, 1.5vw, 16px);
+  }
+
+  .chat-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.82fr);
+    align-items: start;
+    max-width: var(--content-max);
+    margin-inline: auto;
+  }
+
+  .chat-credit-card,
+  .chat-report-panel {
+    grid-column: 1;
+  }
+
+  .chat-products-panel,
+  .chat-history-panel {
+    grid-column: 2;
+  }
+
+  .chat-conversation {
+    grid-column: 1 / -1;
+  }
 }

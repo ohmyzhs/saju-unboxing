@@ -399,9 +399,9 @@ function luckyFromContext(manseContext, w) {
 }
 
 // 제품별 컨텍스트 빌더 선택(단일 인물 상품)
-function contextFor(productId, manse) {
+function contextFor(productId, manse, targetYear = null) {
   if (productId === "cycle") return buildCycleContext(manse);
-  if (productId === "yearly-fortune") return buildYearlyContext(manse);
+  if (productId === "yearly-fortune") return buildYearlyContext(manse, targetYear);
   return buildSajuContext(manse);
 }
 
@@ -409,7 +409,7 @@ const PLAN_PRODUCT_FOCUS = {
   "saju-analysis": "타고난 기질, 강점과 그림자, 일과 재물, 관계, 현재 흐름, 이 사람에게 맞는 생활 보완법을 7~10개 섹션으로 설계한다.",
   compatibility: "두 사람의 끌림, 잘 맞는 결, 충돌, 대화법, 생활 호흡, 오래 가는 방법을 6~8개 섹션과 점수로 설계한다.",
   cycle: "지나온 흐름과 앞으로의 10년 단위 전환점, 준비 구간, 기회와 주의점을 7~10개 섹션으로 설계한다.",
-  "yearly-fortune": "해당 연도의 총운과 계절·월별 흐름, 조심할 때와 행동 방향을 7~10개 섹션으로 설계한다.",
+  "yearly-fortune": "선택한 한 해의 총운과 계절·월별 흐름, 조심할 때와 행동 방향을 7~10개 섹션으로 설계한다.",
 };
 
 const FALLBACK_PLAN_SECTIONS = Object.freeze({
@@ -477,7 +477,7 @@ function fallbackPlan({ productId, profile, partner, context }) {
   };
 }
 
-export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner }) {
+export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, partner, targetYear = null }) {
   const isCompat = productId === "compatibility";
   const subject = isCompat
     ? `"${profile.name}"님과 "${partner?.name || "상대"}"님의 관계`
@@ -488,11 +488,15 @@ export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, p
   const custom = extra && String(extra).trim()
     ? `\n[관리자 추가 지침]\n${String(extra).trim()}`
     : "";
+  const yearlyTarget = productId === "yearly-fortune" && targetYear
+    ? `\n- 대상 연도: ${targetYear}년. 다른 해를 모두 해설하지 말고 이 한 해의 총운·계절·월별 흐름에만 집중한다.`
+    : "";
 
   return `너는 사람의 마음과 삶을 따뜻하고 구체적인 일상 언어로 읽는 명리 상담가다.
 [이번 작업 — 리포트 설계만]
 - 대상: ${subject}
 - ${PLAN_PRODUCT_FOCUS[productId] || PLAN_PRODUCT_FOCUS["saju-analysis"]}
+- 선택 범위: ${productId === "yearly-fortune" ? "선택한 한 해" : "상품 초점에 맞는 기간"}
 - ${output}
 - 주어진 만세력 데이터에만 근거하고, 누구에게나 맞는 칭찬이나 막연한 일반론을 피한다.
 - 한자와 사주 전문용어를 headline·title·angle·lucky의 화면 문구에 쓰지 않는다. 분석 근거는 쉬운 사람 이야기로 번역한다.
@@ -500,29 +504,29 @@ export function buildPlanPrompt({ productId = "saju-analysis", extra, profile, p
 - 같은 종결어미와 '~한 사람' 결말을 반복하지 않는다. 관계의 온도·거리, '돈은~', '지금은~', 이름+사용법 같은 상투 제목을 쓰지 않는다.
 - 각 angle은 해당 만세력에서만 나오는 구체적인 긴장·강점·삶의 장면을 한 줄로 적고 다른 섹션과 중복하지 않는다.
 - 재난·질병·이혼·파산·투자 결과를 단정하거나 공포를 조장하지 않는다. 약점은 관리 방향과 강점의 이면까지 제시한다.
-- 한국어 존댓말로 자연스럽게 쓰고, 본문(body)은 절대 작성하지 않는다.${custom}`;
+- 한국어 존댓말로 자연스럽게 쓰고, 본문(body)은 절대 작성하지 않는다.${yearlyTarget}${custom}`;
 }
 
 /**
  * 1단계 — 설계(제품별). 단일 인물(사주/대운/연도운)은 {headline,sections,lucky}, 궁합은 {headline,score,scoreLabel,hashtags,sections}.
  * @returns {Promise<object>} 공통으로 { sections:[{id,icon,title,angle}], context } 포함
  */
-export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model }, dependencies = {}) {
+export async function generatePlan({ productId = "saju-analysis", productName = "기본 사주 리포트", extra, profile, partner, manse, manseB, model, targetYear = null }, dependencies = {}) {
   const isCompat = productId === "compatibility";
   const partnerName = partner?.name || "상대";
 
   const context = isCompat
     ? buildCompatContext(manse, manseB, profile.name, partnerName)
     : manse && (manse.summary || manse.full)
-      ? contextFor(productId, manse)
+      ? contextFor(productId, manse, targetYear)
       : manse;
 
-  const instructions = buildPlanPrompt({ productId, extra, profile, partner });
+  const instructions = buildPlanPrompt({ productId, extra, profile, partner, targetYear: context?.대상연도 || targetYear });
 
   const input = JSON.stringify(
     isCompat
       ? { a: profile.name, b: partnerName, product: productName, manse: context }
-      : { name: profile.name, gender: profile.gender, birthDate: profile.birthDate, product: productName, manse: context },
+      : { name: profile.name, gender: profile.gender, birthDate: profile.birthDate, product: productName, targetYear: productId === "yearly-fortune" ? context?.대상연도 : undefined, manse: context },
   );
   const request = dependencies.requestStructured || requestStructured;
   let plan;
@@ -583,7 +587,7 @@ const SECTION_PRODUCT_FOCUS = {
   "saju-analysis": "이 사람의 구체적인 성향·강점·그림자·일·재물·관계·현재 흐름을 섹션 각도와 사주 데이터에 맞춰 풀고 막연한 칭찬을 피한다.",
   compatibility: "두 사람의 끌림·충돌·대화·생활 호흡과 오래 가는 방법을 균형 있게 다루며 어느 한쪽도 깎아내리지 않는다.",
   cycle: "10년 단위 흐름의 전환점·준비 구간·기회·주의점을 현재 삶의 선택과 연결한다.",
-  "yearly-fortune": "해당 연도의 전체 흐름과 계절·월별 타이밍, 조심할 때와 행동 조언을 구체적으로 연결한다.",
+  "yearly-fortune": "선택한 한 해의 전체 흐름과 계절·월별 타이밍, 조심할 때와 행동 조언을 구체적으로 연결한다.",
 };
 
 export function buildSectionPrompt({ productId = "saju-analysis", extra, profile, partner, sections, otherTitles = [] }) {

@@ -40,6 +40,8 @@ const ARCHIVE_RETENTION_MS = ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const PENDING_PURCHASE_KEY = "saju_lab_pending_purchase_v1";
 const VISITOR_KEY = "saju_lab_visitor_id_v1";
 const SESSION_KEY = "saju_lab_session_id_v1";
+const SESSION_REFRESH_INTERVAL_MS = 60 * 1000;
+const ACCOUNT_SYNC_STALE_MS = 90 * 1000;
 
 // ---------- Product catalog ----------
 const PRODUCTS = {
@@ -167,7 +169,11 @@ const BRANCH_COLOR = {
 let runtimeConfig = null;
 let lastReport = null; // 마지막으로 렌더된 리포트(공유용)
 let lastShareUrl = null; // 생성된 공유 URL 캐시(한 번만 생성)
+let activeAnalysisArchiveId = null;
 let runtimeSession = null;
+let lastSessionRefreshAt = 0;
+let sessionRefreshPromise = null;
+let pendingAuthNotice = null;
 let activeSlide = 0;
 let selectedProductId = "saju-analysis";
 let selectedProfileId = null;
@@ -316,6 +322,7 @@ function showView(nextView) {
   if (fab) fab.classList.remove("fab-hidden");
   closeMemberModal();
   closeMypage();
+  if (["library", "people", "orders", "points"].includes(nextView)) ensureAccountDataFresh(nextView);
   if (nextView === "library") renderArchive();
   if (nextView === "people") renderPeople();
   if (nextView === "orders") renderOrders();
@@ -344,6 +351,7 @@ let accountScopeId = "guest";
 // 계정 데이터가 서버에서 도착했는지 여부. 부팅/로그인 직후 잠깐 false →
 // 그동안 인원관리·결제내역·보관함은 "없음"이 아니라 "불러오는 중"을 보여준다.
 let accountDataReady = false;
+let accountDataLastSyncedAt = 0;
 function setAccountScope() {
   const uid = runtimeSession?.user?.id;
   accountScopeId = uid ? `u_${String(uid)}` : "guest";
@@ -385,6 +393,19 @@ function reloadAccountData() {
   const active = document.querySelector(".view.is-active")?.dataset.view;
   if (active === "people") renderPeople();
   if (active === "orders") renderOrders();
+  if (active === "points") renderPointsView();
+}
+
+function ensureAccountDataFresh(reason = "view") {
+  if (!runtimeSession?.user?.id) return;
+  if (!accountDataReady || Date.now() - accountDataLastSyncedAt < ACCOUNT_SYNC_STALE_MS) return;
+  accountDataReady = false;
+  const active = document.querySelector(".view.is-active")?.dataset.view;
+  if (active === "people") renderPeople();
+  if (active === "orders") renderOrders();
+  if (active === "library") renderArchive();
+  if (active === "points") renderPointsView();
+  syncAccountData({ reason });
 }
 // ── 계정 데이터 서버 동기화 — 로그인 시 Supabase가 진실, localStorage는 미러(캐시) ──
 function pushProfile(profile) {
@@ -449,7 +470,7 @@ async function syncKind({ resource, kind, baseKey, idField }) {
 }
 
 // 로그인 직후/부팅: 프로필·보관함·주문을 모두 서버와 동기화(기기 무관). 게스트는 로컬만.
-async function syncAccountData() {
+async function syncAccountData({ reason = "sync" } = {}) {
   try {
     if (!runtimeSession?.user?.id) return; // 게스트는 로컬만(서버 동기화 없음)
     // 3종(프로필·보관함·주문)을 병렬로 동기화 — 순차 왕복(콜드스타트 누적) 대신 한 번에.
@@ -464,6 +485,7 @@ async function syncAccountData() {
   } finally {
     // 게스트든 로그인이든 여기까지 오면 "데이터 도착" → 화면을 실제값으로 다시 그린다.
     accountDataReady = true;
+    accountDataLastSyncedAt = Date.now();
     renderProfileSelects();
     renderPrimaryProfileLabel();
     renderArchive();
@@ -653,6 +675,84 @@ async function getJson(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
 }
 
 // ---------- Auth session ----------
+function emptyPoints() {
+  return { enabled: false, balance: 0, regenTokens: 0, transactions: [] };
+}
+
+function guestSession() {
+  return { user: null, points: emptyPoints() };
+}
+
+function normalizeSession(session) {
+  return session?.user
+    ? { user: session.user, points: session.points || emptyPoints() }
+    : guestSession();
+}
+
+function consumeAuthNotice(session = runtimeSession) {
+  if (!pendingAuthNotice) return;
+  const notice = pendingAuthNotice;
+  pendingAuthNotice = null;
+  if (notice.result === "kakao-ok") {
+    const nickname = session?.user?.nickname;
+    if (nickname) showToast(`${nickname}님으로 로그인되었습니다.`);
+    else showToast("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.", true);
+    return;
+  }
+  const messages = {
+    "missing-kakao": "카카오 키가 설정되지 않았습니다 (KAKAO_REST_API_KEY).",
+    "state-error": "로그인 상태(state) 검증 실패 — 쿠키 문제일 수 있어요. 다시 시도해주세요.",
+    "error": "카카오 로그인 오류" + (notice.reason ? `: ${decodeURIComponent(notice.reason)}` : ""),
+  };
+  showToast(messages[notice.result] || `로그인 오류: ${notice.result}`, true);
+}
+
+function applyVerifiedSession(session, { forceSync = false, silent = false } = {}) {
+  const prevUserId = runtimeSession?.user?.id || null;
+  runtimeSession = normalizeSession(session);
+  const nextUserId = runtimeSession?.user?.id || null;
+  renderSession();
+
+  if (!nextUserId && !prevUserId) {
+    accountDataReady = true;
+    accountDataLastSyncedAt = Date.now();
+  }
+
+  if (prevUserId !== nextUserId) {
+    accountDataReady = !nextUserId;
+    accountDataLastSyncedAt = 0;
+    clearPendingPurchase();
+    currentCheckout = null;
+    reloadAccountData();
+    if (nextUserId) syncAccountData({ reason: "session-change" });
+    else if (prevUserId && !silent) showToast("로그인 세션이 만료되었습니다. 다시 로그인해주세요.", true);
+  } else if (nextUserId && (forceSync || Date.now() - accountDataLastSyncedAt >= ACCOUNT_SYNC_STALE_MS)) {
+    accountDataReady = false;
+    reloadAccountData();
+    syncAccountData({ reason: "session-refresh" });
+  }
+
+  consumeAuthNotice(runtimeSession);
+  return runtimeSession;
+}
+
+async function refreshAuthSession(reason = "manual", { force = false, silent = false } = {}) {
+  const now = Date.now();
+  if (sessionRefreshPromise) return sessionRefreshPromise;
+  if (!force && now - lastSessionRefreshAt < SESSION_REFRESH_INTERVAL_MS) return runtimeSession;
+  lastSessionRefreshAt = now;
+  sessionRefreshPromise = getJson("/api/session")
+    .then((session) => applyVerifiedSession(session, { forceSync: force, silent }))
+    .catch(() => {
+      consumeAuthNotice(runtimeSession);
+      return runtimeSession;
+    })
+    .finally(() => {
+      sessionRefreshPromise = null;
+    });
+  return sessionRefreshPromise;
+}
+
 // 첫 화면 깜빡임 방지: 직전 로그인 닉네임 캐시로 상단 칩을 미리 표시(곧 서버 응답으로 확정).
 function applyAuthHint() {
   let hint = null;
@@ -731,8 +831,7 @@ async function refreshPoints() {
   if (!runtimeSession?.user?.id) return;
   try {
     const session = await getJson("/api/session");
-    runtimeSession = session;
-    renderSession();
+    applyVerifiedSession(session, { silent: true });
     renderPointsView();
   } catch {
     // 잔액 갱신 실패는 현재 화면의 마지막 확인값을 유지한다.
@@ -754,13 +853,7 @@ async function emailAuth(action) {
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
-      runtimeSession = { user: body.user, points: body.points };
-      accountDataReady = false; // 새 계정 데이터 도착 전까지 "불러오는 중" 표시
-      clearPendingPurchase(); // 계정 전환 시 미완료 결제정보 제거(교차 누수 방지)
-      currentCheckout = null;
-      renderSession();
-      reloadAccountData(); // 로그인 계정 데이터로 전환(이전 사람 데이터 안 보이게)
-      syncAccountData(); // 게스트 입력 → 서버 이관 + 프로필·보관함·주문 동기화
+      applyVerifiedSession({ user: body.user, points: body.points }, { forceSync: true, silent: true });
       showToast(action === "signup" ? "가입 완료! 로그인되었어요." : "로그인되었습니다.");
     } else if (msg) {
       msg.textContent = body.message || "실패했습니다.";
@@ -974,6 +1067,7 @@ function openStoredAnalysis(item) {
   const partner = item.partnerId ? getProfiles().find((entry) => entry.id === item.partnerId) : null;
   window.clearInterval(activeAnalysisTimer);
   activeAnalysisTimer = null;
+  activeAnalysisArchiveId = item.id;
   showView("analysis");
   const loading = document.querySelector("[data-analysis-loading]");
   if (loading) loading.hidden = true;
@@ -997,6 +1091,7 @@ function retryOrderReport(orderId) {
     orderId,
     paymentStatus: "결제 완료",
     partner: purchase.partner || null,
+    targetYear: purchase.targetYear || null,
     retry: true,
   });
 }
@@ -1470,17 +1565,13 @@ function renderAuthNotice() {
   const authResult = params.get("auth");
   if (!authResult) return;
   const reason = params.get("reason");
+  pendingAuthNotice = { result: authResult, reason };
   history.replaceState(null, "", "/");
   if (authResult === "kakao-ok") {
-    showToast("카카오 로그인이 완료되었습니다.");
+    showToast("카카오 로그인 세션을 확인하는 중입니다.");
     return;
   }
-  const messages = {
-    "missing-kakao": "카카오 키가 설정되지 않았습니다 (KAKAO_REST_API_KEY).",
-    "state-error": "로그인 상태(state) 검증 실패 — 쿠키 문제일 수 있어요. 다시 시도해주세요.",
-    "error": "카카오 로그인 오류" + (reason ? `: ${decodeURIComponent(reason)}` : ""),
-  };
-  showToast(messages[authResult] || `로그인 오류: ${authResult}`, true);
+  consumeAuthNotice(runtimeSession);
 }
 
 // ---------- Product catalog rendering ----------
@@ -1916,11 +2007,12 @@ function closeMemberModal() {
 // ---------- Checkout ----------
 function prepareCheckout(productId, profile, partner = null) {
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
-  currentCheckout = { productId, product, profile, partner };
+  currentCheckout = { productId, product, profile, partner, targetYear: productId === "yearly-fortune" ? selectedYearlyTarget() : null };
   closeMemberModal();
   trackEvent("checkout_view", {
     productId,
     productName: product.name,
+    targetYear: currentCheckout.targetYear,
     profileId: profile.id,
     profileName: profile.name,
     amount: product.amount,
@@ -1931,7 +2023,7 @@ function prepareCheckout(productId, profile, partner = null) {
   const amountEl = document.querySelector("[data-checkout-amount]");
   const descEl = document.querySelector("[data-checkout-description]");
   const profileEl = document.querySelector("[data-checkout-profile]");
-  if (productEl) productEl.textContent = product.name;
+  if (productEl) productEl.textContent = currentCheckout.targetYear ? `${product.name} · ${currentCheckout.targetYear}년` : product.name;
   if (priceEl) priceEl.textContent = product.price;
   if (amountEl) amountEl.textContent = product.amountLabel;
   if (descEl) descEl.textContent = product.description;
@@ -2065,6 +2157,7 @@ document.querySelector("[data-checkout-free]")?.addEventListener("click", () => 
   startAnalysis(currentCheckout.productId, currentCheckout.profile, {
     paymentStatus: "무료",
     partner: currentCheckout.partner || null,
+    targetYear: currentCheckout.targetYear || null,
   });
 });
 
@@ -2181,6 +2274,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           product: context.product,
           profile: context.profile || null,
           partner: context.partner || null,
+          targetYear: context.targetYear || null,
           orderId: order.orderId,
           orderName: order.orderName,
           amount: order.amount,
@@ -2227,6 +2321,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           orderId: order.orderId,
           paymentStatus: "포인트 결제 완료",
           partner: purchase.partner || null,
+          targetYear: purchase.targetYear || null,
         });
       }
       return;
@@ -2477,10 +2572,18 @@ function renderAnalysisResult(productId, profile, partner = null, data = null) {
   const sectionsHtml = sections
     .map((section, index) => {
       const id = section.id || `s${index}`;
-      const hasBody = section.body && String(section.body).trim();
+      const placeholderBody = String(section.body || "").trim() === "이 부분은 잠시 후 다시 펼쳐 주세요.";
+      const hasBody = section.body && String(section.body).trim() && !placeholderBody;
+      const failed = placeholderBody || section.status === "failed" || section.error;
       const bodyHtml = hasBody
         ? renderParagraphs(section.body)
-        : `<div class="section-loading"><span></span><span></span><span></span></div>`;
+        : failed
+          ? `<div class="section-error">
+              <p>이 부분은 아직 완성되지 않았어요.</p>
+              <small>${escapeHtml(section.error || "섹션 생성에 실패했습니다.")}</small>
+              <button type="button" class="section-retry-button" data-section-retry="${escapeHtml(id)}">이 부분 다시 생성</button>
+            </div>`
+          : `<div class="section-loading"><span></span><span></span><span></span></div>`;
       return `
         <details class="report-section" data-section-id="${escapeHtml(id)}" ${index < 3 ? "open" : ""}>
           <summary><span>${escapeHtml(section.icon)}</span>${escapeHtml(section.title)}<i class="report-chevron" aria-hidden="true">›</i></summary>
@@ -2495,7 +2598,7 @@ function renderAnalysisResult(productId, profile, partner = null, data = null) {
   document.querySelector("[data-analysis-related]").hidden = false;
 
   // 공유: 현재 리포트 저장 + 공유 버튼 노출
-  lastReport = { productId, profileName: partner ? `${profile.name} × ${partner.name}` : profile.name, data, sections };
+  lastReport = { productId, profileName: partner ? `${profile.name} × ${partner.name}` : profile.name, data, sections, archiveId: activeAnalysisArchiveId };
   lastShareUrl = null;
   const shareStatus = document.querySelector("[data-share-status]");
   if (shareStatus) shareStatus.textContent = "";
@@ -2590,6 +2693,75 @@ function fillSectionBody(id, body) {
   if (host) host.innerHTML = renderParagraphs(body);
 }
 
+function fillSectionLoading(id) {
+  const host = document.querySelector(`[data-section-id="${id}"] .section-body`);
+  if (host) host.innerHTML = `<div class="section-loading"><span></span><span></span><span></span></div>`;
+}
+
+function fillSectionFailed(id, error) {
+  const host = document.querySelector(`[data-section-id="${id}"] .section-body`);
+  if (!host) return;
+  host.innerHTML = `
+    <div class="section-error">
+      <p>이 부분은 아직 완성되지 않았어요.</p>
+      <small>${escapeHtml(error || "섹션 생성에 실패했습니다.")}</small>
+      <button type="button" class="section-retry-button" data-section-retry="${escapeHtml(id)}">이 부분 다시 생성</button>
+    </div>`;
+}
+
+function refreshStoredAnalysis(item) {
+  const profile = getProfiles().find((entry) => entry.id === item.profileId);
+  if (!profile) return;
+  const partner = item.partnerId ? getProfiles().find((entry) => entry.id === item.partnerId) : null;
+  activeAnalysisArchiveId = item.id;
+  renderAnalysisResult(item.productId, profile, partner, item.analysis || null);
+}
+
+async function retryReportSection(sectionId, trigger = null) {
+  const archiveId = lastReport?.archiveId || activeAnalysisArchiveId;
+  const item = getArchive().find((entry) => entry.id === archiveId);
+  if (!item) return showToast("보관함 리포트를 찾을 수 없습니다.", true);
+
+  const profile = getProfiles().find((entry) => entry.id === item.profileId);
+  if (!profile) return showToast("분석 대상 프로필을 찾을 수 없습니다.", true);
+  const partner = item.partnerId ? getProfiles().find((entry) => entry.id === item.partnerId) : null;
+  const sections = item.analysis?.sections || [];
+  const section = sections.find((entry) => String(entry.id) === String(sectionId));
+  const context = item.analysis?.context;
+  if (!section || !context) return showToast("이전 생성 정보를 찾을 수 없어 이 부분만 다시 만들 수 없습니다.", true);
+
+  if (trigger) trigger.disabled = true;
+  fillSectionLoading(sectionId);
+  try {
+    const allTitles = sections.map((entry) => entry.title).filter(Boolean);
+    const response = await getJson("/api/saju/section", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId: item.productId, profile, partner, context, section, otherTitles: allTitles }),
+    }, 45000);
+    const updated = updateArchiveItem(item.id, (draft) => {
+      const next = window.ReportRecovery.mergeSection(draft, sectionId, response.body || "");
+      const hasFailed = (next.analysis?.sections || []).some((entry) => entry.status === "failed" || !String(entry.body || "").trim());
+      return window.ReportRecovery.finish(next, hasFailed ? "failed" : "complete", hasFailed ? "일부 리포트 생성이 완료되지 않았습니다." : null);
+    });
+    if (updated) refreshStoredAnalysis(updated);
+    showToast("해당 섹션을 다시 생성했습니다.");
+  } catch (error) {
+    fillSectionFailed(sectionId, error.message);
+    const updated = updateArchiveItem(item.id, (draft) =>
+      window.ReportRecovery.finish(window.ReportRecovery.markSectionFailed(draft, sectionId, error.message), "failed", error.message),
+    );
+    if (updated) refreshStoredAnalysis(updated);
+  } finally {
+    if (trigger) trigger.disabled = false;
+  }
+}
+
+document.querySelector("[data-analysis-sections]")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-section-retry]");
+  if (button) retryReportSection(button.dataset.sectionRetry, button);
+});
+
 // 대운 타임라인 — 나이 마디만 보여주는 띠(용어 노출 X), 현재 구간 강조
 function cycleTimelineHtml(ctx) {
   const items = ctx && ctx.대운타임라인;
@@ -2607,11 +2779,17 @@ function cycleTimelineHtml(ctx) {
 function yearlyStripHtml(ctx) {
   const ys = ctx && ctx.세운;
   if (!Array.isArray(ys) || !ys.length) return "";
+  const targetYear = Number(ctx?.대상연도 || ys[0]?.연도);
+  const currentYear = new Date().getFullYear();
   const cards = ys
     .slice(0, 8)
-    .map((y, i) => `<div class="yr-card${i === 0 ? " is-now" : ""}"><b>${escapeHtml(String(y.연도))}</b><small>${Number(y.나이)}세${i === 0 ? " · 올해" : ""}</small></div>`)
+    .map((y) => {
+      const year = Number(y.연도);
+      const suffix = year === currentYear ? " · 올해" : year === targetYear ? " · 선택 연도" : "";
+      return `<div class="yr-card is-now"><b>${escapeHtml(String(y.연도))}</b><small>${Number(y.나이)}세${suffix}</small></div>`;
+    })
     .join("");
-  return `<div class="report-timeline"><h3>다가오는 해</h3><div class="yr-track">${cards}</div></div>`;
+  return `<div class="report-timeline"><h3>${targetYear ? `${targetYear}년 운세 기준` : "연도별 운세 기준"}</h3><div class="yr-track">${cards}</div></div>`;
 }
 
 // 궁합 점수 카드 — 점수 게이지 + 한 줄 라벨 + 해시태그(재미 요소)
@@ -2641,14 +2819,14 @@ function createAnalysisDraft({ productId, product, profile, partner, orderId, pa
     paymentStatus: paymentStatus || "결제 완료",
     data: {
       ...data,
-      context: productId === "cycle" || productId === "yearly-fortune"
-        ? { 대운타임라인: data.context?.대운타임라인, 현재대운: data.context?.현재대운, 세운: data.context?.세운 }
-        : undefined,
+      context: data.context || undefined,
+      targetYear: data.targetYear || data.context?.대상연도 || undefined,
     },
   });
 }
 
 function saveAnalysisDraft(draft, { reportStatus = draft.generationStatus, reportError = draft.generationError } = {}) {
+  activeAnalysisArchiveId = draft.id;
   saveArchive(draft, { sync: false });
   analysisDraftSync = analysisDraftSync
     .then(() => pushUserData("archive", draft))
@@ -2791,6 +2969,7 @@ function startAnalysis(productId, profile, meta = {}) {
       partner,
       orderId: meta.orderId || null,
       visitorId: visitorId(),
+      targetYear: meta.targetYear || null,
       stream: false,
     }),
   })
@@ -2858,9 +3037,8 @@ function startAnalysis(productId, profile, meta = {}) {
             })
             .catch((error) => {
               sectionFailures += 1;
-              s.body = "이 부분은 잠시 후 다시 펼쳐 주세요.";
-              fillSectionBody(s.id, s.body);
-              analysisDraft = window.ReportRecovery.mergeSection(analysisDraft, s.id, s.body);
+              fillSectionFailed(s.id, error.message);
+              analysisDraft = window.ReportRecovery.markSectionFailed(analysisDraft, s.id, error.message);
               analysisDraft = window.ReportRecovery.finish(analysisDraft, "failed", error.message);
               saveAnalysisDraft(analysisDraft, { reportStatus: "failed", reportError: error.message });
               markSectionCompleted();
@@ -3159,6 +3337,7 @@ async function confirmReturnedPayment() {
           orderId,
           paymentStatus: "결제 완료",
           partner: purchase.partner || null,
+          targetYear: purchase.targetYear || null,
           paymentReturn: true,
         });
       };
@@ -3923,8 +4102,20 @@ function bindChat() {
 }
 
 // ---------- Year / cycle interactions ----------
+function selectedYearlyTarget() {
+  const active = document.querySelector("[data-year-panel] button.is-active");
+  const year = Number(active?.dataset.year);
+  return Number.isInteger(year) ? year : new Date().getFullYear();
+}
+
 function bindYearAndCycle() {
   // Year buttons toggle
+  document.querySelector("[data-year-panel]")?.querySelectorAll("button").forEach((button, index) => {
+    const year = new Date().getFullYear() + index;
+    button.dataset.year = String(year);
+    button.textContent = String(year);
+    button.classList.toggle("is-active", index === 0);
+  });
   document.querySelector("[data-year-panel]")?.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       document.querySelectorAll("[data-year-panel] button").forEach((item) => item.classList.remove("is-active"));
@@ -4085,16 +4276,23 @@ logoutButtons.forEach((button) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "logout" }),
     });
-    runtimeSession = { user: null, points: { enabled: false, balance: 0, regenTokens: 0, transactions: [] } };
-    accountDataReady = true; // 게스트 데이터는 로컬이라 즉시 준비됨
-    clearPendingPurchase(); // 미완료 결제정보 제거(다음 사람에게 안 넘어가게)
-    currentCheckout = null;
-    renderSession();
-    reloadAccountData(); // 게스트 스코프로 전환(로그인했던 계정 데이터 화면에서 내림)
+    applyVerifiedSession(guestSession(), { silent: true });
     closeMypage();
     setPaymentStatus("로그아웃되었습니다.");
     showToast("로그아웃되었습니다.");
   });
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshAuthSession("visibility", { force: true });
+});
+
+window.addEventListener("pageshow", (event) => {
+  refreshAuthSession(event.persisted ? "pageshow-bfcache" : "pageshow", { force: Boolean(event.persisted), silent: true });
+});
+
+window.addEventListener("focus", () => {
+  refreshAuthSession("focus");
 });
 
 // 마이페이지 드로어 열기/닫기 (상단 칩 + 햄버거 버튼)
@@ -4176,25 +4374,21 @@ async function boot() {
 
   try {
     runtimeConfig = await getJson("/api/config");
-    runtimeSession = await getJson("/api/session");
-    renderSession();
   } catch {
     runtimeConfig = {
       tossClientKey: "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm",
       tossMode: "test",
       kakaoEnabled: false,
     };
-    runtimeSession = { user: null };
-    renderSession();
   }
+  await refreshAuthSession("boot", { force: true, silent: true });
+  if (!runtimeSession) applyVerifiedSession(guestSession(), { silent: true });
 
-  reloadAccountData(); // 세션 확인됨 → 로그인 계정 기준으로 데이터 다시 읽어 렌더(계정 분리)
   applyRuntimeConfig();
   const legalPath = location.pathname.replace(/^\/+/, "").toLowerCase();
   if (["terms", "privacy", "refund"].includes(legalPath)) showView(legalPath);
   // 결제 확인은 지체 없이 즉시 실행(동기화 끝나길 기다리면 "결제 확인 중"이 길게 돈다).
   // 동기화는 백그라운드 — syncKind가 merge 방식이라 결제확인과 동시 실행해도 주문이 안 사라진다.
-  syncAccountData(); // 로그인 상태면 Supabase에서 프로필·보관함·주문을 받아 동기화(기기 무관)
   await confirmReturnedPayment();
   trackEvent("page_view", { title: document.title });
 }
