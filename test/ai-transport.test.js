@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applyChatModelOptions,
   chatDeltaText,
   chatMessageText,
   extractJsonObject,
@@ -44,7 +45,14 @@ test("routes DeepSeek to chat completions without strict schema", () => {
   assert.deepEqual(modelProfile("deepseek-v4-flash"), {
     transport: "chat",
     strictJson: false,
+    thinking: { type: "disabled" },
   });
+});
+
+test("applies DeepSeek thinking disabled option to chat completion payloads", () => {
+  const payload = applyChatModelOptions({ model: "deepseek-v4-flash", messages: [] }, modelProfile("deepseek-v4-flash"));
+  assert.deepEqual(payload.thinking, { type: "disabled" });
+  assert.equal(applyChatModelOptions({ model: "glm-5.2", messages: [] }, modelProfile("glm-5.2")).thinking, undefined);
 });
 
 test("routes MiniMax to messages without strict schema", () => {

@@ -4,7 +4,7 @@ const DEFAULT_MODEL = process.env.OPENCODE_MODEL || "glm-5.2";
 const DEFAULT_BASE_URL = process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/go/v1";
 const DEFAULT_PROFILE = Object.freeze({ transport: "chat", strictJson: true });
 const MODEL_PROFILES = Object.freeze({
-  "deepseek-v4-flash": Object.freeze({ transport: "chat", strictJson: false }),
+  "deepseek-v4-flash": Object.freeze({ transport: "chat", strictJson: false, thinking: Object.freeze({ type: "disabled" }) }),
   "minimax-m3": Object.freeze({ transport: "messages", strictJson: false }),
 });
 
@@ -18,6 +18,11 @@ export function chatMessageText(message = {}) {
 
 export function chatDeltaText(delta = {}) {
   return String(delta.content || "");
+}
+
+export function applyChatModelOptions(request, profile = {}) {
+  if (!profile?.thinking) return request;
+  return { ...request, thinking: profile.thinking };
 }
 
 export function extractJsonObject(text) {
@@ -126,14 +131,14 @@ function isRetryableTransport(error) {
 
 async function requestChat({ model, system, input, name, schema, profile, maxTokens = 8192, timeoutMs = 70000 }) {
   const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
-  const request = {
+  const request = applyChatModelOptions({
     model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: profile.strictJson ? system : jsonOnlySystem(system, schema) },
       { role: "user", content: input },
     ],
-  };
+  }, profile);
   if (profile.strictJson) {
     request.response_format = {
       type: "json_schema",
@@ -199,16 +204,16 @@ function normalizeUsage(usage = {}) {
   };
 }
 
-async function requestPlainChat({ model, system, input, maxTokens = 1600, timeoutMs = 70000, onDelta }) {
+async function requestPlainChat({ model, system, input, profile = modelProfile(model), maxTokens = 1600, timeoutMs = 70000, onDelta }) {
   const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
-  const request = {
+  const request = applyChatModelOptions({
     model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: input },
     ],
-  };
+  }, profile);
   const timeout = timeoutSignal(timeoutMs);
   try {
     if (onDelta) {

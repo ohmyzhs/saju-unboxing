@@ -27,7 +27,7 @@ export async function runReportAgent({
       question: String(question || "").trim(),
       evidence: { toolCalls },
     }),
-    maxTokens: 3200,
+    maxTokens: 1600,
     timeoutMs: 180000,
     onDelta,
     onReset,

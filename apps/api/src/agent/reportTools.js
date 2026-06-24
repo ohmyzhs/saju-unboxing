@@ -11,6 +11,48 @@ function reportSections(snapshot) {
   return Array.isArray(sections) ? sections : [];
 }
 
+function pick(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value ?? null;
+  const result = {};
+  for (const key of keys) {
+    if (value[key] !== undefined) result[key] = value[key];
+  }
+  return result;
+}
+
+export function compactManseFacts(analysis = {}) {
+  const manse = analysis?.manse || {};
+  return clone({
+    manse: {
+      pillar: manse.pillar || null,
+      yongsin: manse.yongsin || null,
+      strength: manse.strength || null,
+      tenGodStats: manse.tenGodStats || null,
+      yinyang: manse.yinyang || null,
+      hyungchung: manse.hyungchung || null,
+      shinsal: manse.shinsal || null,
+    },
+    summary: pick(analysis?.summary, [
+      "dayStem",
+      "pillars",
+      "strength",
+      "elementBalance",
+      "tenGodStats",
+      "currentDaeun",
+      "yearly",
+      "today",
+    ]),
+    context: pick(analysis?.context, [
+      "dayMaster",
+      "strength",
+      "usefulElements",
+      "currentCycle",
+      "currentYear",
+      "productFocus",
+    ]),
+  });
+}
+
 function keywords(value) {
   const words = String(value || "").toLowerCase().match(/[가-힣a-z0-9]{2,}/g) || [];
   const result = new Set();
@@ -64,11 +106,7 @@ export function createReportTools({ snapshot, history = [] }) {
       return clone(section || null);
     },
     get_manse_facts() {
-      return clone({
-        manse: analysis?.manse || null,
-        summary: analysis?.summary || null,
-        context: analysis?.context || null,
-      });
+      return compactManseFacts(analysis);
     },
     get_conversation_history() {
       return clone((history || [])

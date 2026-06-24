@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  compactManseFacts,
   createReportTools,
   selectRelevantSection,
 } from "../apps/api/src/agent/reportTools.js";
@@ -23,6 +24,29 @@ const SNAPSHOT = {
     ],
   },
 };
+
+test("챗봇 만세력 facts는 장기 운세 배열 전체를 덤프하지 않고 핵심만 보낸다", () => {
+  const facts = compactManseFacts({
+    manse: {
+      pillar: { day: { stem: "丁", branch: "丑" } },
+      yongsin: { yongsin: "木", huisin: "水", gisin: "金" },
+      strength: "중화",
+      tenGodStats: { bigyeop: 3 },
+      yinyang: { yin: 2, yang: 6 },
+      hyungchung: { jijiHae: ["축오"] },
+      shinsal: { gongmangDay: "신유" },
+      daeun: Array.from({ length: 10 }, (_, index) => ({ age: index * 10, stem: "甲", branch: "子" })),
+      wolun: Array.from({ length: 12 }, (_, index) => ({ month: index + 1, stem: "乙", branch: "丑" })),
+      nyunun: Array.from({ length: 10 }, (_, index) => ({ year: 2026 + index, stem: "丙", branch: "寅" })),
+    },
+    summary: { dayStem: "丁" },
+  });
+  assert.deepEqual(facts.manse.pillar.day, { stem: "丁", branch: "丑" });
+  assert.equal(facts.manse.strength, "중화");
+  assert.equal(facts.manse.daeun, undefined);
+  assert.equal(facts.manse.wolun, undefined);
+  assert.equal(facts.manse.nyunun, undefined);
+});
 
 test("Agent 도구는 선택 리포트와 현재 대화만 읽는다", () => {
   const tools = createReportTools({ snapshot: SNAPSHOT, history: [{ role: "user", content: "이전 질문" }] });
@@ -68,7 +92,7 @@ test("Agent는 최대 네 도구 결과와 질문만 모델에 전달한다", as
     },
   });
   const input = JSON.parse(captured.input);
-  assert.equal(captured.maxTokens, 3200);
+  assert.equal(captured.maxTokens, 1600);
   assert.equal(input.question, "올해 이직은 어떤가요?");
   assert.equal(input.evidence.toolCalls.length, 4);
   assert.deepEqual(input.evidence.toolCalls.map((call) => call.name), [
