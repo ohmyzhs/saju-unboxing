@@ -197,6 +197,7 @@ let paymentReturn = false;
 let activeDailyProfile = null;
 let activeDailyMood = "";
 let analysisDraftSync = Promise.resolve();
+let chatReportPreviewHideTimer = null;
 let chatState = {
   catalog: null,
   sessions: [],
@@ -304,7 +305,10 @@ function trackEvent(event, metadata = {}, options = {}) {
 
 // ---------- View routing ----------
 function showView(nextView) {
-  if (currentViewName === "chat" && nextView !== "chat") stopChatStream();
+  if (currentViewName === "chat" && nextView !== "chat") {
+    stopChatStream();
+    closeChatReportPreview({ immediate: true, restoreFocus: false });
+  }
   if (currentViewName === "profile" && nextView !== "profile" && profileReturnContext) {
     profileReturnContext = null;
   }
@@ -3761,6 +3765,7 @@ function stopChatStream() {
 
 function resetChatState() {
   stopChatStream();
+  closeChatReportPreview({ immediate: true, restoreFocus: false });
   chatState = {
     catalog: null,
     sessions: [],
@@ -3794,6 +3799,49 @@ function chatRunStatusLabel(status) {
 function renderChatAssistantContent(content) {
   if (window.ChatMarkdown?.render) return window.ChatMarkdown.render(content || "");
   return escapeHtml(content || "").replace(/\n/g, "<br />");
+}
+
+function renderChatReportPreview() {
+  const report = chatState.detail?.report;
+  const preview = window.ChatReportPreview?.normalizeReport?.(report || {});
+  const title = document.querySelector("[data-chat-report-preview-title]");
+  const meta = document.querySelector("[data-chat-report-preview-meta]");
+  const body = document.querySelector("[data-chat-report-preview-body]");
+  if (title) title.textContent = preview?.productName || "리포트 내용보기";
+  if (meta) meta.textContent = preview?.profileName ? `${preview.profileName}님의 리포트` : "선택한 상담 리포트";
+  if (body) {
+    body.innerHTML = window.ChatReportPreview?.render?.(report || {})
+      || '<p class="chat-report-preview-empty">저장된 리포트 내용을 불러오지 못했습니다.</p>';
+    body.scrollTop = 0;
+  }
+}
+
+function openChatReportPreview() {
+  const overlay = document.querySelector("[data-chat-report-preview]");
+  if (!overlay || !chatState.detail?.report) return;
+  if (chatReportPreviewHideTimer) window.clearTimeout(chatReportPreviewHideTimer);
+  renderChatReportPreview();
+  overlay.hidden = false;
+  overlay.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => {
+    overlay.classList.add("is-open");
+    overlay.querySelector(".chat-report-preview-close")?.focus();
+  });
+}
+
+function closeChatReportPreview({ immediate = false, restoreFocus = true } = {}) {
+  const overlay = document.querySelector("[data-chat-report-preview]");
+  if (!overlay) return;
+  if (chatReportPreviewHideTimer) window.clearTimeout(chatReportPreviewHideTimer);
+  overlay.classList.remove("is-open");
+  overlay.setAttribute("aria-hidden", "true");
+  const finish = () => {
+    if (!overlay.classList.contains("is-open")) overlay.hidden = true;
+    chatReportPreviewHideTimer = null;
+  };
+  if (immediate) finish();
+  else chatReportPreviewHideTimer = window.setTimeout(finish, 300);
+  if (restoreFocus && !immediate) document.querySelector("[data-chat-report-preview-open]")?.focus();
 }
 
 function activeChatRun() {
@@ -3835,6 +3883,11 @@ function renderChatState() {
   const view = document.querySelector('[data-view="chat"]');
   const roomOpen = Boolean(chatState.detail?.session);
   view?.classList.toggle("is-room-open", roomOpen);
+  const previewButton = document.querySelector("[data-chat-report-preview-open]");
+  if (previewButton) {
+    previewButton.hidden = !roomOpen || !chatState.detail?.report;
+    previewButton.disabled = !roomOpen || !chatState.detail?.report;
+  }
   const lobby = document.querySelector("[data-chat-lobby]");
   if (lobby) lobby.hidden = roomOpen;
 
@@ -3971,6 +4024,7 @@ async function loadChatView(preferredSessionId = chatState.activeSessionId) {
 
 function closeChatRoom() {
   stopChatStream();
+  closeChatReportPreview({ immediate: true, restoreFocus: false });
   chatState.activeSessionId = null;
   chatState.detail = null;
   renderChatState();
@@ -4150,6 +4204,8 @@ function bindChat() {
     const buy = event.target.closest("[data-chat-buy]");
     if (buy) return startChatCreditCheckout(buy.dataset.chatBuy);
     if (event.target.closest("[data-chat-session-create]")) return createChatSession();
+    if (event.target.closest("[data-chat-report-preview-open]")) return openChatReportPreview();
+    if (event.target.closest("[data-chat-report-preview-close]")) return closeChatReportPreview();
     if (event.target.closest("[data-chat-room-back]")) return closeChatRoom();
     const sessionButton = event.target.closest("[data-chat-session-id]");
     if (sessionButton) loadChatView(sessionButton.dataset.chatSessionId);
@@ -4367,6 +4423,10 @@ document.querySelectorAll("[data-support-type]").forEach((btn) => {
 });
 // ESC 로 드로어 닫기
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.querySelector("[data-chat-report-preview]")?.classList.contains("is-open")) {
+    closeChatReportPreview();
+    return;
+  }
   if (e.key === "Escape" && mypageDrawer && !mypageDrawer.hasAttribute("hidden")) closeMypage();
 });
 

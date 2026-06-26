@@ -491,8 +491,13 @@
           </div>
           <section class="chat-conversation" data-chat-conversation hidden>
             <header class="chat-room-header">
-              <button type="button" class="chat-room-back" data-chat-room-back aria-label="상담 목록으로 돌아가기">‹</button>
-              <div><small>선택 리포트 전용 상담</small><h2 data-chat-title>AI 챗봇 상담</h2><p data-chat-report-context></p></div>
+              <div class="chat-room-leading">
+                <button type="button" class="chat-room-back" data-chat-room-back aria-label="상담 목록으로 돌아가기">‹</button>
+                <button type="button" class="chat-report-preview-trigger" data-chat-report-preview-open>
+                  <span aria-hidden="true">▤</span> 리포트 내용보기
+                </button>
+              </div>
+              <div class="chat-room-copy"><small>선택 리포트 전용 상담</small><h2 data-chat-title>AI 챗봇 상담</h2><p data-chat-report-context></p></div>
               <span data-chat-run-status></span>
             </header>
             <div class="chat-messages" data-chat-messages aria-live="polite"></div>
@@ -501,6 +506,20 @@
               <div><span data-chat-composer-balance>남은 질문 0건</span><button type="submit" data-chat-send>질문 보내기</button></div>
             </form>
           </section>
+          <div class="chat-report-preview" data-chat-report-preview aria-hidden="true" hidden>
+            <button type="button" class="chat-report-preview-backdrop" data-chat-report-preview-close aria-label="리포트 미리보기 닫기"></button>
+            <section class="chat-report-preview-panel" role="dialog" aria-modal="true" aria-labelledby="chat-report-preview-title">
+              <header>
+                <div>
+                  <small>선택한 리포트</small>
+                  <h2 id="chat-report-preview-title" data-chat-report-preview-title>리포트 내용보기</h2>
+                  <p data-chat-report-preview-meta></p>
+                </div>
+                <button type="button" class="chat-report-preview-close" data-chat-report-preview-close aria-label="리포트 미리보기 닫기">×</button>
+              </header>
+              <div class="chat-report-preview-body" data-chat-report-preview-body></div>
+            </section>
+          </div>
           <p class="form-status chat-status" data-chat-status></p>
         </div>
       </section>
@@ -671,6 +690,7 @@
     <script src="./point-payment.js"></script>
     <script src="./chat-stream.js"></script>
     <script src="./chat-markdown.js"></script>
+    <script src="./chat-report-preview.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
