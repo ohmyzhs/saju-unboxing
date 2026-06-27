@@ -40,6 +40,9 @@ create table if not exists orders (
   user_id text,                         -- 로그인 계정 id (게스트는 비움)
   user_label text,                      -- 카카오 닉네임 또는 이메일 주소
   user_provider text,                   -- 'kakao' | 'email'
+  purchase_snapshot jsonb default '{}'::jsonb, -- 결제 후 fulfillment에 필요한 프로필/상품 스냅샷
+  external_report jsonb default '{}'::jsonb,   -- saju-web 등 외부 리포트 주문/공유 URL 상태
+  report_status text default null,             -- generating | complete | failed
   created_at timestamptz default now(),
   approved_at timestamptz
 );
@@ -234,6 +237,9 @@ alter table analyses    add column if not exists lucky         jsonb;
 alter table orders      add column if not exists user_id       text;
 alter table orders      add column if not exists user_label    text;
 alter table orders      add column if not exists user_provider text;
+alter table orders      add column if not exists purchase_snapshot jsonb default '{}'::jsonb;
+alter table orders      add column if not exists external_report jsonb default '{}'::jsonb;
+alter table orders      add column if not exists report_status text;
 alter table analyses    add column if not exists user_id       text;
 alter table analyses    add column if not exists user_label    text;
 alter table analyses    add column if not exists user_provider text;

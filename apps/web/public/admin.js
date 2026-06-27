@@ -34,6 +34,12 @@ const DEFAULT_PRODUCTS = {
     description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위를 정리합니다.",
     prompt: "사용자가 고른 목적과 후보 날짜만 비교해 날짜별 적합도, 우선순위, 활용법과 주의점을 구체적으로 작성한다.",
   },
+  "mz-dark-mudang-online": {
+    name: "MZ다크무당 사주 리포트",
+    amount: 9900,
+    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
+    prompt: "saju-web tight-v3 온라인뷰 리포트로 생성한다. franchise에서는 결제와 열람 연결만 담당한다.",
+  },
   "daily-fortune": {
     name: "오늘의 무료운세",
     amount: 0,
@@ -84,6 +90,7 @@ const IMAGE_SLOTS = [
   ["thumb.compatibility", "궁합 썸네일"],
   ["thumb.cycle", "대운 썸네일"],
   ["thumb.yearly-fortune", "연도 썸네일"],
+  ["thumb.mz-dark-mudang-online", "MZ다크무당 썸네일"],
   ["thumb.daily-fortune", "오늘 썸네일"],
   ["loading.hero", "분석 로딩 움짤 (gif 권장 · 비우면 기본 애니메이션)"],
 ];

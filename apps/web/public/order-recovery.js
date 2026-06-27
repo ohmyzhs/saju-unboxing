@@ -18,7 +18,11 @@ function capabilities(order = {}) {
   const pointCharge = order.productId === "point-charge";
   const cancelled = status.includes("취소");
   const failed = status.includes("실패") || status.includes("오류");
-  const viewReport = paid && !pointCharge && (order.reportStatus === "complete" || Boolean(order.hasReport));
+  const viewReport = paid && !pointCharge && (
+    order.reportStatus === "complete"
+    || Boolean(order.hasReport)
+    || Boolean(order.externalReport?.shareUrl)
+  );
   const retryReport = paid && !pointCharge && order.reportStatus !== "generating"
     && (order.reportStatus === "failed" || !viewReport);
   return {

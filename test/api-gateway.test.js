@@ -10,6 +10,7 @@ test("gateway resolves every legacy public API path", () => {
   assert.equal(resolveRoute("/api/auth/kakao/callback").name, "kakao-callback");
   assert.deepEqual(resolveRoute("/api/chat/catalog"), { name: "chat", path: "catalog" });
   assert.deepEqual(resolveRoute("/api/chat/sessions/abc/messages"), { name: "chat", path: "sessions/abc/messages" });
+  assert.equal(resolveRoute("/api/external-reports").name, "external-reports");
   assert.deepEqual(resolveRoute("/api/health"), { name: "health" });
   assert.equal(resolveRoute("/api/missing"), null);
 });

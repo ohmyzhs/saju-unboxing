@@ -12,6 +12,7 @@ import kakaoStart from "./legacy/auth/kakao/start.js";
 import kakaoCallback from "./legacy/auth/kakao/callback.js";
 import { createChatHandler } from "./http/chat.js";
 import chatEvents from "./http/chatEvents.js";
+import externalReports from "./http/externalReports.js";
 import {
   resumeStuckChatRuns,
   startChatRecovery,
@@ -43,6 +44,7 @@ const ROUTES = new Map([
   ["/api/track", { name: "track", handler: track }],
   ["/api/session", { name: "session", handler: session }],
   ["/api/share", { name: "share", handler: share }],
+  ["/api/external-reports", { name: "external-reports", handler: externalReports }],
   ["/api/payments/confirm", { name: "payment-confirm", handler: paymentConfirm }],
   ["/api/saju/analyze", { name: "saju-analyze", handler: sajuAnalyze }],
   ["/api/saju/section", { name: "saju-section", handler: sajuSection }],

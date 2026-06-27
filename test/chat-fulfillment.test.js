@@ -115,6 +115,46 @@ test("일반 리포트 주문은 별도 fulfillment가 필요 없다", async () 
   assert.equal(sb.calls.length, 0);
 });
 
+test("MZ다크무당 온라인뷰 상품은 saju-web 외부 리포트 주문을 생성한다", async () => {
+  const sb = supabaseStub();
+  const result = await fulfillPaidOrder(sb, {
+    id: "o6",
+    product_id: "mz-dark-mudang-online",
+    user_id: "u1",
+    status: "결제 완료",
+    purchase_snapshot: {
+      profile: {
+        name: "김가별",
+        birthDate: "1980-10-31",
+        birthTime: "12:00",
+        calendar: "solar",
+        gender: "M",
+      },
+    },
+  }, {
+    createExternalReportOrder: async ({ order, product }) => ({
+      provider: product.provider,
+      externalOrderId: 77,
+      shareToken: "share77",
+      shareUrl: "https://saju-web.example/share/share77",
+      status: "queued",
+      orderName: order.profile_name,
+    }),
+  });
+
+  assert.equal(result.required, true);
+  assert.equal(result.status, "submitted");
+  assert.equal(result.externalOrderId, 77);
+  assert.deepEqual(
+    sb.calls.filter((call) => call.kind === "update").map((call) => call.patch.fulfillment_status),
+    ["processing", "fulfilled"],
+  );
+  assert.equal(
+    sb.calls.filter((call) => call.kind === "update").at(-1).patch.external_report.shareUrl,
+    "https://saju-web.example/share/share77",
+  );
+});
+
 test("포인트 전액과 토스 승인 모두 같은 fulfillment 서비스를 호출한다", () => {
   const orders = readFileSync(new URL("../apps/api/src/legacy/orders.js", import.meta.url), "utf8");
   const confirm = readFileSync(new URL("../apps/api/src/legacy/payments/confirm.js", import.meta.url), "utf8");

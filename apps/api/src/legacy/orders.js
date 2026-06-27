@@ -148,10 +148,14 @@ export default async function handler(req, res) {
       };
       // 로그인 사용자면 계정(카카오/이메일) 식별을 함께 저장. 컬럼이 아직 없으면(미마이그레이션)
       // 기본 행으로 한 번 더 저장 → 주문 기록이 절대 누락되지 않게.
-      const orderRow = { ...baseRow, ...accountFields(user) };
+      const orderRow = {
+        ...baseRow,
+        purchase_snapshot: body.purchaseSnapshot && typeof body.purchaseSnapshot === "object" ? body.purchaseSnapshot : {},
+        ...accountFields(user),
+      };
       const { error } = await sb.from("orders").upsert(orderRow);
       if (error) {
-        if (payment.pointsUsed > 0 || isPointCharge) throw error;
+        if (payment.pointsUsed > 0 || isPointCharge || productId === "mz-dark-mudang-online") throw error;
         await sb.from("orders").upsert(baseRow);
       }
 

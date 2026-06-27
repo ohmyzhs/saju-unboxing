@@ -100,6 +100,18 @@ const PRODUCTS = {
     category: "택일해설",
     description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위와 활용법을 정리합니다.",
   },
+  "mz-dark-mudang-online": {
+    name: "MZ다크무당 사주 리포트",
+    subtitle: "누구의 다크무당 리포트를 볼까요?",
+    price: "9,900원",
+    amountLabel: "9,900원",
+    amount: 9900,
+    paid: true,
+    planId: "starter",
+    category: "프리미엄 온라인뷰",
+    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
+    externalReport: true,
+  },
   "daily-fortune": {
     name: "오늘의 무료운세",
     subtitle: "누구의 오늘을 볼까요?",
@@ -1037,6 +1049,29 @@ function recoverOrderPurchase(order) {
   return { productId, product, profile, partner: null, pointsUsed: Number(order.pointsUsed || 0) };
 }
 
+function isExternalReportProductId(productId) {
+  return Boolean(PRODUCTS[productId]?.externalReport);
+}
+
+function purchaseSnapshot(context = {}) {
+  return {
+    productId: context.productId,
+    productName: context.product?.name || "",
+    profile: context.profile || null,
+    partner: context.partner || null,
+    targetYear: context.targetYear || null,
+    calendarPick: context.calendarPick || null,
+    customer: runtimeSession?.user
+      ? {
+          id: runtimeSession.user.id,
+          email: runtimeSession.user.email || "",
+          nickname: runtimeSession.user.nickname || "",
+          provider: runtimeSession.user.provider || "",
+        }
+      : null,
+  };
+}
+
 async function cancelOrder(orderId, button) {
   if (!window.confirm("이 미결제 주문을 취소할까요?")) return;
   if (button) button.disabled = true;
@@ -1092,7 +1127,35 @@ function openStoredAnalysis(item) {
   renderAnalysisResult(item.productId, profile, partner, item.analysis || null);
 }
 
-function openOrderReport(orderId) {
+async function syncExternalReport(orderId) {
+  const result = await getJson(`/api/external-reports?orderId=${encodeURIComponent(orderId)}`);
+  upsertOrder({
+    orderId,
+    reportStatus: result.reportStatus,
+    externalReport: result.externalReport || null,
+    updatedAt: Date.now(),
+  });
+  if (result.archive) {
+    saveArchiveItem(result.archive);
+  }
+  return result;
+}
+
+async function openOrderReport(orderId) {
+  const order = getOrders().find((entry) => entry.orderId === orderId);
+  if (isExternalReportProductId(order?.productId)) {
+    try {
+      const synced = await syncExternalReport(orderId);
+      const url = synced.externalReport?.shareUrl || order?.externalReport?.shareUrl;
+      if (url) window.open(url, "_blank", "noopener");
+      if (synced.archive) showToast("리포트 본문을 보관함에도 저장했습니다. 이제 챗봇 상담에서 선택할 수 있습니다.");
+      else showToast("saju-web에서 리포트를 생성 중입니다. 잠시 후 다시 확인해주세요.");
+    } catch (error) {
+      if (order?.externalReport?.shareUrl) window.open(order.externalReport.shareUrl, "_blank", "noopener");
+      else showToast(error.message || "외부 리포트 상태를 확인하지 못했습니다.", true);
+    }
+    return;
+  }
   const item = getArchive().find((entry) => entry.orderId === orderId);
   if (!item) return retryOrderReport(orderId);
   openStoredAnalysis(item);
@@ -1101,6 +1164,10 @@ function openOrderReport(orderId) {
 
 function retryOrderReport(orderId) {
   const order = getOrders().find((item) => item.orderId === orderId);
+  if (order?.externalReport?.shareUrl) return openOrderReport(orderId);
+  if (isExternalReportProductId(order?.productId)) {
+    return showToast("saju-web에서 리포트를 생성 중입니다. 잠시 후 리포트보기를 다시 눌러주세요.", true);
+  }
   const purchase = recoverOrderPurchase(order);
   if (!purchase) return showToast("리포트 생성 정보를 복구할 수 없습니다.", true);
   startAnalysis(purchase.productId, purchase.profile, {
@@ -2308,6 +2375,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
         sessionId: sessionId(),
         productId: context?.productId,
         profileName: context?.profile?.name || null,
+        purchaseSnapshot: context ? purchaseSnapshot(context) : null,
       }),
     });
 
@@ -2358,6 +2426,8 @@ async function beginTossPayment(planId, sourceButton, context = null) {
       clearPendingPurchase();
       if (isChatCreditProductId(purchase.productId)) {
         await completeChatCreditPurchase({ purchase, orderId: order.orderId, fulfillment: order.fulfillment });
+      } else if (isExternalReportProductId(purchase.productId)) {
+        completeExternalReportPurchase({ purchase, orderId: order.orderId, fulfillment: order.fulfillment });
       } else if (purchase.productId === "followup") {
         await runFollowupAnswer(purchase);
       } else {
@@ -3371,6 +3441,11 @@ async function confirmReturnedPayment() {
       return;
     }
 
+    if (isExternalReportProductId(pending?.productId)) {
+      completeExternalReportPurchase({ purchase: pending, orderId, fulfillment: result.fulfillment });
+      return;
+    }
+
     setPaymentResult(
       "결제 완료! 🎉",
       "잠시 후 분석이 자동으로 시작됩니다.",
@@ -4196,6 +4271,56 @@ async function completeChatCreditPurchase({ purchase, orderId, fulfillment }) {
     paymentContinueButton.textContent = "AI 챗봇 상담으로 이동";
     paymentContinueButton.onclick = () => showView("chat");
   }
+}
+
+function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
+  clearPendingPurchase();
+  const externalReport = fulfillment?.externalOrderId
+    ? {
+        provider: fulfillment.provider || "saju-web",
+        externalOrderId: fulfillment.externalOrderId,
+        shareToken: fulfillment.shareToken || "",
+        shareUrl: fulfillment.shareUrl || "",
+        status: fulfillment.externalStatus || fulfillment.status || "queued",
+      }
+    : null;
+  upsertOrder({
+    orderId,
+    productId: purchase.productId,
+    productName: purchase.product?.name,
+    profileName: purchase.profile?.name || "-",
+    amount: purchase.price ?? purchase.product?.amount ?? 0,
+    pointsUsed: purchase.pointsUsed || 0,
+    payMethod: purchase.payMethod,
+    status: "결제 완료",
+    reportStatus: fulfillment?.status === "submitted" ? "generating" : "failed",
+    reportError: fulfillment?.status === "submitted" ? null : fulfillment?.error || "외부 리포트 주문 생성 확인이 필요합니다.",
+    externalReport,
+    updatedAt: Date.now(),
+  });
+  setPaymentResult(
+    fulfillment?.status === "submitted" ? "결제 완료 · 리포트 생성 시작" : "결제 완료 · 리포트 생성 확인 필요",
+    fulfillment?.status === "submitted"
+      ? "saju-web MZ다크무당 온라인뷰 리포트 제작을 시작했습니다."
+      : "결제는 완료됐지만 saju-web 주문 상태를 다시 확인해야 합니다.",
+    [
+      ["상품", purchase.product?.name || "MZ다크무당 사주 리포트"],
+      ["대상", purchase.profile?.name || "프로필"],
+      ["생성 상태", fulfillment?.status === "submitted" ? "saju-web 생성중" : "확인 필요"],
+    ],
+    fulfillment?.status === "submitted",
+    fulfillment?.status === "submitted" ? "🔮" : "⏳",
+  );
+  if (paymentRef) {
+    paymentRef.hidden = false;
+    paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주세요`;
+  }
+  if (paymentContinueButton) {
+    paymentContinueButton.hidden = false;
+    paymentContinueButton.textContent = "결제 내역으로 이동";
+    paymentContinueButton.onclick = () => showView("orders");
+  }
+  pushUserData("order", getOrders().find((order) => order.orderId === orderId));
 }
 
 function bindChat() {

@@ -42,3 +42,25 @@ test("결제 내역은 상세·취소·이어하기·리포트 복구 동작을 
   assert.match(app, /retryOrderReport/);
   assert.match(app, /OrderRecovery\.totalAmount/);
 });
+
+test("MZ다크무당 온라인뷰 상품은 외부 리포트 스냅샷과 리포트 보기 흐름을 가진다", () => {
+  const schema = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8");
+  const admin = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
+  assert.match(html, /data-product-id="mz-dark-mudang-online"/);
+  assert.match(app, /"mz-dark-mudang-online":\s*\{/);
+  assert.match(app, /externalReport:\s*true/);
+  assert.match(app, /purchaseSnapshot\(context\)/);
+  assert.match(app, /\/api\/external-reports\?orderId=/);
+  assert.match(admin, /"mz-dark-mudang-online":\s*\{/);
+  assert.match(schema, /purchase_snapshot jsonb/i);
+  assert.match(schema, /external_report jsonb/i);
+  assert.match(schema, /report_status text/i);
+  assert.equal(
+    globalThis.OrderRecovery.capabilities({
+      status: "결제 완료",
+      reportStatus: "generating",
+      externalReport: { shareUrl: "https://saju-web.example/share/t" },
+    }).viewReport,
+    true,
+  );
+});
