@@ -45,6 +45,10 @@ test("결제 내역은 상세·취소·이어하기·리포트 복구 동작을 
 
 test("MZ다크무당 온라인뷰 상품은 외부 리포트 스냅샷과 리포트 보기 흐름을 가진다", () => {
   const schema = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8");
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20260628090000_external_report_orders.sql", import.meta.url),
+    "utf8",
+  );
   const admin = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
   assert.match(html, /data-product-id="mz-dark-mudang-online"/);
   assert.match(app, /"mz-dark-mudang-online":\s*\{/);
@@ -55,6 +59,10 @@ test("MZ다크무당 온라인뷰 상품은 외부 리포트 스냅샷과 리포
   assert.match(schema, /purchase_snapshot jsonb/i);
   assert.match(schema, /external_report jsonb/i);
   assert.match(schema, /report_status text/i);
+  assert.match(migration, /alter table orders[\s\S]*purchase_snapshot jsonb/i);
+  assert.match(migration, /alter table orders[\s\S]*external_report jsonb/i);
+  assert.match(migration, /alter table orders[\s\S]*report_status text/i);
+  assert.match(migration, /notify pgrst, 'reload schema'/i);
   assert.equal(
     globalThis.OrderRecovery.capabilities({
       status: "결제 완료",
