@@ -54,6 +54,20 @@ export function resolveOrderPayment({ price, requestedPoints = 0, balance = 0 })
   return paymentBreakdown(price, requestedPoints, balance);
 }
 
+export function normalizeOrderDatabaseError(error) {
+  const text = String(error?.message || error || "");
+  if (/schema cache|Could not find the 'purchase_snapshot' column|Could not find the 'external_report' column|Could not find the 'report_status' column/i.test(text)) {
+    const normalized = new Error(
+      "주문 DB 스키마 캐시 갱신이 필요합니다. Supabase SQL Editor에서 외부 리포트 주문 migration과 schema cache reload를 실행한 뒤 다시 시도해주세요.",
+    );
+    normalized.statusCode = 503;
+    normalized.code = "orders_schema_cache_reload_required";
+    normalized.cause = error;
+    return normalized;
+  }
+  return error;
+}
+
 export async function completePointOnlyOrder({ userId, orderId, pointsUsed, adjust, markDone, markFailed }) {
   let spent = false;
   try {
@@ -210,6 +224,7 @@ export default async function handler(req, res) {
       fulfillment,
     });
   } catch (error) {
-    return sendJson(res, error.statusCode || 500, { message: error.message });
+    const normalized = normalizeOrderDatabaseError(error);
+    return sendJson(res, normalized.statusCode || 500, { message: normalized.message, code: normalized.code || undefined });
   }
 }

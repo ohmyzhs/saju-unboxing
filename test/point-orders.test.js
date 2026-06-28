@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { completePointOnlyOrder, resolveOrderPayment, resolveProductPrice } from "../apps/api/src/legacy/orders.js";
+import {
+  completePointOnlyOrder,
+  normalizeOrderDatabaseError,
+  resolveOrderPayment,
+  resolveProductPrice,
+} from "../apps/api/src/legacy/orders.js";
 
 test("서버 상품 설정 가격을 클라이언트 금액보다 우선한다", () => {
   const config = { products: { "saju-analysis": { amount: 1490 } } };
@@ -55,4 +60,13 @@ test("차감 후 주문 완료 저장이 실패하면 포인트를 환원한다"
     markFailed: async () => {},
   }), /주문 저장 실패/);
   assert.deepEqual(calls.map((entry) => entry.type), ["spend", "refund"]);
+});
+
+test("주문 schema cache 오류는 실행 가능한 안내로 변환한다", () => {
+  const normalized = normalizeOrderDatabaseError({
+    message: "Could not find the 'purchase_snapshot' column of 'orders' in the schema cache",
+  });
+  assert.equal(normalized.statusCode, 503);
+  assert.equal(normalized.code, "orders_schema_cache_reload_required");
+  assert.match(normalized.message, /schema cache reload|스키마 캐시 갱신/i);
 });
