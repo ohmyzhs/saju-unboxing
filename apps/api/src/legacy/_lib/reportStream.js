@@ -71,7 +71,7 @@ export async function runReportStream(options, dependencies) {
   } = dependencies;
   const {
     productId = "saju-analysis",
-    productName = "기본 사주 리포트",
+    productName = "흑야 사주 비망록",
     profile,
     partner,
     config,

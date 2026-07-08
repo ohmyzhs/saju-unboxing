@@ -402,7 +402,7 @@ begin
   session_title := left(coalesce(
     nullif(trim(archive_data->>'productName'), ''),
     nullif(trim(archive_data->>'profileName'), ''),
-    'AI 챗봇 상담'
+    '강무영 상담각'
   ), 160);
 
   insert into chat_sessions(user_id, source_archive_id, report_snapshot, title)

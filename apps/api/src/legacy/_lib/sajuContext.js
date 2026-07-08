@@ -263,7 +263,7 @@ export function buildCycleContext(manse) {
   };
 }
 
-// ── 연도별 운세(세운+월운) ─────────────────────────────────────
+// ── 한 해의 왕명(세운+월운) ─────────────────────────────────────
 /** 선택한 한 해의 연운(세운) + 해당 연도 월운. */
 export function buildYearlyContext(manse, targetYear = null) {
   const base = buildSajuContext(manse);

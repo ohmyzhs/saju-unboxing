@@ -6,9 +6,10 @@ const html = readFileSync(new URL("../apps/web/public/index.html", import.meta.u
 const app = readFileSync(new URL("../apps/web/public/app.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../apps/web/public/styles.css", import.meta.url), "utf8");
 
-test("AI 챗봇 상담은 기존 추가 질문과 분리된 화면과 진입점을 가진다", () => {
+test("강무영 상담각은 흑야 문답과 분리된 화면과 진입점을 가진다", () => {
   assert.match(html, /data-view="chat"/);
-  assert.match(html, /data-view-target="chat"[^>]*>[\s\S]*?AI 챗봇 상담/);
+  assert.match(html, /data-view-target="chat"[^>]*>[\s\S]*?강무영 상담각/);
+  assert.match(html, /data-view-target="followup"[^>]*>[\s\S]*?흑야 문답/);
   assert.match(html, /data-category="consult"[\s\S]*?data-view-target="chat"/);
   assert.match(html, /data-chat-products/);
   assert.match(html, /data-chat-report-select/);
