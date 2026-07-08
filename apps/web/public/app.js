@@ -2759,7 +2759,7 @@ function shareKakao(url, title) {
       if (!Kakao.isInitialized()) Kakao.init(key);
       Kakao.Share.sendDefault({
         objectType: "feed",
-        content: { title, description: "사주언박싱-mini 리포트", imageUrl: `${location.origin}/assets/generated/banners/hero-lab.jpg`, link: { mobileWebUrl: url, webUrl: url } },
+        content: { title, description: "사주언박싱-mini 리포트", imageUrl: `${location.origin}/assets/generated/banners/heukya-premium-hero.jpg`, link: { mobileWebUrl: url, webUrl: url } },
       });
     } catch {
       fallbackCopy(url);
