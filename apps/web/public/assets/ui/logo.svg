@@ -3,5 +3,5 @@
   <path d="M25 56c19-30 49-37 79-24 22 9 45 9 79-10" stroke="#F59A7E" stroke-width="5" stroke-linecap="round"/>
   <circle cx="37" cy="27" r="8" fill="#BD8B2D"/>
   <circle cx="160" cy="58" r="5" fill="#146A5D"/>
-  <text x="104" y="51" fill="#FFF8E8" font-size="25" font-weight="900" text-anchor="middle" font-family="Pretendard, Noto Sans KR, sans-serif">흑야 사주언박싱</text>
+  <text x="104" y="51" fill="#FFF8E8" font-size="31" font-weight="900" text-anchor="middle" font-family="Pretendard, Noto Sans KR, sans-serif">사주언박싱-mini</text>
 </svg>

@@ -46,93 +46,93 @@ const ACCOUNT_SYNC_STALE_MS = 90 * 1000;
 // ---------- Product catalog ----------
 const PRODUCTS = {
   "saju-analysis": {
-    name: "흑야 사주 비망록",
-    subtitle: "어느 분의 봉인된 사주함을 열까요?",
+    name: "기본 사주 리포트",
+    subtitle: "어떤 분의 사주해설을 볼까요?",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "starter",
-    category: "흑야 사주해설",
-    description: "봉인된 사주의 함을 열어 기질, 재물, 직업, 인연의 결을 정중한 사극체 하오체로 고하오.",
+    category: "사주해설",
+    description: "만세력, 타고난 성향, 직업운, 재물운, 관계 흐름을 긴 호흡의 리포트로 정리합니다.",
   },
   compatibility: {
-    name: "인연궁 합서",
-    subtitle: "인연의 합을 살필 첫 번째 분을 고르시오.",
+    name: "관계 궁합 분석",
+    subtitle: "궁합을 볼 기준 프로필을 먼저 선택해주세요.",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "starter",
-    category: "인연궁 해설",
-    description: "두 사람 사이에 흐르는 끌림과 어긋남을 궁궐의 등불 아래 차분히 풀어드리오.",
+    category: "궁합해설",
+    description: "두 사람의 끌림, 충돌 지점, 대화 방식과 오래 가는 방법을 관계 중심으로 풀어냅니다.",
   },
   cycle: {
-    name: "십년운 궁궐도",
-    subtitle: "어느 분의 십년 운길을 펼쳐볼까요?",
+    name: "대운의 흐름",
+    subtitle: "어떤 분의 대운을 볼까요?",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "starter",
-    category: "대운 궁궐도",
-    description: "십 년마다 바뀌는 운의 문과 돌아서야 할 회랑을 지도처럼 펼쳐 보이오.",
+    category: "대운해설",
+    description: "10년 단위 운의 전환점과 준비 구간, 기회와 위기를 타임라인으로 풀어드립니다.",
   },
   "yearly-fortune": {
-    name: "한 해의 왕명",
-    subtitle: "어느 분의 한 해 왕명을 받으시겠소?",
+    name: "연도별 운세",
+    subtitle: "어떤 분의 연도별 운세를 볼까요?",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "starter",
-    category: "세운 왕명",
-    description: "선택한 해의 총운과 계절별 징조, 달마다 조심할 문턱을 고하오.",
+    category: "연도 운세",
+    description: "특정 연도의 총운과 계절별 흐름, 조심할 타이밍과 행동 조언을 미리 짚습니다.",
   },
   "auspicious-date": {
-    name: "길일 어명첩",
-    subtitle: "어느 분의 중한 일정에 맞출 길일입니까?",
+    name: "목적별 택일 리포트",
+    subtitle: "어떤 분의 일정에 맞는 날짜인지 선택해주세요.",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "fortune",
-    category: "택일 비책",
-    description: "어명이 내려오기 전, 선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교해 올리오.",
+    category: "택일해설",
+    description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위와 활용법을 정리합니다.",
   },
   "mz-dark-mudang-online": {
-    name: "흑야 온라인 사주첩",
-    subtitle: "누구의 흑야 사주첩을 펼칠까요?",
+    name: "MZ다크무당 사주 리포트",
+    subtitle: "누구의 다크무당 리포트를 볼까요?",
     price: "9,900원",
     amountLabel: "9,900원",
     amount: 9900,
     paid: true,
     planId: "starter",
-    category: "흑야 온라인뷰",
-    description: "젊은 군주 강무영의 흑금 세계관으로 펼치는 온라인뷰 전용 프리미엄 사주첩이오.",
+    category: "프리미엄 온라인뷰",
+    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
     externalReport: true,
   },
   "daily-fortune": {
-    name: "오늘의 기운 전갈",
-    subtitle: "누구의 오늘 기운을 고할까요?",
+    name: "오늘의 무료운세",
+    subtitle: "누구의 오늘을 볼까요?",
     price: "무료",
     amountLabel: "0원",
     amount: 0,
     paid: false,
     planId: null,
-    category: "오늘 전갈",
-    description: "궁궐 새벽에 먼저 도착한 전갈처럼 오늘의 분위기와 마음가짐을 짧게 고하오.",
+    category: "오늘 운세",
+    description: "오늘 하루의 분위기, 일정, 마음가짐, 작은 선택 포인트를 짧고 실용적으로 정리합니다.",
   },
   followup: {
-    name: "흑야 문답 1회권",
-    subtitle: "어느 사주첩에 관해 더 여쭙겠소?",
+    name: "질문 1회권",
+    subtitle: "어떤 분석에 대해 더 물어볼까요?",
     price: "990원",
     amountLabel: "990원",
     amount: 990,
     paid: true,
     planId: "starter",
-    category: "문답 상담",
-    description: "이미 받은 사주첩의 만세력을 그대로 두고, 더 궁금한 한 대목에 답을 올리오.",
+    category: "추가 질문",
+    description: "이미 받은 분석의 만세력을 그대로 활용해, 더 궁금한 점 하나에 깊이 있는 답을 드립니다.",
   },
 };
 
@@ -1273,7 +1273,7 @@ function renderSupport(type) {
   const biz = runtimeConfig?.business || {};
   const email = biz.email || "";
   const tel = biz.tel || "";
-  const subject = encodeURIComponent(`[문의-${title}] 흑야 사주언박싱`);
+  const subject = encodeURIComponent(`[문의-${title}] 사주언박싱-mini`);
   const body = encodeURIComponent(`문의 유형: ${title}\n\n(여기에 내용을 적어주세요)\n\n----\n주문번호:\n`);
   box.hidden = false;
   box.innerHTML = `
@@ -1285,7 +1285,7 @@ function renderSupport(type) {
     ${!email && !tel ? `<div class="support-line"><span>안내</span><b>관리자에서 문의처(이메일/전화)를 등록해주세요</b></div>` : ""}`;
 }
 
-// ---------- 오늘의 흑야 전갈 (리치) ----------
+// ---------- 오늘의 무료운세 (리치) ----------
 const GANZHI_INFO = {
   "甲": ["갑", "wood"], "乙": ["을", "wood"], "丙": ["병", "fire"], "丁": ["정", "fire"],
   "戊": ["무", "earth"], "己": ["기", "earth"], "庚": ["경", "metal"], "辛": ["신", "metal"],
@@ -1309,31 +1309,31 @@ function dailyCacheKey(profileId, mood = "") {
 const HOME_GUIDE_STEPS = Object.freeze({
   profile: {
     count: "1 / 4",
-    title: "운명 주인을 먼저 등록하오",
-    copy: "이름과 생년월일, 태어난 시간을 한 번 봉하면 다른 사주첩에서도 다시 묻지 않소.",
-    action: "운명 주인 등록",
+    title: "분석할 사람을 먼저 등록하세요",
+    copy: "이름과 생년월일, 태어난 시간을 한 번 저장하면 다른 상품에서도 다시 입력할 필요가 없습니다.",
+    action: "프로필 등록하기",
     view: "profile",
   },
   product: {
     count: "2 / 4",
-    title: "열고 싶은 사주첩을 고르시오",
-    copy: "흑야 사주 비망록, 인연궁 합서, 십년운 궁궐도, 한 해의 왕명 중 하나를 고르면 주인을 선택할 수 있소.",
-    action: "사주첩 둘러보기",
+    title: "궁금한 주제에 맞는 상품을 고르세요",
+    copy: "기본 사주, 궁합, 대운, 연도운 중 원하는 분석을 선택하면 저장한 프로필을 고르는 화면이 열립니다.",
+    action: "상품 둘러보기",
     view: "home",
     selector: ".product-grid",
   },
   orders: {
     count: "3 / 4",
-    title: "주문 전갈은 언제든 다시 확인하오",
-    copy: "진행 중인 주문은 이어 결제하거나 취소할 수 있고, 완료된 주문은 사주첩 작성 상태까지 확인할 수 있소.",
-    action: "주문 전갈 보기",
+    title: "결제 상태는 언제든 다시 확인할 수 있어요",
+    copy: "진행 중인 주문은 이어서 결제하거나 취소할 수 있고, 완료된 주문은 상세 내역과 분석 상태를 확인할 수 있습니다.",
+    action: "결제 내역 보기",
     view: "orders",
   },
   library: {
     count: "4 / 4",
-    title: "완성된 사주첩은 보관함에 봉하오",
-    copy: "페이지를 나갔다 돌아와도 같은 계정의 비망록 보관함에서 사주첩을 다시 열고 상담각으로 이어갈 수 있소.",
-    action: "비망록 열기",
+    title: "완성된 결과는 보관함에 남습니다",
+    copy: "페이지를 나갔다 돌아와도 같은 계정의 보관함에서 리포트를 다시 열고 챗봇 상담으로 이어갈 수 있습니다.",
+    action: "보관함 열기",
     view: "library",
   },
 });
@@ -1390,8 +1390,8 @@ function startDailyFortune(profile, options = {}) {
   body.innerHTML = `
     <div class="daily-loading" role="status" aria-live="polite">
       <div class="daily-spinner"></div>
-      <p>${escapeHtml(profile.name)}님의 오늘 전갈을 읽는 중이오...</p>
-      <small>사주 원국과 오늘 일진을 맞춰보고 있소</small>
+      <p>${escapeHtml(profile.name)}님의 오늘 기류를 읽는 중...</p>
+      <small>사주 원국과 오늘 일진을 맞춰보고 있어요</small>
     </div>`;
   trackEvent("analysis_start", { productId: "daily-fortune", profileId: profile.id, profileName: profile.name });
 
@@ -1402,7 +1402,7 @@ function startDailyFortune(profile, options = {}) {
   })
     .then((data) => {
       if (options.regen && !data.regenerated) {
-        throw new Error("재생성권을 사용할 수 없소. 잠시 후 다시 청하소서.");
+        throw new Error("재생성권을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.");
       }
       if (runtimeSession?.points && Number.isInteger(data.regenTokens)) {
         runtimeSession.points.regenTokens = data.regenTokens;
@@ -1415,7 +1415,7 @@ function startDailyFortune(profile, options = {}) {
     .catch((error) => {
       body.innerHTML = `
         <div class="daily-loading">
-          <p>오늘의 전갈을 불러오지 못했소.</p>
+          <p>오늘의 운세를 불러오지 못했어요.</p>
           <small>${escapeHtml(error.message)}</small>
           <button class="primary-action" type="button" data-view-target="fortune" style="margin-top:14px;max-width:200px">돌아가기</button>
         </div>`;
@@ -1507,10 +1507,10 @@ function renderDailyFortune(profile, data) {
   const spot = d.luckySpot || {};
 
   const crossItems = [
-    ["saju-analysis", "봉인된 사주함을 열겠소?", "기질·재물·직업·인연까지 한 장에"],
-    ["compatibility", "그 사람과의 인연궁을 보겠소?", "두 사람의 끌림과 충돌 지점"],
-    ["cycle", "십년운의 물길은 언제 드는가", "10년 단위 전환점 읽기"],
-    ["yearly-fortune", "특정 연도의 왕명이 궁금하오?", "그 해의 큰 흐름과 타이밍"],
+    ["saju-analysis", "내 사주 전체가 궁금하다면?", "기질·재물·직업·관계까지 한 번에"],
+    ["compatibility", "우리 사이는 몇 점?", "두 사람의 끌림과 충돌 지점"],
+    ["cycle", "대운, 언제 물 들어와요?", "10년 단위 전환점 읽기"],
+    ["yearly-fortune", "특정 연도가 궁금하다면?", "그 해의 큰 흐름과 타이밍"],
   ]
     .map(
       ([pid, t, sub]) => `
@@ -1552,7 +1552,7 @@ function renderDailyFortune(profile, data) {
     </section>
 
     <section class="daily-block">
-      <h3>✨ 오늘의 전갈</h3>
+      <h3>✨ 오늘의 해설</h3>
       <div class="daily-acc">${sections}</div>
     </section>
 
@@ -1561,7 +1561,7 @@ function renderDailyFortune(profile, data) {
       <div class="cat-notes">${catBodies}</div>
     </section>
 
-    ${quests ? `<section class="daily-block"><h3>🎯 오늘의 작은 명</h3><ul class="daily-quests">${quests}</ul></section>` : ""}
+    ${quests ? `<section class="daily-block"><h3>🎯 오늘의 작은 실천</h3><ul class="daily-quests">${quests}</ul></section>` : ""}
 
     <section class="daily-block daily-food">
       <h3>🍽️ 오늘 뭐 먹지?</h3>
@@ -1581,11 +1581,11 @@ function renderDailyFortune(profile, data) {
     </section>
 
     <section class="daily-cross">
-      <h3>다음 사주첩도 살피겠소?</h3>
+      <h3>이런 분석은 어때요?</h3>
       ${crossItems}
     </section>
 
-    <p class="daily-foot">오늘의 기운 전갈은 사람마다 하루 한 번 새로 계산되오. 매일 들러 기류를 살피소서.</p>`;
+    <p class="daily-foot">오늘의 무료 운세는 사람마다 하루 한 번 새로 계산돼요. 매일 들러 기류를 확인해보세요.</p>`;
 
   body.querySelectorAll("[data-daily-cross]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1607,7 +1607,7 @@ function renderDailyRegeneration() {
   const tokens = Math.max(0, Number(runtimeSession?.points?.regenTokens || 0));
   if (card) card.hidden = !loggedIn;
   if (count) count.textContent = tokens > 0
-    ? `남은 재생성권 ${tokens}개 · 오늘 전갈을 새로 받을 수 있소.`
+    ? `남은 재생성권 ${tokens}개 · 오늘 운세를 새로 만들 수 있어요.`
     : "남은 재생성권이 없습니다.";
   if (button) {
     button.hidden = tokens <= 0;
@@ -1618,7 +1618,7 @@ function renderDailyRegeneration() {
 
 document.querySelector("[data-daily-regenerate]")?.addEventListener("click", () => {
   if (!activeDailyProfile || Number(runtimeSession?.points?.regenTokens || 0) <= 0) return;
-  if (!window.confirm("재생성권 1개를 사용해 오늘의 기운 전갈을 새로 받겠소?")) return;
+  if (!window.confirm("재생성권 1개를 사용해 오늘의 무료운세를 새로 만들까요?")) return;
   startDailyFortune(activeDailyProfile, { regen: true, mood: activeDailyMood });
 });
 
@@ -2395,7 +2395,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
           payMethod: order.payMethod,
           customerKey: order.customerKey,
           createdAt: Date.now(),
-          // 흑야 문답: 결제 후 답변 생성에 필요한 정보(만세력 재사용)
+          // 추가 질문 상담: 결제 후 답변 생성에 필요한 정보(만세력 재사용)
           question: context.question || null,
           analysisId: context.analysisId || null,
           manse: context.manse || null,
@@ -2409,7 +2409,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
         orderId: order.orderId,
         productId: context.productId,
         productName: context.product.name,
-        profileName: context.profile?.name || (isChatCreditProductId(context.productId) ? "강무영 상담각" : "포인트 충전"),
+        profileName: context.profile?.name || (isChatCreditProductId(context.productId) ? "AI 챗봇 상담" : "포인트 충전"),
         amount: order.price,
         cashAmount: order.amount,
         pointsUsed: order.pointsUsed,
@@ -2447,7 +2447,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
     const successUrl = `${location.origin}/payments/success`;
     const failUrl = `${location.origin}/payments/fail`;
     const orderName = purchase ? `${context.product.name}${context.profile?.name ? ` · ${context.profile.name}` : ""}` : order.orderName;
-    const customerName = runtimeSession?.user?.nickname || context?.profile?.name || "흑야 사주언박싱 고객";
+    const customerName = runtimeSession?.user?.nickname || context?.profile?.name || "사주언박싱-mini 고객";
 
     trackEvent("payment_start", { orderId: order.orderId, productId: context?.productId, amount: order.amount });
 
@@ -2494,7 +2494,7 @@ async function requestExistingOrderPayment(order, purchase) {
   const amount = Number(purchase.amount ?? order.cashAmount ?? window.OrderRecovery.cashAmount(order));
   if (!(amount > 0)) throw new Error("토스로 결제할 금액이 없습니다.");
   const orderName = purchase.orderName || `${purchase.product?.name || order.productName || "사주 리포트"}${purchase.profile?.name ? ` · ${purchase.profile.name}` : ""}`;
-  const customerName = runtimeSession?.user?.nickname || purchase.profile?.name || "흑야 사주언박싱 고객";
+  const customerName = runtimeSession?.user?.nickname || purchase.profile?.name || "사주언박싱-mini 고객";
   const successUrl = `${location.origin}/payments/success`;
   const failUrl = `${location.origin}/payments/fail`;
   trackEvent("payment_resume", { orderId: order.orderId, productId: order.productId, amount });
@@ -2759,7 +2759,7 @@ function shareKakao(url, title) {
       if (!Kakao.isInitialized()) Kakao.init(key);
       Kakao.Share.sendDefault({
         objectType: "feed",
-        content: { title, description: "흑야 사주언박싱 사주첩", imageUrl: `${location.origin}/assets/generated/banners/heukya-premium-hero.jpg`, link: { mobileWebUrl: url, webUrl: url } },
+        content: { title, description: "사주언박싱-mini 리포트", imageUrl: `${location.origin}/assets/generated/banners/hero-lab.jpg`, link: { mobileWebUrl: url, webUrl: url } },
       });
     } catch {
       fallbackCopy(url);
@@ -2890,7 +2890,7 @@ function cycleTimelineHtml(ctx) {
   return `<div class="report-timeline"><h3>10년 단위 흐름</h3><div class="tl-track">${nodes}</div></div>`;
 }
 
-// 한 해의 왕명 — 다가오는 해 카드(연도+나이), 올해 강조
+// 연도별 운세 — 다가오는 해 카드(연도+나이), 올해 강조
 function yearlyStripHtml(ctx) {
   const ys = ctx && ctx.세운;
   if (!Array.isArray(ys) || !ys.length) return "";
@@ -2904,7 +2904,7 @@ function yearlyStripHtml(ctx) {
       return `<div class="yr-card is-now"><b>${escapeHtml(String(y.연도))}</b><small>${Number(y.나이)}세${suffix}</small></div>`;
     })
     .join("");
-  return `<div class="report-timeline"><h3>${targetYear ? `${targetYear}년 왕명 기준` : "한 해의 왕명 기준"}</h3><div class="yr-track">${cards}</div></div>`;
+  return `<div class="report-timeline"><h3>${targetYear ? `${targetYear}년 운세 기준` : "연도별 운세 기준"}</h3><div class="yr-track">${cards}</div></div>`;
 }
 
 // 궁합 점수 카드 — 점수 게이지 + 한 줄 라벨 + 해시태그(재미 요소)
@@ -3426,7 +3426,7 @@ async function confirmReturnedPayment() {
 
     if (Number(pending?.pointsUsed || result.pointsUsed || 0) > 0) await refreshPoints();
 
-    // 흑야 문답: 결제 완료 후 저장된 만세력으로 답변 생성 → 문답 화면으로
+    // 추가 질문 상담: 결제 완료 후 저장된 만세력으로 답변 생성 → 추가 질문 화면으로
     if (pending?.productId === "followup") {
       if (paymentRef) {
         paymentRef.hidden = false;
@@ -3657,7 +3657,7 @@ function bindFortuneMood() {
     const profile = getProfiles().find((item) => item.id === profileId);
     const mood = fortuneMoodValue();
     if (!profile) {
-      if (status) status.textContent = "오늘 전갈을 받을 운명 주인을 먼저 추가하소서.";
+      if (status) status.textContent = "오늘 운세를 볼 프로필을 먼저 추가해주세요.";
       return;
     }
     if (!mood) {
@@ -3678,12 +3678,12 @@ function fortuneMoodValue() {
   return mood;
 }
 
-// ---------- 흑야 문답(결제형) ----------
+// ---------- 추가 질문 상담(결제형) ----------
 // 보관함에서 구매한 분석을 고르고, 질문 1회권(990원)을 결제하면, 그 분석의 만세력을
 // 그대로 재사용해(만세력 재계산·포인트 차감 없이) AI가 답변한다. Q&A는 그 분석에 저장된다.
 let followupSelectedId = null;
 
-// 만세력이 저장돼 문답 가능한 분석만(오늘의 흑야 전갈 등 manse 없는 항목 제외)
+// 만세력이 저장돼 추가 질문이 가능한 분석만(오늘의 무료운세 등 manse 없는 항목 제외)
 function followupArchive() {
   return getArchive().filter((a) => a?.analysis && (a.analysis.manse || a.analysis.summary));
 }
@@ -3827,7 +3827,7 @@ function bindFollowup() {
   // 진입 시 렌더는 showView("followup")에서 처리. 여기선 별도 바인딩 없음(이벤트는 renderFollowup에서).
 }
 
-// ---------- 강무영 상담각(질의응답권형) ----------
+// ---------- AI 챗봇 상담(질의응답권형) ----------
 function isChatCreditProductId(productId) {
   return /^chat-qa-(1|3|5|10)$/.test(String(productId || ""));
 }
@@ -4022,7 +4022,7 @@ function renderChatState() {
   }
   if (conversation) conversation.hidden = false;
   const title = document.querySelector("[data-chat-title]");
-  if (title) title.textContent = chatState.detail.session.title || "강무영 상담각";
+  if (title) title.textContent = chatState.detail.session.title || "AI 챗봇 상담";
   const reportContext = document.querySelector("[data-chat-report-context]");
   if (reportContext) {
     const report = chatState.detail.report || {};
@@ -4237,7 +4237,7 @@ function startChatCreditCheckout(productId) {
     amountLabel: formatWon(row.amount),
     paid: true,
     planId: null,
-    category: "강무영 상담각",
+    category: "AI 챗봇 상담",
     description: `${row.questions}개의 질문을 선택한 리포트 기반 AI 챗봇에서 사용할 수 있습니다.`,
   };
   currentCheckout = { productId: row.id, product, profile: null, partner: null, pointsUsed: 0 };
@@ -4268,7 +4268,7 @@ async function completeChatCreditPurchase({ purchase, orderId, fulfillment }) {
   }
   if (paymentContinueButton) {
     paymentContinueButton.hidden = false;
-    paymentContinueButton.textContent = "강무영 상담각으로 이동";
+    paymentContinueButton.textContent = "AI 챗봇 상담으로 이동";
     paymentContinueButton.onclick = () => showView("chat");
   }
 }
@@ -4299,12 +4299,12 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
     updatedAt: Date.now(),
   });
   setPaymentResult(
-    fulfillment?.status === "submitted" ? "결제 완료 · 사주첩 작성 시작" : "결제 완료 · 사주첩 작성 확인 필요",
+    fulfillment?.status === "submitted" ? "결제 완료 · 리포트 생성 시작" : "결제 완료 · 리포트 생성 확인 필요",
     fulfillment?.status === "submitted"
-      ? "saju-web 흑야 온라인 사주첩 제작을 시작했소."
-      : "결제는 완료됐지만 saju-web 주문 상태를 다시 확인해야 하오.",
+      ? "saju-web MZ다크무당 온라인뷰 리포트 제작을 시작했습니다."
+      : "결제는 완료됐지만 saju-web 주문 상태를 다시 확인해야 합니다.",
     [
-      ["상품", purchase.product?.name || "흑야 온라인 사주첩"],
+      ["상품", purchase.product?.name || "MZ다크무당 사주 리포트"],
       ["대상", purchase.profile?.name || "프로필"],
       ["생성 상태", fulfillment?.status === "submitted" ? "saju-web 생성중" : "확인 필요"],
     ],
@@ -4313,11 +4313,11 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
   );
   if (paymentRef) {
     paymentRef.hidden = false;
-    paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주소서`;
+    paymentRef.textContent = `주문번호 ${shortOrderId(orderId)} · 문의 시 알려주세요`;
   }
   if (paymentContinueButton) {
     paymentContinueButton.hidden = false;
-    paymentContinueButton.textContent = "주문 전갈로 이동";
+    paymentContinueButton.textContent = "결제 내역으로 이동";
     paymentContinueButton.onclick = () => showView("orders");
   }
   pushUserData("order", getOrders().find((order) => order.orderId === orderId));

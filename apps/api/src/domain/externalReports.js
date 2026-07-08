@@ -4,7 +4,7 @@ export const EXTERNAL_REPORT_PRODUCTS = Object.freeze({
   "mz-dark-mudang-online": Object.freeze({
     id: "mz-dark-mudang-online",
     provider: "saju-web",
-    name: "흑야 온라인 사주첩",
+    name: "MZ다크무당 사주 리포트",
     productType: "general_saju",
     reportTemplate: "tight-v3",
     reportEngine: "default",

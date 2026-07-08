@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   try {
     const body = await readJson(req);
 
-    // 흑야 문답(결제형): 보관함에 저장된 만세력을 재사용해 후속 질문 1건에 답한다.
+    // 추가 질문 상담(결제형): 보관함에 저장된 만세력을 재사용해 후속 질문 1건에 답한다.
     // 함수 수(Vercel Hobby 12개) 절약 위해 별도 엔드포인트 대신 여기에 통합.
     if (body.mode === "followup") {
       const { profile, manse, summary, question, history = [] } = body;

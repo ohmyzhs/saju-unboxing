@@ -15,12 +15,12 @@ import {
 } from "../_lib/points.js";
 
 const PRODUCT_NAMES = {
-  "saju-analysis": "흑야 사주 비망록",
-  compatibility: "인연궁 합서",
-  cycle: "십년운 궁궐도",
-  "yearly-fortune": "한 해의 왕명",
-  "auspicious-date": "길일 어명첩",
-  "daily-fortune": "오늘의 기운 전갈",
+  "saju-analysis": "기본 사주 리포트",
+  compatibility: "관계 궁합 분석",
+  cycle: "대운의 흐름",
+  "yearly-fortune": "연도별 운세",
+  "auspicious-date": "목적별 택일 리포트",
+  "daily-fortune": "오늘의 무료운세",
 };
 
 export function normalizeCalendarPick(value) {
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 오늘의 흑야 전갈 → 같은 사람·같은 날(KST)이면 저장 결과 재사용(만세력 포인트/AI 절약)
+    // 오늘의 무료운세 → 같은 사람·같은 날(KST)이면 저장 결과 재사용(만세력 포인트/AI 절약)
     if (productId === "daily-fortune") {
       // await 필수: 안 하면 handleDaily 내부 에러가 위 try/catch 를 못 거치고
       // FUNCTION_INVOCATION_FAILED(비-JSON "A server error...") 로 떨어진다.

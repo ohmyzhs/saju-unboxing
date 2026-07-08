@@ -5,52 +5,52 @@ const ORDER_KEY = "saju_lab_orders_v1";
 
 const DEFAULT_PRODUCTS = {
   "saju-analysis": {
-    name: "흑야 사주 비망록",
+    name: "기본 사주 리포트",
     amount: 990,
-    description: "봉인된 사주의 함을 열어 기질, 재물, 직업, 인연의 결을 정중한 사극체 하오체로 고하오.",
-    prompt: "흑야 강무영 세계관을 유지하며 정통 명리 해석을 사극 하오체로 작성한다.",
+    description: "타고난 성향, 재물운, 직업운, 관계 흐름까지 한 번에 정리합니다.",
+    prompt: "정통 명리 해석을 바탕으로 성향, 재물, 직업, 관계, 올해의 선택 기준을 긴 호흡의 리포트로 작성한다.",
   },
   compatibility: {
-    name: "인연궁 합서",
+    name: "관계 궁합 분석",
     amount: 990,
-    description: "두 사람 사이에 흐르는 끌림과 어긋남을 궁궐의 등불 아래 차분히 풀어드리오.",
-    prompt: "두 사람의 인연을 조선 궁궐 문답처럼 정중한 하오체로 작성한다.",
+    description: "두 사람의 리듬과 충돌 지점을 부드럽게 풀어봅니다.",
+    prompt: "두 사람의 일간, 일지, 월지, 오행 균형을 비교해 끌림과 충돌, 오래 가는 대화법을 구체적으로 작성한다.",
   },
   cycle: {
-    name: "십년운 궁궐도",
+    name: "대운의 흐름",
     amount: 990,
-    description: "십 년마다 바뀌는 운의 문과 돌아서야 할 회랑을 지도처럼 펼쳐 보이오.",
-    prompt: "대운 시작 시점과 10년 단위 흐름을 궁궐도처럼 펼치되 사극 하오체로 작성한다.",
+    description: "10년 단위 운의 전환점과 준비 구간을 읽습니다.",
+    prompt: "대운 시작 시점과 10년 단위 흐름을 중심으로 기회, 주의, 준비할 선택을 타임라인처럼 작성한다.",
   },
   "yearly-fortune": {
-    name: "한 해의 왕명",
+    name: "연도별 운세",
     amount: 990,
-    description: "선택한 해의 총운과 계절별 징조, 달마다 조심할 문턱을 고하오.",
-    prompt: "세운과 원국의 작용을 기준으로 한 해의 왕명을 받드는 말투로 작성한다.",
+    description: "특정 연도의 총운, 계절별 포인트, 월별 흐름을 봅니다.",
+    prompt: "세운과 원국의 작용을 기준으로 해당 연도의 총운, 월별 포인트, 조심할 시기와 실행 조언을 작성한다.",
   },
   "auspicious-date": {
-    name: "길일 어명첩",
+    name: "목적별 택일 리포트",
     amount: 990,
-    description: "어명이 내려오기 전, 선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교해 올리오.",
-    prompt: "후보 날짜만 비교해 길일 순위와 활용법을 사극 하오체로 작성한다.",
+    description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위를 정리합니다.",
+    prompt: "사용자가 고른 목적과 후보 날짜만 비교해 날짜별 적합도, 우선순위, 활용법과 주의점을 구체적으로 작성한다.",
   },
   "mz-dark-mudang-online": {
-    name: "흑야 온라인 사주첩",
+    name: "MZ다크무당 사주 리포트",
     amount: 9900,
-    description: "젊은 군주 강무영의 흑금 세계관으로 펼치는 온라인뷰 전용 프리미엄 사주첩이오.",
+    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
     prompt: "saju-web tight-v3 온라인뷰 리포트로 생성한다. franchise에서는 결제와 열람 연결만 담당한다.",
   },
   "daily-fortune": {
-    name: "오늘의 기운 전갈",
+    name: "오늘의 무료운세",
     amount: 0,
-    description: "궁궐 새벽에 먼저 도착한 전갈처럼 오늘의 분위기와 마음가짐을 짧게 고하오.",
-    prompt: "오늘 하루의 분위기, 관계, 일, 소비, 컨디션을 짧고 실용적인 사극 하오체로 작성한다.",
+    description: "짧은 질문으로 하루의 기운과 조심할 점을 봅니다.",
+    prompt: "오늘 하루의 분위기, 관계, 일, 소비, 컨디션을 짧고 실용적인 조언으로 작성한다.",
   },
   followup: {
-    name: "흑야 문답 1회권",
+    name: "질문 1회권",
     amount: 990,
-    description: "이미 받은 사주첩의 만세력을 그대로 두고, 더 궁금한 한 대목에 답을 올리오.",
-    prompt: "이미 계산된 만세력을 근거로 고객의 추가 질문에 정면으로, 사극 하오체로 답한다.",
+    description: "이미 받은 분석에 대해 더 궁금한 점 하나를, 그 사주 그대로 답해드립니다.",
+    prompt: "이미 계산된 만세력을 근거로 고객의 추가 질문에 정면으로, 따뜻하고 구체적으로 답한다.",
   },
 };
 
@@ -90,7 +90,7 @@ const IMAGE_SLOTS = [
   ["thumb.compatibility", "궁합 썸네일"],
   ["thumb.cycle", "대운 썸네일"],
   ["thumb.yearly-fortune", "연도 썸네일"],
-  ["thumb.mz-dark-mudang-online", "흑야 온라인 썸네일"],
+  ["thumb.mz-dark-mudang-online", "MZ다크무당 썸네일"],
   ["thumb.daily-fortune", "오늘 썸네일"],
   ["loading.hero", "분석 로딩 움짤 (gif 권장 · 비우면 기본 애니메이션)"],
 ];
@@ -282,7 +282,7 @@ function showLogin() {
   wrap.className = "admin-login";
   wrap.innerHTML = `
     <form id="admin-login-form">
-      <div class="admin-login-brand"><span>命</span><h2>흑야 사주언박싱 관리자</h2></div>
+      <div class="admin-login-brand"><span>命</span><h2>사주언박싱-mini 관리자</h2></div>
       <p class="sub">관리자 비밀번호를 입력해 주세요.</p>
       <input type="password" id="admin-pw" placeholder="관리자 비밀번호" autocomplete="current-password" />
       <button type="submit">로그인</button>
