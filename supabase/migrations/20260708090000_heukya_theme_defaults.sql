@@ -49,12 +49,12 @@ set
     )
   ),
   images = coalesce(images, '{}'::jsonb) || jsonb_build_object(
-    'banner.hero', '/assets/generated/banners/heukya-hero.jpg',
-    'thumb.saju-analysis', '/assets/generated/thumbnails/heukya-saju-reading.jpg',
-    'thumb.compatibility', '/assets/generated/thumbnails/heukya-compatibility.jpg',
-    'thumb.cycle', '/assets/generated/thumbnails/heukya-fortune-cycle.jpg',
-    'thumb.mz-dark-mudang-online', '/assets/generated/thumbnails/heukya-dark-mudang.jpg',
-    'thumb.yearly-fortune', '/assets/generated/thumbnails/heukya-year-wheel.jpg'
+    'banner.hero', '/assets/generated/banners/heukya-premium-hero.jpg',
+    'thumb.saju-analysis', '/assets/generated/thumbnails/heukya-premium-saju-reading.jpg',
+    'thumb.compatibility', '/assets/generated/thumbnails/heukya-premium-compatibility.jpg',
+    'thumb.cycle', '/assets/generated/thumbnails/heukya-premium-fortune-cycle.jpg',
+    'thumb.mz-dark-mudang-online', '/assets/generated/thumbnails/heukya-premium-dark-mudang.jpg',
+    'thumb.yearly-fortune', '/assets/generated/thumbnails/heukya-premium-year-wheel.jpg'
   ),
   updated_at = now()
 where id = 1;

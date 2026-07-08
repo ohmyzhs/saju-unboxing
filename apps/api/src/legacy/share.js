@@ -96,7 +96,7 @@ function paragraphs(body) {
 function renderHtml(payload, shareUrl, base, kakaoJsKey) {
   const title = payload.profileName ? `${payload.profileName}님의 ${payload.productName}` : payload.productName;
   const desc = (payload.sections[0]?.body || payload.headline || "").slice(0, 110).replace(/\s+/g, " ");
-  const ogImage = `${base}/assets/generated/banners/heukya-hero.jpg`;
+  const ogImage = `${base}/assets/generated/banners/heukya-premium-hero.jpg`;
   const sections = payload.sections
     .map(
       (s) => `<details class="sec" open><summary><span>${esc(s.icon)}</span>${esc(s.title)}</summary><div class="body">${paragraphs(s.body)}</div></details>`,
