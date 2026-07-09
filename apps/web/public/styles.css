@@ -7411,3 +7411,34 @@ body {
 .home-guide-panel h3 {
   word-break: keep-all;
 }
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v7 — 바텀내브 활성 상태: 잉크 슬랩 제거,
+   골드 언더바 인디케이터 (에디토리얼)
+   ───────────────────────────────────────────────────── */
+.bottom-nav > button {
+  position: relative;
+  transition: color 160ms ease;
+}
+
+.bottom-nav > button.is-active {
+  background: transparent;
+  border-color: transparent;
+  color: #16233c;
+  font-weight: 700;
+}
+
+.bottom-nav > button:not(.fortune-fab).is-active::after {
+  content: "";
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  width: 18px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: var(--royal-gold);
+}
+
+.bottom-nav > button:not(.fortune-fab).is-active img {
+  filter: none;
+}
