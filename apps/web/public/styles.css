@@ -6807,3 +6807,208 @@ body {
     grid-column: span 2;
   }
 }
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v4 '청월(淸月)' — 상용 프리미엄 폴리시
+   포스터형 히어로(9:16 근접 노출) + 명조 디스플레이 서체 + 카드 정제
+   ───────────────────────────────────────────────────── */
+:root {
+  --font-display: "Gowun Batang", "Noto Serif KR", "AppleMyungjo", serif;
+}
+
+.brand-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+
+/* 배너: 세로 포스터 비율로 키워 원본 구도(상단 여백+하단 인물)를 살린다 */
+.banner-carousel {
+  height: min(158vw, 680px);
+  border-radius: 30px;
+  border: 1px solid rgba(213, 170, 85, 0.42);
+}
+
+.banner-slide img {
+  object-position: center 22%;
+}
+
+/* 카피를 상단 하늘 여백으로 이동 */
+.banner-copy,
+.banner-copy.banner-copy-right {
+  inset: 30px 22px auto 22px;
+}
+
+.banner-slide::after {
+  background:
+    linear-gradient(180deg, rgba(23, 35, 58, 0.34) 0%, rgba(23, 35, 58, 0.08) 26%, rgba(23, 35, 58, 0) 42%),
+    linear-gradient(0deg, rgba(23, 35, 58, 0.30) 0%, rgba(23, 35, 58, 0) 24%);
+}
+
+.banner-copy p {
+  margin: 0 0 12px;
+  padding: 6px 11px;
+  max-width: 100%;
+  color: #f6e3ae;
+  background: rgba(22, 33, 55, 0.34);
+  border: 1px solid rgba(213, 170, 85, 0.34);
+  backdrop-filter: blur(6px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.banner-copy h1,
+.banner-copy h2 {
+  max-width: 300px;
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(29px, 8vw, 36px);
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+  color: #fffdf6;
+  text-shadow: 0 3px 22px rgba(12, 20, 36, 0.55);
+}
+
+.banner-button {
+  min-width: 132px;
+  height: 46px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 248, 232, 0.34);
+  box-shadow: 0 12px 26px rgba(22, 33, 55, 0.36);
+}
+
+.carousel-dots {
+  bottom: 16px;
+  right: 18px;
+  background: rgba(22, 33, 55, 0.38);
+}
+
+/* 상품 카드 — 청월당급 정제 */
+.product-card {
+  border-radius: 22px;
+  border: 1px solid rgba(213, 170, 85, 0.30);
+  box-shadow: 0 12px 28px rgba(43, 58, 88, 0.10);
+  transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 40px rgba(43, 58, 88, 0.16);
+}
+
+.product-image {
+  background: #24365370;
+}
+
+.product-image img {
+  filter: saturate(1.0) contrast(1.01);
+  transition: transform 0.4s ease;
+}
+
+.product-card:hover .product-image img {
+  transform: scale(1.035);
+}
+
+.product-image::after {
+  background: linear-gradient(180deg, rgba(23, 35, 58, 0) 62%, rgba(23, 35, 58, 0.30) 100%);
+}
+
+.product-image span {
+  top: 10px;
+  left: 10px;
+  right: auto;
+  bottom: auto;
+  width: fit-content;
+  height: auto;
+  padding: 5px 10px;
+  background: rgba(22, 33, 55, 0.52);
+  border: 1px solid rgba(213, 170, 85, 0.50);
+  backdrop-filter: blur(6px);
+  letter-spacing: 0.06em;
+}
+
+.product-copy h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16.5px;
+  letter-spacing: -0.02em;
+  color: #14203a;
+}
+
+.product-copy footer strong {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+/* 섹션 제목 서체 통일 */
+.home-story h2,
+.view-title h1,
+.analysis-hero h1,
+.home-guide-panel h2,
+.daily-hero h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* 입장 모션 — 첫 페인트 한 번만, 절제된 스태거 */
+@keyframes heukya-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.banner-copy {
+  animation: heukya-rise 0.6s ease 0.05s both;
+}
+
+[data-view="home"].is-active .product-card {
+  animation: heukya-rise 0.55s ease both;
+}
+
+[data-view="home"].is-active .product-card:nth-child(1) { animation-delay: 0.06s; }
+[data-view="home"].is-active .product-card:nth-child(2) { animation-delay: 0.12s; }
+[data-view="home"].is-active .product-card:nth-child(3) { animation-delay: 0.18s; }
+[data-view="home"].is-active .product-card:nth-child(4) { animation-delay: 0.24s; }
+[data-view="home"].is-active .product-card:nth-child(5) { animation-delay: 0.30s; }
+[data-view="home"].is-active .product-card:nth-child(6) { animation-delay: 0.36s; }
+[data-view="home"].is-active .product-card:nth-child(7) { animation-delay: 0.42s; }
+[data-view="home"].is-active .product-card:nth-child(8) { animation-delay: 0.48s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .banner-copy,
+  [data-view="home"].is-active .product-card {
+    animation: none;
+  }
+
+  .product-card,
+  .product-image img {
+    transition: none;
+  }
+}
+
+@media (min-width: 720px) {
+  .banner-carousel {
+    height: 640px;
+  }
+
+  .banner-slide img {
+    object-position: center 30%;
+  }
+}
+
+/* 설명 2줄 클램프 강제(부분 노출 방지) — min-height가 2줄 높이보다 크면
+   3번째 줄 상단이 슬쩍 보이므로 min-height를 푼다 */
+.product-copy p {
+  min-height: 0;
+  max-height: calc(1.55em * 2);
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
