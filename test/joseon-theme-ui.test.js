@@ -19,7 +19,7 @@ const migration = readFileSync(
 test("홈 화면은 흑야 조선 미스터리 비주얼(이미지 스킨)을 쓴다", () => {
   assert.match(html, /assets\/generated\/banners\/heukya-premium-hero\.jpg/);
   assert.match(html, /assets\/generated\/banners\/heukya-premium-daily-flow\.jpg/);
-  assert.match(html, /assets\/generated\/banners\/heukya-premium-auspicious-date\.jpg/);
+  assert.match(html, /assets\/generated\/banners\/heukya-premium-unboxing\.jpg/);
   // 여명 팔레트: 칠흑이 아니라 새벽빛 남색 + 금.
   assert.match(css, /--midnight-ink:\s*#1a2942/i);
   assert.match(css, /--royal-gold:\s*#d5aa55/i);
@@ -41,11 +41,10 @@ test("모든 주요 상품 카드는 흑야 썸네일을 사용한다", () => {
   }
 });
 
-test("헤더·상품명칭은 기존 이름을 그대로 유지한다", () => {
+test("헤더·상품명칭은 기존 이름을 그대로 유지한다 (프리미엄 상품만 개명)", () => {
   assert.match(html, /사주언박싱-mini/);
   assert.match(html, /기본 사주 리포트/);
   assert.match(html, /관계 궁합 분석/);
-  assert.match(html, /MZ다크무당 사주 리포트/);
   assert.match(app, /"기본 사주 리포트"/);
   assert.match(toss, /사주언박싱-mini 기본 분석/);
   const shipped = [html, app, admin, adminHtml, logo, share, toss].join("\n");
@@ -55,10 +54,31 @@ test("헤더·상품명칭은 기존 이름을 그대로 유지한다", () => {
   );
 });
 
+test("프리미엄 상품은 새 이름과 하오체 각오 카피, 히어로 직하단 가로 카드를 가진다", () => {
+  assert.match(html, /운명 완전개봉 · 흑야 프리미엄/);
+  assert.match(app, /운명 완전개봉 · 흑야 프리미엄/);
+  assert.match(html, /premium-unboxing-card/);
+  assert.match(css, /\.premium-unboxing-card/);
+  assert.match(html, /가감 없이.*각오|각오를 단단히/);
+  // 옛 이름 퇴출
+  const shipped = [html, app, admin].join("\n");
+  assert.doesNotMatch(shipped, /MZ다크무당 사주 리포트/);
+  // 캐러셀 3번 슬라이드는 택일 대신 프리미엄으로
+  assert.doesNotMatch(html, /banner-copy-right[\s\S]{0,200}택일 캘린더/);
+  assert.match(html, /data-slide="2"[\s\S]{0,400}data-product-id="mz-dark-mudang-online"/);
+});
+
+test("홈 그리드에서 추가질문 카드는 빠지고 AI 챗봇 상담이 세로형으로 대체한다", () => {
+  assert.doesNotMatch(html, /<h2>추가 질문 상담<\/h2>/);
+  assert.match(html, /product-card chat-product-card/);
+  assert.doesNotMatch(html, /product-card-wide chat-product-card/);
+  assert.match(html, /footer-menu/);
+});
+
 test("운영 런타임 설정 migration은 이미지 스킨만 흑야로, 상품명은 원래대로 유지한다", () => {
   assert.match(migration, /site_config/);
   assert.match(migration, /기본 사주 리포트/);
-  assert.match(migration, /MZ다크무당 사주 리포트/);
+  assert.match(migration, /운명 완전개봉 · 흑야 프리미엄/);
   assert.match(migration, /사주언박싱-mini/);
   assert.match(migration, /heukya-premium-hero\.jpg/);
   assert.match(migration, /heukya-premium-dark-mudang\.jpg/);

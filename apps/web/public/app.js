@@ -101,15 +101,15 @@ const PRODUCTS = {
     description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위와 활용법을 정리합니다.",
   },
   "mz-dark-mudang-online": {
-    name: "MZ다크무당 사주 리포트",
-    subtitle: "누구의 다크무당 리포트를 볼까요?",
+    name: "운명 완전개봉 · 흑야 프리미엄",
+    subtitle: "누구의 운명함을 완전히 열어 보겠소?",
     price: "9,900원",
     amountLabel: "9,900원",
     amount: 9900,
     paid: true,
     planId: "starter",
     category: "프리미엄 온라인뷰",
-    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
+    description: "그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.",
     externalReport: true,
   },
   "daily-fortune": {
@@ -4304,7 +4304,7 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
       ? "saju-web MZ다크무당 온라인뷰 리포트 제작을 시작했습니다."
       : "결제는 완료됐지만 saju-web 주문 상태를 다시 확인해야 합니다.",
     [
-      ["상품", purchase.product?.name || "MZ다크무당 사주 리포트"],
+      ["상품", purchase.product?.name || "운명 완전개봉 · 흑야 프리미엄"],
       ["대상", purchase.profile?.name || "프로필"],
       ["생성 상태", fulfillment?.status === "submitted" ? "saju-web 생성중" : "확인 필요"],
     ],

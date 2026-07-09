@@ -31,9 +31,9 @@ set
       'description', '10년 단위 운의 전환점과 준비 구간, 기회와 위기를 타임라인으로 풀어드립니다.'
     ),
     'mz-dark-mudang-online', jsonb_build_object(
-      'name', 'MZ다크무당 사주 리포트',
+      'name', '운명 완전개봉 · 흑야 프리미엄',
       'amount', 9900,
-      'description', 'saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.'
+      'description', '그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.'
     ),
     'yearly-fortune', jsonb_build_object(
       'name', '연도별 운세',

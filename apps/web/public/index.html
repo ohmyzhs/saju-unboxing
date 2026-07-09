@@ -44,11 +44,11 @@
             </div>
           </article>
           <article class="banner-slide" data-slide="2">
-            <img src="./assets/generated/banners/heukya-premium-auspicious-date.jpg" alt="" loading="lazy" decoding="async" />
+            <img src="./assets/generated/banners/heukya-premium-unboxing.jpg" alt="" loading="lazy" decoding="async" />
             <div class="banner-copy banner-copy-right">
-              <p>결정이 필요한 날을 고를 때</p>
-              <h2>택일 캘린더</h2>
-              <button class="banner-button" data-view-target="calendar">날짜 살펴보기</button>
+              <p>가감 없이 고할 것이니, 각오하시오</p>
+              <h2>운명 완전개봉</h2>
+              <button class="banner-button" data-product-id="mz-dark-mudang-online">운명함 열기</button>
             </div>
           </article>
           <div class="carousel-dots" role="tablist" aria-label="배너 선택">
@@ -58,11 +58,26 @@
           </div>
         </section>
 
+        <article class="premium-unboxing-card" data-category="saju">
+          <button class="product-image" data-product-id="mz-dark-mudang-online">
+            <img src="./assets/generated/thumbnails/heukya-premium-dark-mudang.jpg" alt="운명 완전개봉 프리미엄 썸네일" data-img-key="thumb.mz-dark-mudang-online" loading="lazy" decoding="async" />
+          </button>
+          <div class="product-copy">
+            <small class="premium-flag">PREMIUM · 온라인뷰 단독</small>
+            <h2 data-product-name="mz-dark-mudang-online">운명 완전개봉 · 흑야 프리미엄</h2>
+            <p data-product-description="mz-dark-mudang-online">그대의 운명, 이번엔 남김없이 열어 보이겠소. 길한 것만 골라 고하지 않을 터 — 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.</p>
+            <footer>
+              <strong data-product-price="mz-dark-mudang-online">9,900원</strong>
+              <button data-product-id="mz-dark-mudang-online">운명함 열기</button>
+            </footer>
+          </div>
+        </article>
+
         <nav class="filters" aria-label="상품 분류">
           <button class="is-active" data-filter="all">전체</button>
           <button data-filter="saju">사주·명리</button>
           <button data-filter="timing">운세·택일</button>
-          <button data-filter="consult">추가질문</button>
+          <button data-filter="consult">상담</button>
         </nav>
 
         <section class="product-grid" aria-label="사주언박싱-mini 서비스">
@@ -111,21 +126,6 @@
             </div>
           </article>
 
-          <article class="product-card" data-category="saju">
-            <button class="product-image" data-product-id="mz-dark-mudang-online">
-              <img src="./assets/generated/thumbnails/heukya-premium-dark-mudang.jpg" alt="MZ다크무당 온라인뷰 썸네일" data-img-key="thumb.mz-dark-mudang-online" loading="lazy" decoding="async" />
-              <span>온라인뷰</span>
-            </button>
-            <div class="product-copy">
-              <h2 data-product-name="mz-dark-mudang-online">MZ다크무당 사주 리포트</h2>
-              <p data-product-description="mz-dark-mudang-online">saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.</p>
-              <footer>
-                <strong data-product-price="mz-dark-mudang-online">9,900원</strong>
-                <button data-product-id="mz-dark-mudang-online">온라인 리포트 신청</button>
-              </footer>
-            </div>
-          </article>
-
           <article class="product-card" data-category="timing">
             <button class="product-image" data-view-target="calendar">
               <img src="./assets/generated/thumbnails/heukya-premium-auspicious-date.jpg" alt="택일 썸네일" loading="lazy" decoding="async" />
@@ -156,22 +156,7 @@
             </div>
           </article>
 
-          <article class="product-card" data-category="consult">
-            <button class="product-image" data-view-target="followup">
-              <img src="./assets/generated/thumbnails/heukya-premium-consult-chat.jpg" alt="추가 질문 썸네일" loading="lazy" decoding="async" />
-              <span>추가질문</span>
-            </button>
-            <div class="product-copy">
-              <h2>추가 질문 상담</h2>
-              <p>이미 받은 분석에 대해 더 궁금한 점을, 그 사주 그대로 답해드려요.</p>
-              <footer>
-                <strong>질문 1회권 · <span data-product-price="followup">990원</span></strong>
-                <button data-view-target="followup">질문하러 가기</button>
-              </footer>
-            </div>
-          </article>
-
-          <article class="product-card product-card-wide chat-product-card" data-category="consult">
+          <article class="product-card chat-product-card" data-category="consult">
             <button class="product-image" data-view-target="chat">
               <img src="./assets/generated/thumbnails/heukya-premium-consult-chat.jpg" alt="AI 챗봇 상담 썸네일" loading="lazy" decoding="async" />
               <span>AI챗봇</span>
@@ -682,6 +667,17 @@
       </div>
 
       <footer class="site-footer" data-site-footer>
+        <nav class="footer-menu" aria-label="메뉴 바로가기">
+          <b>메뉴 바로가기</b>
+          <div class="footer-menu-grid">
+            <button type="button" data-view-target="home">홈</button>
+            <button type="button" data-view-target="fortune">오늘의 무료운세</button>
+            <button type="button" data-view-target="people">인원 관리</button>
+            <button type="button" data-view-target="library">결과 보관함</button>
+            <button type="button" data-view-target="chat">AI 챗봇 상담</button>
+            <button type="button" data-view-target="support">문의하기</button>
+          </div>
+        </nav>
         <nav class="footer-links" aria-label="약관 및 정책">
           <button type="button" data-view-target="terms">이용약관</button>
           <button type="button" data-view-target="privacy">개인정보처리방침</button>

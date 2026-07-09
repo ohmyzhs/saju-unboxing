@@ -35,9 +35,9 @@ const DEFAULT_PRODUCTS = {
     prompt: "사용자가 고른 목적과 후보 날짜만 비교해 날짜별 적합도, 우선순위, 활용법과 주의점을 구체적으로 작성한다.",
   },
   "mz-dark-mudang-online": {
-    name: "MZ다크무당 사주 리포트",
+    name: "운명 완전개봉 · 흑야 프리미엄",
     amount: 9900,
-    description: "saju-web의 MZ다크무당 테마로 제작되는 온라인뷰 전용 프리미엄 사주 리포트입니다.",
+    description: "그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.",
     prompt: "saju-web tight-v3 온라인뷰 리포트로 생성한다. franchise에서는 결제와 열람 연결만 담당한다.",
   },
   "daily-fortune": {
@@ -90,7 +90,7 @@ const IMAGE_SLOTS = [
   ["thumb.compatibility", "궁합 썸네일"],
   ["thumb.cycle", "대운 썸네일"],
   ["thumb.yearly-fortune", "연도 썸네일"],
-  ["thumb.mz-dark-mudang-online", "MZ다크무당 썸네일"],
+  ["thumb.mz-dark-mudang-online", "프리미엄(운명 완전개봉) 썸네일"],
   ["thumb.daily-fortune", "오늘 썸네일"],
   ["loading.hero", "분석 로딩 움짤 (gif 권장 · 비우면 기본 애니메이션)"],
 ];
