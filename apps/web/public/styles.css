@@ -5096,8 +5096,9 @@ select {
   justify-content: space-between;
   height: 56px;
   padding: 0 18px;
-  background: linear-gradient(120deg, var(--jade), #1f8f80);
-  color: #fff;
+  background: linear-gradient(120deg, #1d2f4d, #16233c);
+  border-bottom: 1px solid rgba(213, 170, 85, 0.4);
+  color: #fff8e8;
   position: sticky;
   top: 0;
 }
@@ -7707,4 +7708,64 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hero-glow, .hero-motes, .hero-twinkle { animation: none; }
   .hero-motes { opacity: 0.6; transform: none; }
+}
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v10 — 헤딩 전역 고운바탕(명조) 통일
+   제목/헤딩은 고운바탕, 본문·버튼·입력·라벨은 Pretendard 산세리프.
+   ───────────────────────────────────────────────────── */
+
+/* --font 는 지금까지 .admin-body 에만 정의돼 있어 메인 앱 body 에선
+   var(--font) 가 빈 값 → UA 기본(Apple SD Gothic Neo=고딕) 폴백이었다.
+   전역 :root 에 정의해 앱 전체 산세리프를 Pretendard 로 확정한다. */
+:root {
+  --font: "Pretendard Variable", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+}
+h1, h2, h3, h4,
+.slim-poster h1,
+.points-poster h1,
+.view-title h1,
+.chat-head h1,
+.analysis-hero h1,
+.report-title h1,
+.report-headline,
+.daily-hero h1,
+.home-story h2,
+.home-guide-panel h3,
+.product-copy h2,
+.premium-unboxing-card .product-copy h2,
+.banner-copy h1,
+.banner-copy h2,
+.mypage-head h2,
+.mypage-id-text b,
+.points-balance-card strong,
+.compat-score b,
+.daily-score strong,
+.section-title,
+.step-heading span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* 본문·컨트롤·라벨은 산세리프 유지(가독성) */
+body,
+button,
+input,
+select,
+textarea,
+p,
+small,
+label,
+.mypage-menu button,
+.bottom-nav > button,
+.footer-menu-grid button,
+.filters button,
+.segmented button,
+.product-copy p,
+.banner-copy p,
+.premium-flag,
+.step-heading b,
+[data-points-tokens] {
+  font-family: var(--font);
 }
