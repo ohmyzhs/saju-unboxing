@@ -7715,11 +7715,12 @@ body {
    제목/헤딩은 고운바탕, 본문·버튼·입력·라벨은 Pretendard 산세리프.
    ───────────────────────────────────────────────────── */
 
-/* --font 는 지금까지 .admin-body 에만 정의돼 있어 메인 앱 body 에선
-   var(--font) 가 빈 값 → UA 기본(Apple SD Gothic Neo=고딕) 폴백이었다.
-   전역 :root 에 정의해 앱 전체 산세리프를 Pretendard 로 확정한다. */
+/* 사용자 요청: 앱 전역 고운바탕(명조) 통일 — 제목뿐 아니라 본문·메뉴·
+   버튼·입력까지 전부 고운바탕. --font 를 전역에서 고운바탕 스택으로
+   정의하면 var(--font) 를 쓰는 모든 본문/컨트롤이 함께 명조로 바뀐다.
+   (.admin-body 는 데이터 밀집 내부 화면이라 자체 Pretendard 유지) */
 :root {
-  --font: "Pretendard Variable", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  --font: "Gowun Batang", "Noto Serif KR", "AppleMyungjo", serif;
 }
 h1, h2, h3, h4,
 .slim-poster h1,
@@ -7748,7 +7749,8 @@ h1, h2, h3, h4,
   letter-spacing: -0.015em;
 }
 
-/* 본문·컨트롤·라벨은 산세리프 유지(가독성) */
+/* 전역 고운바탕: 본문·컨트롤·라벨도 명조로 통일.
+   (var(--font) 가 이제 고운바탕이라 명시 목록도 함께 명조가 된다) */
 body,
 button,
 input,
@@ -7767,5 +7769,5 @@ label,
 .premium-flag,
 .step-heading b,
 [data-points-tokens] {
-  font-family: var(--font);
+  font-family: var(--font-display);
 }
