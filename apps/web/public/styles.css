@@ -7012,3 +7012,151 @@ body {
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v5 '묵선(墨線)' — 에디토리얼 럭셔리 오버라이드
+   둥근 라운드·그라데이션 캔디 제거: 직선에 가까운 radius,
+   헤어라인 보더, 플랫 잉크+골드. 서체·이미지는 v4 유지.
+   ───────────────────────────────────────────────────── */
+
+/* 1) 라운드 평탄화 */
+.banner-carousel { border-radius: 12px; }
+.product-card { border-radius: 6px; }
+.brand-mark { border-radius: 7px; }
+.bottom-nav { border-radius: 12px; }
+.home-story { border-radius: 10px; }
+.carousel-dots { border-radius: 2px; }
+
+.form-step,
+.checkout-panel,
+.archive-card,
+.support-card,
+.calendar-panel,
+.fortune-card,
+.daily-card,
+.followup-panel,
+.chat-credit-card,
+.chat-report-panel,
+.chat-products-panel,
+.chat-history-panel {
+  border-radius: 8px;
+}
+
+/* 2) 버튼 — 플랫 잉크 + 골드 헤어라인 (그라데이션 제거) */
+.banner-button,
+.primary-action,
+.product-copy footer button,
+.home-guide-panel button,
+.order-actions button,
+.payment-result-actions .primary-action,
+.support-contact .primary-action {
+  background: var(--midnight-ink);
+  color: #f3dc9f;
+  border: 1px solid rgba(213, 170, 85, 0.52);
+  border-radius: 3px;
+  box-shadow: none;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.banner-button:hover,
+.primary-action:hover,
+.product-copy footer button:hover {
+  background: #24365a;
+}
+
+.product-copy footer button { border-radius: 3px; min-height: 40px; }
+.banner-button { height: 46px; min-width: 128px; border-radius: 3px; }
+
+/* 3) 칩·필터 — 직사각 헤어라인 태그 */
+.filters button,
+.story-points button,
+.library-filters button,
+.segmented button {
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid rgba(26, 41, 66, 0.24);
+  color: #33415e;
+  box-shadow: none;
+  letter-spacing: 0.03em;
+}
+
+.filters button.is-active,
+.story-points button.is-active,
+.library-filters button.is-active,
+.segmented button.is-active,
+.bottom-nav > button.is-active {
+  background: var(--midnight-ink);
+  color: #f6e3ae;
+  border-color: var(--midnight-ink);
+}
+
+.auth-chip {
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid rgba(143, 111, 42, 0.55);
+  color: #1c2a44;
+  box-shadow: none;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* 4) 배너 카피 — pill 박스 대신 골드 룰 라인 + 트래킹 텍스트 */
+.banner-copy h1::before,
+.banner-copy h2::before {
+  content: "";
+  display: block;
+  width: 34px;
+  height: 2px;
+  margin: 0 0 14px;
+  background: var(--royal-gold);
+}
+
+.banner-copy p {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  backdrop-filter: none;
+  border-radius: 0;
+  color: #f3dc9f;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-shadow: 0 2px 12px rgba(12, 20, 36, 0.6);
+}
+
+.product-image span {
+  border-radius: 2px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: rgba(16, 24, 42, 0.58);
+}
+
+/* 5) 그림자 절제 */
+.banner-carousel { box-shadow: 0 10px 30px rgba(8, 13, 21, 0.16); }
+
+.product-card {
+  box-shadow: 0 4px 14px rgba(26, 32, 51, 0.08);
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(26, 32, 51, 0.13);
+}
+
+.bottom-nav { box-shadow: 0 10px 28px rgba(8, 13, 21, 0.16); }
+
+/* 6) FAB — 티얼 캔디 제거, 잉크 + 골드 링 */
+.fortune-fab span {
+  border: 4px solid #fffaf0;
+  background: linear-gradient(150deg, #22344f, #1a2942);
+  box-shadow: 0 0 0 1px rgba(213, 170, 85, 0.55), 0 10px 22px rgba(8, 13, 21, 0.28);
+}
+
+.bottom-nav .fortune-fab {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
