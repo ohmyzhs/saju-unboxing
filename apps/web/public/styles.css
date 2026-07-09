@@ -308,10 +308,9 @@ body {
     #fff0b6;
   color: var(--ink);
   font-family:
+    "Pretendard Variable",
     "Pretendard",
     "Noto Sans KR",
-    "Apple SD Gothic Neo",
-    "Malgun Gothic",
     system-ui,
     sans-serif;
   letter-spacing: 0;
@@ -3669,8 +3668,7 @@ select {
   --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
   --shadow: 0 1px 3px rgba(17, 24, 39, 0.05), 0 6px 16px rgba(17, 24, 39, 0.05);
   --ring: 0 0 0 4px rgba(49, 130, 246, 0.16);
-  --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-    system-ui, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+  --font: "Pretendard Variable", Pretendard, "Noto Sans KR", system-ui, sans-serif;
 
   min-height: 100vh;
   background: var(--bg);
@@ -7441,4 +7439,184 @@ body {
 
 .bottom-nav > button:not(.fortune-fab).is-active img {
   filter: none;
+}
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v8 — 서브페이지 테마·서체 통일
+   구테마 잔재(emerald/rose 색바, 핑크 pill) 제거,
+   홈과 동일한 잉크+금+한지 팔레트 + 고운바탕 디스플레이 서체
+   ───────────────────────────────────────────────────── */
+
+/* 1) 뷰 타이틀 — 색바 제거, 한지 위 잉크 헤더 + 금 헤어라인 */
+.view-title {
+  position: sticky;
+  top: 72px;
+  z-index: 6;
+  height: 60px;
+  padding: 0 16px;
+  background: rgba(255, 250, 240, 0.94);
+  border-bottom: 1px solid rgba(213, 170, 85, 0.30);
+  backdrop-filter: blur(12px);
+}
+
+.view-title.emerald,
+.view-title.rose,
+.view-title.daily-title {
+  background: rgba(255, 250, 240, 0.94);
+  color: var(--ink);
+}
+
+.view-title h1,
+.chat-head h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: #16233c;
+}
+
+.view-title button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  color: #16233c;
+  font-size: 26px;
+}
+
+.view-title button:hover {
+  background: rgba(26, 41, 66, 0.06);
+}
+
+/* 2) 서브페이지 패널 — 한지 카드 통일 */
+.form-step,
+.checkout-panel,
+.calendar-panel,
+.fortune-card,
+.followup-panel,
+.support-card,
+.points-card,
+.order-card,
+.report-section {
+  border: 1px solid rgba(213, 170, 85, 0.24);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 253, 246, 0.96), rgba(248, 238, 212, 0.7));
+}
+
+/* 3) 스텝 번호 뱃지 — 잉크+금 */
+.step-heading b {
+  background: var(--midnight-ink);
+  color: var(--soft-gold);
+  border: 1px solid rgba(213, 170, 85, 0.5);
+}
+
+.step-heading span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* 4) 세그먼트 토글 — 잉크 활성(홈과 동일) */
+.segmented {
+  border: 1px solid rgba(26, 41, 66, 0.16);
+  border-radius: 4px;
+  background: rgba(255, 253, 246, 0.6);
+}
+
+.segmented button {
+  border-radius: 3px;
+}
+
+.segmented button.is-active {
+  background: var(--midnight-ink);
+  color: #f6e3ae;
+}
+
+/* 5) 고스트/보조 pill 버튼(핑크 잔재 등) → 잉크·금 헤어라인 사각 */
+.compat-profile-field > button,
+.year-panel button {
+  border: 1px solid rgba(26, 41, 66, 0.22);
+  border-radius: 3px;
+  color: #33415e;
+  background: rgba(255, 253, 246, 0.7);
+  font-weight: 700;
+}
+
+.compat-profile-field > button:hover {
+  border-color: rgba(213, 170, 85, 0.6);
+  color: #16233c;
+}
+
+.year-panel button.is-active {
+  background: var(--midnight-ink);
+  color: #f6e3ae;
+}
+
+.compatibility-form [data-compat-status] {
+  color: var(--blood-moon);
+}
+
+/* 6) 연도 카드 현재 표시 → 금 */
+.yr-card.is-now {
+  border-color: rgba(213, 170, 85, 0.7);
+  background: #fbf1d9;
+}
+
+/* 7) 폼 라벨·제목 가독성 */
+.stack-form label,
+.fortune-card label,
+.compat-profile-field label {
+  color: #2a3550;
+}
+
+/* 8) 리포트/분석 제목 서체 통일 */
+.analysis-hero h1,
+.report-title h1,
+.report-headline,
+.daily-hero h1,
+.chat-report-title,
+.section-title,
+.report-section h2 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* v8 후속 — 포인트 녹색 카드 · 슬림포스터 헤더 통일 */
+.mypage-points,
+.points-balance-card {
+  background: linear-gradient(150deg, #1d2f4d, #16233c);
+  border: 1px solid rgba(213, 170, 85, 0.34);
+}
+
+.points-poster,
+.points-hero {
+  background: linear-gradient(135deg, #16233c, #b98236) !important;
+}
+
+/* 슬림포스터(챗봇·리포트 등 서브 헤더) → 잉크 그라데이션 + 한지 스크림 제거 */
+.slim-poster {
+  height: auto;
+  min-height: 96px;
+  padding: 20px;
+  background: linear-gradient(135deg, #1d2f4d 0%, #16233c 62%, #101a30 100%);
+  border-bottom: 1px solid rgba(213, 170, 85, 0.34);
+}
+
+.slim-poster::before,
+.slim-poster::after {
+  display: none;
+}
+
+.slim-poster p {
+  color: var(--soft-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.slim-poster h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: #fff8e8;
 }
