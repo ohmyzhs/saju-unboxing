@@ -7620,3 +7620,91 @@ body {
   font-weight: 700;
   color: #fff8e8;
 }
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v9 — 히어로 CSS 시네마그래프 (움직임)
+   정적 리치 이미지 위에 떠오르는 금빛 입자·숨쉬는 광원·별 반짝임.
+   grok webp 대체(용량 0, reduced-motion 대응).
+   ───────────────────────────────────────────────────── */
+.hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.banner-slide .banner-copy {
+  z-index: 3;
+}
+
+/* 함에서 번지는 숨쉬는 금빛 광원 */
+.hero-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 20%;
+  width: 68%;
+  height: 34%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(255, 201, 94, 0.34), rgba(255, 201, 94, 0.10) 45%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: heroGlow 4.8s ease-in-out infinite;
+}
+
+@keyframes heroGlow {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.95; transform: translateX(-50%) scale(1.09); }
+}
+
+/* 위로 떠오르는 금빛 입자 */
+.hero-motes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -25%;
+  height: 150%;
+  background-image:
+    radial-gradient(2.4px 2.4px at 18% 82%, rgba(255, 226, 150, 0.95), transparent 60%),
+    radial-gradient(1.8px 1.8px at 32% 68%, rgba(255, 214, 128, 0.85), transparent 60%),
+    radial-gradient(2.2px 2.2px at 47% 90%, rgba(255, 232, 170, 0.9), transparent 60%),
+    radial-gradient(1.6px 1.6px at 58% 74%, rgba(255, 210, 120, 0.8), transparent 60%),
+    radial-gradient(2.6px 2.6px at 68% 86%, rgba(255, 228, 158, 0.95), transparent 60%),
+    radial-gradient(1.5px 1.5px at 78% 66%, rgba(255, 216, 132, 0.8), transparent 60%),
+    radial-gradient(2px 2px at 40% 60%, rgba(255, 222, 146, 0.85), transparent 60%),
+    radial-gradient(1.7px 1.7px at 62% 54%, rgba(255, 208, 118, 0.75), transparent 60%),
+    radial-gradient(2.3px 2.3px at 27% 48%, rgba(255, 230, 162, 0.85), transparent 60%),
+    radial-gradient(1.6px 1.6px at 72% 44%, rgba(255, 214, 128, 0.7), transparent 60%);
+  background-repeat: no-repeat;
+  animation: heroRise 8.5s linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes heroRise {
+  0% { transform: translateY(6%); opacity: 0; }
+  18% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { transform: translateY(-16%); opacity: 0; }
+}
+
+/* 별 반짝임 */
+.hero-twinkle {
+  position: absolute;
+  inset: 0 0 55% 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 22% 24%, rgba(255, 255, 255, 0.95), transparent 60%),
+    radial-gradient(1.2px 1.2px at 66% 16%, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(1.4px 1.4px at 84% 30%, rgba(255, 246, 220, 0.9), transparent 60%),
+    radial-gradient(1.1px 1.1px at 44% 12%, rgba(255, 255, 255, 0.8), transparent 60%);
+  background-repeat: no-repeat;
+  animation: heroTwinkle 3.6s ease-in-out infinite;
+}
+
+@keyframes heroTwinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow, .hero-motes, .hero-twinkle { animation: none; }
+  .hero-motes { opacity: 0.6; transform: none; }
+}
