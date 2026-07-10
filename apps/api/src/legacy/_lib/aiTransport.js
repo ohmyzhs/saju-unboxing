@@ -72,16 +72,17 @@ export function resolveAiRouting(config = {}, kind = "report") {
   };
   const orModel = kind === "chat" ? (or.chat_model || or.report_model) : or.report_model;
   const orKey = or.api_key || process.env.OPENROUTER_API_KEY || "";
-  const openrouterRoute = orModel && orKey
-    ? {
-        provider: "openrouter",
-        model: orModel,
-        providerPin: String((kind === "chat" ? or.chat_provider : or.report_provider) || "").trim(),
-        apiKey: or.api_key || "",
-      }
-    : null;
-  if (routing.primary === "openrouter" && openrouterRoute) return [openrouterRoute, opencodeRoute];
-  return openrouterRoute ? [opencodeRoute, openrouterRoute] : [opencodeRoute];
+  const openrouterRoutes = [];
+  if (orModel && orKey) {
+    const providerPin = String((kind === "chat" ? or.chat_provider : or.report_provider) || "").trim();
+    const base = { provider: "openrouter", model: orModel, providerPin, apiKey: or.api_key || "" };
+    openrouterRoutes.push(base);
+    // 핀 고정 실패(계정 정책으로 해당 엔드포인트 제외, 프로바이더 순간 장애 등)가
+    // openrouter 전체 실패가 되지 않도록 핀 없는(auto) 시도를 한 단계 더 둔다.
+    if (providerPin) openrouterRoutes.push({ ...base, providerPin: "" });
+  }
+  if (routing.primary === "openrouter" && openrouterRoutes.length) return [...openrouterRoutes, opencodeRoute];
+  return [opencodeRoute, ...openrouterRoutes];
 }
 
 export function chatMessageText(message = {}) {
