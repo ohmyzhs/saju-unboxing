@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-admin-popover" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-ai-routing" />
     <style>body.locked .admin-shell{display:none}</style>
   </head>
   <body class="admin-body locked">
@@ -54,6 +54,7 @@
               <button data-admin-tab="business">사업자정보</button>
               <button data-admin-tab="legal">약관/정책</button>
               <button data-admin-tab="saju">만세력 API</button>
+              <button data-admin-tab="ai">AI 모델</button>
               <button data-admin-tab="settings">비밀번호</button>
             </div>
           </div>
@@ -322,42 +323,73 @@
             </div>
           </form>
           <p class="form-status" data-saju-status></p>
+        </section>
 
-          <h2 style="margin-top:32px">AI 해설 모델</h2>
+        <section class="admin-panel" data-admin-panel="ai" hidden>
+          <h2>AI 모델 · 프로바이더</h2>
           <p class="admin-help">
-            사주 해설을 만드는 AI 모델입니다 (OpenCode Go). 서버가 모델별 API와 JSON 응답 형식을 자동 처리합니다.
-            비워두면 환경변수 <code>OPENCODE_MODEL</code> → 기본 <b>glm-5.2</b>를 사용합니다.
+            리포트 해설과 챗봇 상담에 쓰는 AI를 프로바이더별로 설정합니다.
+            <b>1순위 프로바이더가 실패(레이트리밋·장애·타임아웃)하면 2순위로 자동 폴백</b>됩니다.
           </p>
-          <form class="product-admin-grid is-narrow" data-model-form>
-            <label>모델
-              <select name="ai_model" data-model-select>
-                <option value="glm-5.2">glm-5.2 (추천 · 기본)</option>
-                <option value="kimi-k2.7-code">kimi-k2.7-code (빠름)</option>
-                <option value="deepseek-v4-flash">deepseek-v4-flash (속도 우선)</option>
-                <option value="minimax-m3">minimax-m3</option>
-              </select>
-            </label>
-            <button class="primary-action admin-save" type="submit">모델 저장</button>
-          </form>
-          <p class="form-status" data-model-status></p>
+          <form class="prompt-admin-grid is-narrow" data-ai-routing-form>
+            <article class="admin-product-card prompt-card">
+              <header><b>폴백 우선순위</b></header>
+              <label>1순위 프로바이더
+                <select name="primary">
+                  <option value="opencode">OpenCode Go (기본)</option>
+                  <option value="openrouter">OpenRouter</option>
+                </select>
+              </label>
+              <p class="admin-help">나머지 프로바이더가 자동으로 2순위 폴백이 됩니다. OpenRouter는 모델과 API 키가 설정된 경우에만 폴백 후보가 됩니다.</p>
+            </article>
 
-          <h2 style="margin-top:32px">챗봇 상담 모델</h2>
-          <p class="admin-help">
-            AI 챗봇 상담이 답변에 쓰는 모델입니다. 리포트 해설 모델과 <b>별개</b>로 설정합니다.
-            비우면 위 해설 모델을 따라갑니다. 빠른 응답엔 <b>deepseek-v4-flash</b>를 권장합니다.
-          </p>
-          <form class="product-admin-grid is-narrow" data-chat-model-form>
-            <label>모델
-              <select name="chat_model" data-chat-model-select>
-                <option value="deepseek-v4-flash">deepseek-v4-flash (속도 우선 · 추천)</option>
-                <option value="glm-5.2">glm-5.2 (품질)</option>
-                <option value="kimi-k2.7-code">kimi-k2.7-code</option>
-                <option value="minimax-m3">minimax-m3</option>
-              </select>
-            </label>
-            <button class="primary-action admin-save" type="submit">챗봇 모델 저장</button>
+            <article class="admin-product-card prompt-card">
+              <header><b>OpenCode Go</b><span>API 키는 환경변수 OPENCODE_API_KEY</span></header>
+              <label>AI 해설 모델
+                <select name="oc_report_model" data-oc-report-model>
+                  <option value="glm-5.2">glm-5.2 (추천 · 기본)</option>
+                  <option value="kimi-k2.7-code">kimi-k2.7-code (빠름)</option>
+                  <option value="deepseek-v4-flash">deepseek-v4-flash (속도 우선)</option>
+                  <option value="minimax-m3">minimax-m3</option>
+                </select>
+              </label>
+              <label>챗봇 상담 모델
+                <select name="oc_chat_model" data-oc-chat-model>
+                  <option value="deepseek-v4-flash">deepseek-v4-flash (속도 우선 · 추천)</option>
+                  <option value="glm-5.2">glm-5.2 (품질)</option>
+                  <option value="kimi-k2.7-code">kimi-k2.7-code</option>
+                  <option value="minimax-m3">minimax-m3</option>
+                </select>
+              </label>
+            </article>
+
+            <article class="admin-product-card prompt-card">
+              <header><b>OpenRouter</b><span data-openrouter-key-hint>키 미설정</span></header>
+              <label>API 키
+                <input name="or_api_key" type="password" placeholder="sk-or-... (비우면 환경변수 OPENROUTER_API_KEY 사용)" autocomplete="off" />
+              </label>
+              <label>AI 해설 모델
+                <input name="or_report_model" placeholder="예: anthropic/claude-sonnet-4.5" />
+              </label>
+              <label>AI 해설 프로바이더 지정 (선택)
+                <input name="or_report_provider" placeholder="예: anthropic — 비우면 auto" />
+              </label>
+              <label>챗봇 상담 모델
+                <input name="or_chat_model" placeholder="예: deepseek/deepseek-chat-v3-0324" />
+              </label>
+              <label>챗봇 프로바이더 지정 (선택)
+                <input name="or_chat_provider" placeholder="예: deepseek — 비우면 auto" />
+              </label>
+              <p class="admin-help">
+                모델명은 OpenRouter 카탈로그 ID(<code>회사/모델</code>) 그대로 입력하세요.
+                프로바이더를 지정하면 <b>같은 인프라로 고정되어 프롬프트 캐싱 히트율이 올라갑니다</b>
+                (auto는 요청마다 라우팅이 바뀔 수 있어 캐시가 자주 깨집니다). 지정 시 해당 프로바이더 장애면 요청이 실패하고 1↔2순위 폴백 규칙을 따릅니다.
+              </p>
+            </article>
+
+            <button class="primary-action admin-save" type="submit">AI 설정 저장</button>
           </form>
-          <p class="form-status" data-chat-model-status></p>
+          <p class="form-status" data-ai-routing-status></p>
         </section>
 
         <section class="admin-panel" data-admin-panel="settings" hidden>
@@ -374,6 +406,6 @@
     </main>
     <script src="./runtime-config.js"></script>
     <script src="./api-client.js"></script>
-    <script src="./admin.js?v=20260710-admin-popover"></script>
+    <script src="./admin.js?v=20260710-ai-routing"></script>
   </body>
 </html>

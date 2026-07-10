@@ -84,7 +84,7 @@ function writeStore(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-let serverConfig = { products: {}, prompts: {}, images: {}, branding: {}, ai_model: "glm-5.2", chat_model: "" };
+let serverConfig = { products: {}, prompts: {}, images: {}, branding: {}, ai_model: "glm-5.2", chat_model: "", ai_routing: {} };
 
 const IMAGE_SLOTS = [
   ["banner.hero", "메인 배너"],
@@ -233,6 +233,7 @@ async function saveConfig(patch, statusSel, okMsg) {
     }
     Object.assign(serverConfig, patch);
     renderProductForms();
+    renderAiRouting();
     setStatus(status, okMsg, "ok");
   } catch (e) {
     setStatus(status, `저장 실패: ${e.message}`, "error");
@@ -1097,48 +1098,65 @@ function saveSaju(event) {
   saveConfig({ saju }, "[data-saju-status]", "만세력 API 정보를 저장했습니다. 이제 .env 없이도 분석이 동작합니다.");
 }
 
-// ── AI 해설 모델 ──
-function renderModel() {
-  const select = document.querySelector("[data-model-select]");
-  if (!select) return;
-  const current = serverConfig.ai_model || "glm-5.2";
-  // 저장값이 목록에 없으면(예: 옛 gpt-5.4-mini) 맨 위에 표기해 현재 값을 보이게 한다.
-  if (current && ![...select.options].some((o) => o.value === current)) {
+// ── AI 모델 · 프로바이더 라우팅 (opencode-go 1순위 → openrouter 폴백) ──
+function ensureSelectValue(select, value) {
+  if (!select || !value) return;
+  if (![...select.options].some((o) => o.value === value)) {
     const opt = document.createElement("option");
-    opt.value = current;
-    opt.textContent = `${current} (현재 · 미검증)`;
+    opt.value = value;
+    opt.textContent = `${value} (현재 · 목록 외)`;
     select.insertBefore(opt, select.firstChild);
   }
-  select.value = current;
+  select.value = value;
 }
 
-function saveModel(event) {
-  event.preventDefault();
-  const select = event.currentTarget.querySelector("[data-model-select]");
-  const ai_model = String(select?.value || "").trim();
-  if (!ai_model) return;
-  saveConfig({ ai_model }, "[data-model-status]", "AI 모델을 저장했습니다. 다음 분석부터 적용됩니다.");
-}
-
-// ── 챗봇 상담 모델 (리포트 모델과 별개) ──
-function renderChatModel() {
-  const select = document.querySelector("[data-chat-model-select]");
-  if (!select) return;
-  const current = serverConfig.chat_model || "";
-  if (current && ![...select.options].some((o) => o.value === current)) {
-    const opt = document.createElement("option");
-    opt.value = current;
-    opt.textContent = `${current} (현재)`;
-    select.insertBefore(opt, select.firstChild);
+function renderAiRouting() {
+  const form = document.querySelector("[data-ai-routing-form]");
+  if (!form) return;
+  const routing = serverConfig.ai_routing || {};
+  const oc = routing.opencode || {};
+  const or = routing.openrouter || {};
+  form.elements.primary.value = routing.primary === "openrouter" ? "openrouter" : "opencode";
+  // opencode 모델 — 신설정 없으면 기존 ai_model/chat_model 승계
+  ensureSelectValue(form.elements.oc_report_model, oc.report_model || serverConfig.ai_model || "glm-5.2");
+  ensureSelectValue(form.elements.oc_chat_model, oc.chat_model || serverConfig.chat_model || "deepseek-v4-flash");
+  form.elements.or_api_key.value = or.api_key || "";
+  form.elements.or_report_model.value = or.report_model || "";
+  form.elements.or_report_provider.value = or.report_provider || "";
+  form.elements.or_chat_model.value = or.chat_model || "";
+  form.elements.or_chat_provider.value = or.chat_provider || "";
+  const hint = document.querySelector("[data-openrouter-key-hint]");
+  if (hint) {
+    hint.textContent = or.api_key
+      ? "키 저장됨 (관리자 설정)"
+      : serverConfig.openrouter_env_key ? "키 설정됨 (환경변수)" : "키 미설정 — 폴백 비활성";
   }
-  select.value = current || "deepseek-v4-flash";
 }
 
-function saveChatModel(event) {
+function saveAiRouting(event) {
   event.preventDefault();
-  const select = event.currentTarget.querySelector("[data-chat-model-select]");
-  const chat_model = String(select?.value || "").trim();
-  saveConfig({ chat_model }, "[data-chat-model-status]", "챗봇 모델을 저장했습니다. 다음 질문부터 적용됩니다.");
+  const data = new FormData(event.currentTarget);
+  const value = (key) => String(data.get(key) || "").trim();
+  const ai_routing = {
+    primary: value("primary") === "openrouter" ? "openrouter" : "opencode",
+    opencode: {
+      report_model: value("oc_report_model"),
+      chat_model: value("oc_chat_model"),
+    },
+    openrouter: {
+      api_key: value("or_api_key"),
+      report_model: value("or_report_model"),
+      report_provider: value("or_report_provider"),
+      chat_model: value("or_chat_model"),
+      chat_provider: value("or_chat_provider"),
+    },
+  };
+  // 구버전 코드 경로(레거시 ai_model/chat_model 조회)와의 일관성 유지
+  saveConfig(
+    { ai_routing, ai_model: ai_routing.opencode.report_model, chat_model: ai_routing.opencode.chat_model },
+    "[data-ai-routing-status]",
+    "AI 설정을 저장했습니다. 다음 분석·질문부터 적용됩니다.",
+  );
 }
 
 async function testSaju() {
@@ -1197,8 +1215,7 @@ document.querySelector("[data-product-form]")?.addEventListener("submit", savePr
 document.querySelector("[data-legal-form]")?.addEventListener("submit", saveLegal);
 document.querySelector("[data-business-form]")?.addEventListener("submit", saveBusiness);
 document.querySelector("[data-saju-form]")?.addEventListener("submit", saveSaju);
-document.querySelector("[data-model-form]")?.addEventListener("submit", saveModel);
-document.querySelector("[data-chat-model-form]")?.addEventListener("submit", saveChatModel);
+document.querySelector("[data-ai-routing-form]")?.addEventListener("submit", saveAiRouting);
 document.querySelector("[data-saju-test]")?.addEventListener("click", testSaju);
 document.querySelector("[data-password-form]")?.addEventListener("submit", changePassword);
 document.querySelector("[data-point-adjust]")?.addEventListener("submit", (event) => submitPointAdmin(event, "adjust"));
@@ -1231,8 +1248,7 @@ async function init() {
   renderLegal();
   renderBusiness();
   renderSaju();
-  renderModel();
-  renderChatModel();
+  renderAiRouting();
   loadAnalytics();
 }
 init();

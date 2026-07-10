@@ -3,6 +3,7 @@
 // 만세력 포인트 차감 없음(컨텍스트 재사용). 프론트가 2개 단위로 병렬 호출 → 점진적 렌더.
 import { readJson, sendJson } from "../_lib/http.js";
 import { generateSection, generateSections, generateFollowup } from "../_lib/analysis.js";
+import { resolveAiRouting } from "../_lib/aiTransport.js";
 import { loadSiteConfig } from "../_lib/supabase.js";
 
 export function validateSectionBatchInput(sections) {
@@ -34,7 +35,7 @@ export default async function handler(req, res) {
       if (!question || !String(question).trim()) return sendJson(res, 400, { message: "질문을 입력해주세요." });
       const config = await loadSiteConfig();
       const extra = config?.prompts?.["followup"]; // 어드민이 추가 질문 톤을 따로 줄 수 있음
-      const model = config?.ai_model || undefined;
+      const model = resolveAiRouting(config, "report"); // 프로바이더 폴백 체인(opencode→openrouter)
       const { answer } = await generateFollowup({ profile, manse, summary, question, history, model, extra });
       return sendJson(res, 200, { ok: true, answer });
     }
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
 
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침
-    const model = config?.ai_model || undefined;
+    const model = resolveAiRouting(config, "report"); // 프로바이더 폴백 체인(opencode→openrouter)
 
     if (Array.isArray(sections)) {
       const requested = validateSectionBatchInput(sections);

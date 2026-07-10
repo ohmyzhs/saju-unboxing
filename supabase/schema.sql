@@ -272,6 +272,7 @@ alter table site_config add column if not exists legal    jsonb default '{}'::js
 alter table site_config add column if not exists business jsonb default '{}'::jsonb;
 alter table site_config add column if not exists saju     jsonb default '{}'::jsonb;
 alter table site_config add column if not exists chat_model text; -- 챗봇 전용 모델(비우면 ai_model 따름)
+alter table site_config add column if not exists ai_routing jsonb default '{}'::jsonb; -- AI 프로바이더 폴백 라우팅(opencode→openrouter)
 alter table analyses    add column if not exists lucky         jsonb;
 alter table orders      add column if not exists user_id       text;
 alter table orders      add column if not exists user_label    text;

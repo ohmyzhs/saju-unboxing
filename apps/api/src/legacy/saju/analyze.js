@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import { readJson, sendJson } from "../_lib/http.js";
 import { computeManse } from "../_lib/sajuApi.js";
 import { generateAnalysis, generateDailyFortune, generatePlan, generateSections } from "../_lib/analysis.js";
+import { resolveAiRouting } from "../_lib/aiTransport.js";
 import { openSse, runReportStream, sendSse } from "../_lib/reportStream.js";
 import { getSupabase, loadSiteConfig } from "../_lib/supabase.js";
 import { dayPillar, todayKST } from "../_lib/ganzhi.js";
@@ -58,7 +59,7 @@ export default async function handler(req, res) {
     }
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침(코드 base 위에 append)
-    const model = config?.ai_model || undefined;
+    const model = resolveAiRouting(config, "report"); // 프로바이더 폴백 체인(opencode→openrouter)
     const sessionUser = await getSessionUser(req);
     const acct = accountFields(sessionUser); // 로그인 계정(카카오/이메일) — 고객 관리 기준
 

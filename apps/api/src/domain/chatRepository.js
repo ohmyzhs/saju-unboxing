@@ -1,4 +1,5 @@
 import { getChatCreditAccount } from "./chatCredits.js";
+import { resolveAiRouting } from "../legacy/_lib/aiTransport.js";
 
 function repositoryError(message, statusCode = 400, code = null) {
   const error = new Error(message);
@@ -260,7 +261,7 @@ export async function loadChatRunContext(sb, runId) {
   const [{ data: session, error: sessionError }, { data: question, error: questionError }, { data: config, error: configError }] = await Promise.all([
     sb.from("chat_sessions").select("id, user_id, report_snapshot").eq("id", run.session_id).maybeSingle(),
     sb.from("chat_messages").select("id, content, created_at").eq("id", run.user_message_id).maybeSingle(),
-    sb.from("site_config").select("ai_model, chat_model").eq("id", 1).maybeSingle(),
+    sb.from("site_config").select("ai_model, chat_model, ai_routing").eq("id", 1).maybeSingle(),
   ]);
   if (sessionError) throw sessionError;
   if (questionError) throw questionError;
@@ -281,7 +282,7 @@ export async function loadChatRunContext(sb, runId) {
     snapshot: session.report_snapshot,
     question: question.content,
     history: (history || []).reverse(),
-    // 챗 전용 모델 우선(없으면 리포트 모델 → env → 기본 deepseek-v4-flash)
-    model: config?.chat_model || config?.ai_model || process.env.CHAT_MODEL || process.env.OPENCODE_MODEL || "deepseek-v4-flash",
+    // 챗 전용 라우팅 체인 — 1순위 opencode, 실패 시 openrouter 자동 폴백
+    model: resolveAiRouting(config || {}, "chat"),
   };
 }

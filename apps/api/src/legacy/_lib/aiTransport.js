@@ -2,14 +2,86 @@ import OpenAI from "openai";
 
 const DEFAULT_MODEL = process.env.OPENCODE_MODEL || "glm-5.2";
 const DEFAULT_BASE_URL = process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/go/v1";
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 const DEFAULT_PROFILE = Object.freeze({ transport: "chat", strictJson: true });
 const MODEL_PROFILES = Object.freeze({
   "deepseek-v4-flash": Object.freeze({ transport: "chat", strictJson: false, thinking: Object.freeze({ type: "disabled" }) }),
   "minimax-m3": Object.freeze({ transport: "messages", strictJson: false }),
 });
+// OpenRouter는 OpenAI 호환 chat 엔드포인트만 사용. response_format json_schema는
+// 모델마다 지원이 갈려서 프롬프트 JSON 강제(jsonOnlySystem) 방식으로 통일한다.
+const OPENROUTER_PROFILE = Object.freeze({ transport: "chat", strictJson: false });
 
 export function modelProfile(model) {
   return MODEL_PROFILES[model] || DEFAULT_PROFILE;
+}
+
+// ── 프로바이더 라우팅 ──────────────────────────────────
+// 1순위 opencode-go → 실패(레이트리밋·5xx·타임아웃·키 미설정 등) 시 2순위 openrouter 자동 폴백.
+// route = { provider: "opencode"|"openrouter", model, providerPin?, apiKey? }
+
+function routeProfile(route) {
+  return route.provider === "openrouter" ? OPENROUTER_PROFILE : modelProfile(route.model);
+}
+
+function providerClientConfig(route) {
+  if (route.provider === "openrouter") {
+    const key = route.apiKey || process.env.OPENROUTER_API_KEY;
+    if (!key) {
+      const error = new Error("OpenRouter 키가 설정되지 않았습니다 (관리자 설정 또는 OPENROUTER_API_KEY).");
+      error.statusCode = 503;
+      throw error;
+    }
+    return {
+      baseURL: OPENROUTER_BASE_URL,
+      apiKey: key,
+      defaultHeaders: { "HTTP-Referer": "https://www.saju-unboxing.com", "X-Title": "saju-unboxing" },
+    };
+  }
+  return { baseURL: DEFAULT_BASE_URL, apiKey: apiKey() };
+}
+
+// OpenRouter 전용 요청 필드 — 프로바이더 지정 시 캐싱 히트를 위해 고정(폴백 비활성).
+function applyRouteRequestOptions(request, route) {
+  if (route.provider !== "openrouter" || !route.providerPin) return request;
+  return { ...request, provider: { order: [route.providerPin], allow_fallbacks: false } };
+}
+
+function routeLabel(route) {
+  return route.provider === "openrouter" ? `openrouter:${route.model}` : route.model;
+}
+
+// options.model 이 문자열이면 기존(오픈코드 단독) 동작, resolveAiRouting 결과(배열)면 폴백 체인.
+function toRoutes(modelOption) {
+  if (Array.isArray(modelOption) && modelOption.length) return modelOption;
+  const model = typeof modelOption === "string" && modelOption ? modelOption : DEFAULT_MODEL;
+  return [{ provider: "opencode", model }];
+}
+
+// site_config → 우선순위 라우팅 체인. kind: "report"(AI해설) | "chat"(챗봇상담)
+export function resolveAiRouting(config = {}, kind = "report") {
+  const routing = config.ai_routing || {};
+  const oc = routing.opencode || {};
+  const or = routing.openrouter || {};
+  const legacyModel = kind === "chat"
+    ? (config.chat_model || config.ai_model || process.env.CHAT_MODEL || process.env.OPENCODE_MODEL || "deepseek-v4-flash")
+    : (config.ai_model || DEFAULT_MODEL);
+  const opencodeRoute = {
+    provider: "opencode",
+    model: (kind === "chat" ? oc.chat_model : oc.report_model) || legacyModel,
+  };
+  const orModel = kind === "chat" ? (or.chat_model || or.report_model) : or.report_model;
+  const orKey = or.api_key || process.env.OPENROUTER_API_KEY || "";
+  const openrouterRoute = orModel && orKey
+    ? {
+        provider: "openrouter",
+        model: orModel,
+        providerPin: String((kind === "chat" ? or.chat_provider : or.report_provider) || "").trim(),
+        apiKey: or.api_key || "",
+      }
+    : null;
+  if (routing.primary === "openrouter" && openrouterRoute) return [openrouterRoute, opencodeRoute];
+  return openrouterRoute ? [opencodeRoute, openrouterRoute] : [opencodeRoute];
 }
 
 export function chatMessageText(message = {}) {
@@ -129,16 +201,16 @@ function isRetryableTransport(error) {
   return error?.retryable === true || status === 429 || status >= 500;
 }
 
-async function requestChat({ model, system, input, name, schema, profile, maxTokens = 8192, timeoutMs = 70000 }) {
-  const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
-  const request = applyChatModelOptions({
-    model,
+async function requestChat({ route, system, input, name, schema, profile, maxTokens = 8192, timeoutMs = 70000 }) {
+  const client = new OpenAI(providerClientConfig(route));
+  const request = applyRouteRequestOptions(applyChatModelOptions({
+    model: route.model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: profile.strictJson ? system : jsonOnlySystem(system, schema) },
       { role: "user", content: input },
     ],
-  }, profile);
+  }, profile), route);
   if (profile.strictJson) {
     request.response_format = {
       type: "json_schema",
@@ -158,7 +230,7 @@ async function requestChat({ model, system, input, name, schema, profile, maxTok
   }
 }
 
-async function requestMessages({ model, system, input, schema, maxTokens = 8192, timeoutMs = 70000 }) {
+async function requestMessages({ route, system, input, schema, maxTokens = 8192, timeoutMs = 70000 }) {
   const timeout = timeoutSignal(timeoutMs);
   try {
     const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/+$/, "")}/messages`, {
@@ -170,7 +242,7 @@ async function requestMessages({ model, system, input, schema, maxTokens = 8192,
       },
       signal: timeout.signal,
       body: JSON.stringify({
-        model,
+        model: route.model,
         max_tokens: maxTokens,
         system: jsonOnlySystem(system, schema),
         messages: [{ role: "user", content: input }],
@@ -204,16 +276,16 @@ function normalizeUsage(usage = {}) {
   };
 }
 
-async function requestPlainChat({ model, system, input, profile = modelProfile(model), maxTokens = 1600, timeoutMs = 70000, onDelta }) {
-  const client = new OpenAI({ apiKey: apiKey(), baseURL: DEFAULT_BASE_URL });
-  const request = applyChatModelOptions({
-    model,
+async function requestPlainChat({ route, system, input, profile = routeProfile(route), maxTokens = 1600, timeoutMs = 70000, onDelta }) {
+  const client = new OpenAI(providerClientConfig(route));
+  const request = applyRouteRequestOptions(applyChatModelOptions({
+    model: route.model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: input },
     ],
-  }, profile);
+  }, profile), route);
   const timeout = timeoutSignal(timeoutMs);
   try {
     if (onDelta) {
@@ -246,7 +318,7 @@ async function requestPlainChat({ model, system, input, profile = modelProfile(m
   }
 }
 
-async function requestPlainMessages({ model, system, input, maxTokens = 1600, timeoutMs = 70000, onDelta }) {
+async function requestPlainMessages({ route, system, input, maxTokens = 1600, timeoutMs = 70000, onDelta }) {
   const timeout = timeoutSignal(timeoutMs);
   try {
     const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/+$/, "")}/messages`, {
@@ -258,7 +330,7 @@ async function requestPlainMessages({ model, system, input, maxTokens = 1600, ti
       },
       signal: timeout.signal,
       body: JSON.stringify({
-        model,
+        model: route.model,
         max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content: input }],
@@ -284,52 +356,58 @@ async function requestPlainMessages({ model, system, input, maxTokens = 1600, ti
 }
 
 export async function requestText(options, dependencies = {}) {
-  const model = options.model || DEFAULT_MODEL;
-  const profile = modelProfile(model);
-  const request = dependencies.request || (profile.transport === "messages" ? requestPlainMessages : requestPlainChat);
-  const requestOptions = { ...options, model, profile };
+  const routes = toRoutes(options.model);
   let lastError;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const response = await request(requestOptions);
-      const result = typeof response === "string" ? { text: response, usage: {} } : response;
-      if (!String(result?.text || "").trim()) throw new Error("AI 응답이 비어 있습니다.");
-      return { text: result.text, usage: normalizeUsage(result.usage), model };
-    } catch (error) {
-      lastError = normalizeTransportError(error);
-      if (attempt === 0 && isRetryableTransport(lastError)) {
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const route = routes[routeIndex];
+    const profile = routeProfile(route);
+    const request = dependencies.request || (profile.transport === "messages" ? requestPlainMessages : requestPlainChat);
+    const requestOptions = { ...options, route, model: route.model, profile };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await request(requestOptions);
+        const result = typeof response === "string" ? { text: response, usage: {} } : response;
+        if (!String(result?.text || "").trim()) throw new Error("AI 응답이 비어 있습니다.");
+        return { text: result.text, usage: normalizeUsage(result.usage), model: routeLabel(route) };
+      } catch (error) {
+        lastError = normalizeTransportError(error);
+        // 같은 프로바이더 1회 재시도(재시도 가능 오류) → 소진하면 다음 프로바이더로 폴백
+        const hasNextAttempt = attempt === 0 && isRetryableTransport(lastError);
+        const hasNextRoute = routeIndex + 1 < routes.length;
+        if (!hasNextAttempt && !hasNextRoute) throw lastError;
         if (options.onReset) await options.onReset();
-        continue;
+        if (!hasNextAttempt) break;
       }
-      throw lastError;
     }
   }
   throw lastError;
 }
 
 export async function requestStructured(options, dependencies = {}) {
-  const model = options.model || DEFAULT_MODEL;
-  const profile = modelProfile(model);
-  const request = dependencies.request || (profile.transport === "messages" ? requestMessages : requestChat);
-  const requestOptions = { ...options, model, profile };
-
+  const routes = toRoutes(options.model);
   let lastError;
   const maxAttempts = Math.max(1, Math.min(2, Number(options.maxAttempts) || 2));
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    let text;
-    try {
-      text = await request(requestOptions);
-    } catch (error) {
-      lastError = normalizeTransportError(error);
-      if (attempt + 1 < maxAttempts && isRetryableTransport(lastError)) continue;
-      throw lastError;
-    }
-    try {
-      const value = extractJsonObject(text);
-      validateSchema(value, options.schema);
-      return value;
-    } catch (error) {
-      lastError = error;
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const route = routes[routeIndex];
+    const profile = routeProfile(route);
+    const request = dependencies.request || (profile.transport === "messages" ? requestMessages : requestChat);
+    const requestOptions = { ...options, route, model: route.model, profile };
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      let text;
+      try {
+        text = await request(requestOptions);
+      } catch (error) {
+        lastError = normalizeTransportError(error);
+        if (attempt + 1 < maxAttempts && isRetryableTransport(lastError)) continue;
+        break; // 이 프로바이더 포기 → 다음 프로바이더 폴백
+      }
+      try {
+        const value = extractJsonObject(text);
+        validateSchema(value, options.schema);
+        return value;
+      } catch (error) {
+        lastError = error;
+      }
     }
   }
   throw lastError;
