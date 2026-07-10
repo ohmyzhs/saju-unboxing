@@ -1,13 +1,25 @@
 import { readJson, sendJson } from "./http.js";
 import { adjustPoints, adjustRegenTokens, getPointAccount, isInsufficientPoints } from "./points.js";
 
-export function mergePointMembers(pointRows = [], orderRows = []) {
+export function mergePointMembers(pointRows = [], orderRows = [], userRows = []) {
   const labels = new Map();
+  // 가입 회원(users 테이블) — 주문·포인트 이력이 없어도 회원 목록에 나와야 한다.
+  for (const row of userRows) {
+    if (!row.id) continue;
+    labels.set(String(row.id), {
+      userLabel: row.nickname || row.email || "회원",
+      userProvider: "email",
+      email: row.email || "",
+      joinedAt: row.created_at || null,
+    });
+  }
   for (const row of orderRows) {
     if (!row.user_id || labels.has(String(row.user_id))) continue;
     labels.set(String(row.user_id), {
       userLabel: row.user_label || "회원",
       userProvider: row.user_provider || "kakao",
+      email: "",
+      joinedAt: null,
     });
   }
   const accounts = new Map(
@@ -22,15 +34,12 @@ export function mergePointMembers(pointRows = [], orderRows = []) {
     if (!accounts.has(userId)) accounts.set(userId, { userId, balance: 0, regenTokens: 0, updatedAt: null });
   }
   return [...accounts.values()]
-    .map((account) => ({
-      ...account,
-      userLabel: labels.get(account.userId)?.userLabel || account.userId,
-      userProvider: labels.get(account.userId)?.userProvider || "unknown",
-    }))
-    .map(({ userId, userLabel, userProvider, balance, regenTokens, updatedAt }) => ({
+    .map(({ userId, balance, regenTokens, updatedAt }) => ({
       userId,
-      userLabel,
-      userProvider,
+      userLabel: labels.get(userId)?.userLabel || userId,
+      userProvider: labels.get(userId)?.userProvider || "unknown",
+      email: labels.get(userId)?.email || "",
+      joinedAt: labels.get(userId)?.joinedAt || null,
       balance,
       regenTokens,
       updatedAt,
@@ -50,12 +59,13 @@ export function normalizeAdminPointChange(body = {}) {
 }
 
 export async function listPointMembers(sb) {
-  const [{ data: pointRows, error: pointError }, { data: orderRows, error: orderError }] = await Promise.all([
+  const [{ data: pointRows, error: pointError }, { data: orderRows, error: orderError }, { data: userRows, error: userError }] = await Promise.all([
     sb.from("user_points").select("user_id, balance, regen_tokens, updated_at").order("updated_at", { ascending: false }).limit(1000),
     sb.from("orders").select("user_id, user_label, user_provider, created_at").not("user_id", "is", null).order("created_at", { ascending: false }).limit(2000),
+    sb.from("users").select("id, email, nickname, created_at").order("created_at", { ascending: false }).limit(2000),
   ]);
-  if (pointError || orderError) throw pointError || orderError;
-  return mergePointMembers(pointRows || [], orderRows || []);
+  if (pointError || orderError || userError) throw pointError || orderError || userError;
+  return mergePointMembers(pointRows || [], orderRows || [], userRows || []);
 }
 
 export async function loadAdminPointPayload(sb, userId = "", dependencies = {}) {

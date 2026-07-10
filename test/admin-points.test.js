@@ -7,11 +7,15 @@ import { loadAdminPointPayload, mergePointMembers, normalizeAdminPointChange } f
 const html = readFileSync(new URL("../apps/web/public/admin.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
 
-test("관리자 화면에 회원 포인트 탭과 조정 폼이 있다", () => {
-  assert.match(html, /data-admin-tab="points"/);
+test("포인트 관리는 고객 관리 화면의 팝오버 레이어로 제공된다", () => {
+  // 별도 '회원 포인트' 탭은 제거 — 고객 목록의 포인트 컬럼 + 팝오버로 통합 (2026-07 UI 정비)
+  assert.doesNotMatch(html, /data-admin-tab="points"/);
+  assert.match(html, /data-point-popover/);
   assert.match(html, /data-point-adjust/);
   assert.match(html, /data-regen-adjust/);
   assert.match(app, /loadAdminPoints/);
+  assert.match(app, /openPointPopover/);
+  assert.match(app, /renderCustomers/);
 });
 
 test("주문 계정 라벨을 포인트 회원 잔액에 합친다", () => {
@@ -26,9 +30,29 @@ test("주문 계정 라벨을 포인트 회원 잔액에 합친다", () => {
     userId: "u1",
     userLabel: "회원A",
     userProvider: "email",
+    email: "",
+    joinedAt: null,
     balance: 13000,
     regenTokens: 2,
     updatedAt: "2026-06-20T01:00:00Z",
+  });
+});
+
+test("주문·포인트 이력이 없는 이메일 가입 회원도 목록에 나온다", () => {
+  const members = mergePointMembers(
+    [],
+    [],
+    [{ id: "u9", email: "new@user.co", nickname: "새회원", created_at: "2026-07-10T00:00:00Z" }],
+  );
+  assert.deepEqual(members[0], {
+    userId: "u9",
+    userLabel: "새회원",
+    userProvider: "email",
+    email: "new@user.co",
+    joinedAt: "2026-07-10T00:00:00Z",
+    balance: 0,
+    regenTokens: 0,
+    updatedAt: null,
   });
 });
 

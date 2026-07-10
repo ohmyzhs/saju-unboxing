@@ -229,15 +229,25 @@ async function analytics(req, res) {
   // 분석 작업 목록 — 큰 컬럼(manse/sections)은 빼고 메타만. 계정 컬럼이 아직 없으면(미마이그레이션) 라이트로 폴백.
   const ANALYSIS_COLS = "id, product_id, profile_name, order_id, visitor_id, created_at, user_id, user_label, user_provider";
   const ANALYSIS_COLS_LITE = "id, product_id, profile_name, order_id, visitor_id, created_at";
-  const [{ data: evRows }, { data: orderRows }] = await Promise.all([
+  const [{ data: evRows }, { data: orderRows }, { data: userRows }] = await Promise.all([
     sb.from("events").select("*").order("at", { ascending: false }).limit(3000),
     sb.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
+    sb.from("users").select("id, email, nickname, phone, created_at").order("created_at", { ascending: false }).limit(2000),
   ]);
   let aq = await sb.from("analyses").select(ANALYSIS_COLS).order("created_at", { ascending: false }).limit(500);
   if (aq.error) aq = await sb.from("analyses").select(ANALYSIS_COLS_LITE).order("created_at", { ascending: false }).limit(500);
   const events = (evRows || []).map(mapEvent).reverse();
   const orders = (orderRows || []).map(mapOrder);
   const summary = summarizeAnalytics(events, orders);
+  // 가입 회원(이메일) — 주문·분석 이력이 없어도 고객 관리에 보이도록 별도 전달.
+  summary.members = (userRows || []).map((u) => ({
+    userId: String(u.id),
+    label: u.nickname || u.email || "회원",
+    email: u.email || "",
+    phone: u.phone || "",
+    provider: "email",
+    joinedAt: u.created_at ? new Date(u.created_at).getTime() : null,
+  }));
   summary.analyses = (aq.data || []).map((r) => ({
     id: r.id,
     productId: r.product_id,

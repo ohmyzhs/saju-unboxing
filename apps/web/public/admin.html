@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-member-support" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-admin-popover" />
     <style>body.locked .admin-shell{display:none}</style>
   </head>
   <body class="admin-body locked">
@@ -35,7 +35,6 @@
             <div class="nav-group-items">
               <button data-admin-tab="payments">결제</button>
               <button data-admin-tab="customers">고객</button>
-              <button data-admin-tab="points">회원 포인트</button>
               <button data-admin-tab="support">1:1 문의</button>
               <button data-admin-tab="analysis">분석 작업</button>
             </div>
@@ -209,79 +208,82 @@
 
         <section class="admin-panel" data-admin-panel="customers" hidden>
           <h2>고객 관리</h2>
+          <p class="admin-help">가입 회원과 주문 고객을 함께 봅니다. 회원의 포인트 관리 버튼을 누르면 잔액 조회·부여 레이어가 열립니다.</p>
+          <label class="admin-point-search">고객 검색
+            <input type="search" data-point-member-search placeholder="이름·이메일·회원 ID" />
+          </label>
           <div class="admin-table" data-admin-customers-list></div>
-        </section>
 
-        <section class="admin-panel" data-admin-panel="support" hidden>
-          <h2>1:1 문의 관리</h2>
-          <p class="admin-help">회원이 남긴 비공개 문의를 확인하고 처리 상태와 답변을 저장합니다.</p>
-          <div class="split-grid admin-support-grid">
-            <section>
-              <h3>최근 문의</h3>
-              <div class="admin-table" data-admin-support-list></div>
-            </section>
-            <section class="admin-support-detail">
-              <h3 data-admin-support-title>문의를 선택하세요</h3>
-              <p class="admin-help" data-admin-support-meta></p>
-              <div class="admin-support-content" data-admin-support-content>왼쪽 목록에서 문의를 선택하세요.</div>
-              <form class="product-admin-grid is-narrow" data-admin-support-form hidden>
-                <input type="hidden" name="id" />
-                <label>처리 상태
-                  <select name="status">
-                    <option value="received">접수</option>
-                    <option value="in_progress">확인 중</option>
-                    <option value="answered">답변 완료</option>
-                    <option value="closed">종료</option>
-                  </select>
-                </label>
-                <label>답변
-                  <textarea name="answer" rows="8" maxlength="5000" placeholder="회원에게 보여줄 답변을 입력하세요."></textarea>
-                </label>
-                <button class="primary-action admin-save" type="submit">답변 저장</button>
-              </form>
-              <p class="form-status" data-admin-support-status></p>
+          <div class="admin-popover" data-point-popover hidden>
+            <div class="admin-popover-backdrop" data-point-popover-close></div>
+            <section class="admin-popover-card" role="dialog" aria-modal="true" aria-label="회원 포인트 관리">
+              <header class="admin-popover-head">
+                <h3 data-admin-point-title>회원을 선택하세요</h3>
+                <button class="admin-popover-x" type="button" data-point-popover-close aria-label="닫기">×</button>
+              </header>
+              <div class="admin-popover-body">
+                <div class="admin-point-summary" data-admin-point-summary></div>
+                <div class="admin-point-quick" aria-label="빠른 포인트 조정">
+                  <button type="button" data-point-quick data-operation="adjust" data-amount="1000" disabled>+1,000P</button>
+                  <button type="button" data-point-quick data-operation="adjust" data-amount="5000" disabled>+5,000P</button>
+                  <button type="button" data-point-quick data-operation="adjust" data-amount="-1000" disabled>−1,000P</button>
+                  <button type="button" data-point-quick data-operation="regen" data-amount="1" disabled>재생성 +1</button>
+                </div>
+                <form class="product-admin-grid is-narrow" data-point-adjust>
+                  <label>포인트 조정 (+충전 / −차감)
+                    <input type="number" name="amount" step="1" placeholder="예: 5000 또는 -500" required disabled />
+                  </label>
+                  <label>관리 메모
+                    <input name="memo" maxlength="200" placeholder="예: CS 보상" disabled />
+                  </label>
+                  <button class="primary-action admin-save" type="submit" disabled>포인트 반영</button>
+                </form>
+                <form class="product-admin-grid is-narrow" data-regen-adjust>
+                  <label>무료운세 재생성 토큰 부여
+                    <input type="number" name="amount" min="1" step="1" value="1" required disabled />
+                  </label>
+                  <button class="secondary-action" type="submit" disabled>토큰 부여</button>
+                </form>
+                <p class="form-status" data-admin-point-status></p>
+                <h3>최근 거래 내역</h3>
+                <div class="admin-table" data-admin-point-transactions></div>
+              </div>
             </section>
           </div>
         </section>
 
-        <section class="admin-panel" data-admin-panel="points" hidden>
-          <h2>회원 포인트 관리</h2>
-          <p class="admin-help">회원별 잔액과 무료운세 재생성 토큰을 조회하고 수동으로 조정합니다. 모든 포인트 변경은 감사 내역에 기록됩니다.</p>
-          <div class="split-grid point-admin-grid">
-            <section>
-              <h3>회원 목록</h3>
-              <label class="admin-point-search">회원 검색
-                <input type="search" data-point-member-search placeholder="이름·이메일·회원 ID" />
-              </label>
-              <div class="admin-table" data-admin-point-members></div>
-            </section>
-            <section class="admin-point-detail">
-              <h3 data-admin-point-title>회원을 선택하세요</h3>
-              <div class="admin-point-summary" data-admin-point-summary></div>
-              <div class="admin-point-quick" aria-label="빠른 포인트 조정">
-                <button type="button" data-point-quick data-operation="adjust" data-amount="1000" disabled>+1,000P</button>
-                <button type="button" data-point-quick data-operation="adjust" data-amount="5000" disabled>+5,000P</button>
-                <button type="button" data-point-quick data-operation="adjust" data-amount="-1000" disabled>−1,000P</button>
-                <button type="button" data-point-quick data-operation="regen" data-amount="1" disabled>재생성 +1</button>
+        <section class="admin-panel" data-admin-panel="support" hidden>
+          <h2>1:1 문의 관리</h2>
+          <p class="admin-help">회원이 남긴 비공개 문의를 확인하고 처리 상태와 답변을 저장합니다. 문의를 누르면 상세 레이어가 열립니다.</p>
+          <div class="admin-table" data-admin-support-list></div>
+
+          <div class="admin-popover" data-support-popover hidden>
+            <div class="admin-popover-backdrop" data-support-popover-close></div>
+            <section class="admin-popover-card" role="dialog" aria-modal="true" aria-label="문의 상세">
+              <header class="admin-popover-head">
+                <h3 data-admin-support-title>문의를 선택하세요</h3>
+                <button class="admin-popover-x" type="button" data-support-popover-close aria-label="닫기">×</button>
+              </header>
+              <div class="admin-popover-body">
+                <p class="admin-help" data-admin-support-meta></p>
+                <div class="admin-support-content" data-admin-support-content></div>
+                <form class="product-admin-grid is-narrow" data-admin-support-form hidden>
+                  <input type="hidden" name="id" />
+                  <label>처리 상태
+                    <select name="status">
+                      <option value="received">접수</option>
+                      <option value="in_progress">확인 중</option>
+                      <option value="answered">답변 완료</option>
+                      <option value="closed">종료</option>
+                    </select>
+                  </label>
+                  <label>답변
+                    <textarea name="answer" rows="8" maxlength="5000" placeholder="회원에게 보여줄 답변을 입력하세요."></textarea>
+                  </label>
+                  <button class="primary-action admin-save" type="submit">답변 저장</button>
+                </form>
+                <p class="form-status" data-admin-support-status></p>
               </div>
-              <form class="product-admin-grid is-narrow" data-point-adjust>
-                <label>포인트 조정 (+충전 / −차감)
-                  <input type="number" name="amount" step="1" placeholder="예: 5000 또는 -500" required disabled />
-                </label>
-                <label>관리 메모
-                  <input name="memo" maxlength="200" placeholder="예: CS 보상" disabled />
-                </label>
-                <button class="primary-action admin-save" type="submit" disabled>포인트 반영</button>
-              </form>
-              <form class="product-admin-grid is-narrow" data-regen-adjust>
-                <label>무료운세 재생성 토큰 부여
-                  <input type="number" name="amount" min="1" step="1" value="1" required disabled />
-                </label>
-                <button class="secondary-action" type="submit" disabled>토큰 부여</button>
-              </form>
-              <p class="form-status" data-admin-point-status></p>
-              <h3>최근 거래 내역</h3>
-              <div class="admin-table" data-admin-point-transactions></div>
             </section>
           </div>
         </section>
@@ -372,6 +374,6 @@
     </main>
     <script src="./runtime-config.js"></script>
     <script src="./api-client.js"></script>
-    <script src="./admin.js?v=20260710-member-support"></script>
+    <script src="./admin.js?v=20260710-admin-popover"></script>
   </body>
 </html>
