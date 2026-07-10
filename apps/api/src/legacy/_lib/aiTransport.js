@@ -371,6 +371,8 @@ export async function requestText(options, dependencies = {}) {
         return { text: result.text, usage: normalizeUsage(result.usage), model: routeLabel(route) };
       } catch (error) {
         lastError = normalizeTransportError(error);
+        // Vercel 함수 로그에서 폴백 여부를 추적할 수 있게 프로바이더별 실패를 남긴다.
+        console.error(`[ai-fallback] ${routeLabel(route)} 실패 (${lastError.statusCode || lastError.status || "-"}): ${String(lastError.message || "").slice(0, 200)}`);
         // 같은 프로바이더 1회 재시도(재시도 가능 오류) → 소진하면 다음 프로바이더로 폴백
         const hasNextAttempt = attempt === 0 && isRetryableTransport(lastError);
         const hasNextRoute = routeIndex + 1 < routes.length;
@@ -398,6 +400,7 @@ export async function requestStructured(options, dependencies = {}) {
         text = await request(requestOptions);
       } catch (error) {
         lastError = normalizeTransportError(error);
+        console.error(`[ai-fallback] ${routeLabel(route)} 실패 (${lastError.statusCode || lastError.status || "-"}): ${String(lastError.message || "").slice(0, 200)}`);
         if (attempt + 1 < maxAttempts && isRetryableTransport(lastError)) continue;
         break; // 이 프로바이더 포기 → 다음 프로바이더 폴백
       }

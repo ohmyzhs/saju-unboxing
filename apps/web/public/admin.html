@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-ai-routing" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-ai-test" />
     <style>body.locked .admin-shell{display:none}</style>
   </head>
   <body class="admin-body locked">
@@ -387,9 +387,13 @@
               </p>
             </article>
 
-            <button class="primary-action admin-save" type="submit">AI 설정 저장</button>
+            <div class="btn-row">
+              <button class="primary-action admin-save" type="submit">AI 설정 저장</button>
+              <button class="secondary-action" type="button" data-ai-test>프로바이더 연결 테스트</button>
+            </div>
           </form>
           <p class="form-status" data-ai-routing-status></p>
+          <div class="admin-table" data-ai-test-result></div>
         </section>
 
         <section class="admin-panel" data-admin-panel="settings" hidden>
@@ -406,6 +410,6 @@
     </main>
     <script src="./runtime-config.js"></script>
     <script src="./api-client.js"></script>
-    <script src="./admin.js?v=20260710-ai-routing"></script>
+    <script src="./admin.js?v=20260710-ai-test"></script>
   </body>
 </html>

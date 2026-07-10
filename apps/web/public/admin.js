@@ -1216,6 +1216,47 @@ document.querySelector("[data-legal-form]")?.addEventListener("submit", saveLega
 document.querySelector("[data-business-form]")?.addEventListener("submit", saveBusiness);
 document.querySelector("[data-saju-form]")?.addEventListener("submit", saveSaju);
 document.querySelector("[data-ai-routing-form]")?.addEventListener("submit", saveAiRouting);
+
+// AI 프로바이더 연결 테스트 — 서버가 보는 체인 + 프로바이더별 실호출 결과 표시
+document.querySelector("[data-ai-test]")?.addEventListener("click", async () => {
+  const status = document.querySelector("[data-ai-routing-status]");
+  const target = document.querySelector("[data-ai-test-result]");
+  const button = document.querySelector("[data-ai-test]");
+  if (button) button.disabled = true;
+  setStatus(status, "저장된 설정 기준으로 각 프로바이더를 실제 호출하는 중… (최대 1분)");
+  if (target) target.innerHTML = "";
+  try {
+    const { ok, status: code, body } = await adminPost("/api/admin/ai-test", {});
+    if (code === 401) return showLogin();
+    if (!ok) throw new Error(body.message || "연결 테스트에 실패했습니다.");
+    const kindLabel = { report: "AI 해설", chat: "챗봇 상담" };
+    const rows = [];
+    if (!body.aiRoutingColumnVisible) {
+      rows.push(`<tr><td colspan="3"><b>⚠️ site_config.ai_routing 컬럼이 안 보입니다.</b><small>마이그레이션 실행 또는 notify pgrst, 'reload schema' 필요 — 폴백 설정이 서버에 전달되지 않는 상태.</small></td></tr>`);
+    } else if (!body.aiRoutingSaved) {
+      rows.push(`<tr><td colspan="3"><b>⚠️ 저장된 AI 라우팅 설정이 비어 있습니다.</b><small>위 폼에서 "AI 설정 저장"을 먼저 누르세요.</small></td></tr>`);
+    }
+    for (const kind of ["report", "chat"]) {
+      const r = body.results?.[kind];
+      if (!r) continue;
+      rows.push(`<tr><td colspan="3"><b>${kindLabel[kind]}</b><small>체인: ${safe(r.chain.join(" → "))}${r.chain.length < 2 ? " · 폴백 없음(OpenRouter 모델·키 미설정)" : ""}</small></td></tr>`);
+      for (const probe of r.probes) {
+        rows.push(`
+          <tr>
+            <td><b>${safe(probe.provider)}</b><small>${safe(probe.model)}${probe.providerPin ? ` · pin: ${safe(probe.providerPin)}` : ""}</small></td>
+            <td>${statusPill(probe.ok ? "성공" : "실패")}</td>
+            <td>${probe.ok ? `<small>${safe(probe.sample)}</small>` : `<b>${probe.status || "-"}</b><small>${safe(probe.message)}</small>`}</td>
+          </tr>`);
+      }
+    }
+    if (target) target.innerHTML = `<table><thead><tr><th>프로바이더</th><th>결과</th><th>내용</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+    setStatus(status, "연결 테스트 완료.", "ok");
+  } catch (error) {
+    setStatus(status, error.message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
 document.querySelector("[data-saju-test]")?.addEventListener("click", testSaju);
 document.querySelector("[data-password-form]")?.addEventListener("submit", changePassword);
 document.querySelector("[data-point-adjust]")?.addEventListener("submit", (event) => submitPointAdmin(event, "adjust"));

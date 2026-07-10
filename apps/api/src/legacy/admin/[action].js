@@ -6,6 +6,7 @@ import { getSupabase, loadSiteConfig } from "../_lib/supabase.js";
 import { summarizeAnalytics } from "../_lib/analytics.js";
 import { LEGAL_DEFAULTS } from "../_lib/legalDefaults.js";
 import { fetchBalance } from "../_lib/sajuApi.js";
+import { requestText, resolveAiRouting } from "../_lib/aiTransport.js";
 import { handleAdminPoints } from "../_lib/adminPoints.js";
 import { mapSupportInquiry, SUPPORT_STATUSES } from "../support.js";
 
@@ -22,6 +23,7 @@ export default async function handler(req, res) {
   if (action === "analytics") return analytics(req, res);
   if (action === "password") return changePassword(req, res);
   if (action === "saju-test") return sajuTest(req, res);
+  if (action === "ai-test") return aiTest(req, res);
   if (action === "points") return handleAdminPoints(req, res, getSupabase());
   if (action === "support") return support(req, res);
   return sendJson(res, 404, { message: "관리자 경로를 찾지 못했습니다." });
@@ -117,6 +119,47 @@ async function sajuTest(req, res) {
   return sendJson(res, 200, {
     ok: false,
     message: bal.status === 401 ? "API 키가 유효하지 않습니다." : `연결 실패 (${bal.reason || bal.status})`,
+  });
+}
+
+// AI 프로바이더 연결 테스트 — 서버가 실제로 보는 라우팅 체인과 프로바이더별 호출 결과를 반환.
+// "설정했는데 폴백이 안 된다" 류 문제를 어드민에서 바로 진단한다.
+async function aiTest(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
+  const config = await loadSiteConfig();
+  const results = {};
+  for (const kind of ["report", "chat"]) {
+    const routes = resolveAiRouting(config, kind);
+    const probes = [];
+    for (const route of routes) {
+      try {
+        const r = await requestText({
+          model: [route],
+          system: "테스트 요청이다. 짧게 답하라.",
+          input: "1+1은? 숫자만 답하라.",
+          maxTokens: 16,
+          timeoutMs: 20000,
+        });
+        probes.push({ provider: route.provider, model: route.model, providerPin: route.providerPin || "", ok: true, sample: String(r.text).slice(0, 40) });
+      } catch (error) {
+        probes.push({
+          provider: route.provider,
+          model: route.model,
+          providerPin: route.providerPin || "",
+          ok: false,
+          status: error.statusCode || error.status || null,
+          message: String(error.message || "").slice(0, 300),
+        });
+      }
+    }
+    results[kind] = { chain: routes.map((r) => `${r.provider}:${r.model}`), probes };
+  }
+  return sendJson(res, 200, {
+    ok: true,
+    // 컬럼이 스키마 캐시에 없으면 select * 결과에서 키 자체가 빠진다 → 마이그레이션/리로드 미적용 신호
+    aiRoutingColumnVisible: Object.prototype.hasOwnProperty.call(config, "ai_routing"),
+    aiRoutingSaved: Boolean(config.ai_routing && Object.keys(config.ai_routing).length),
+    results,
   });
 }
 
