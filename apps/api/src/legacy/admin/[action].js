@@ -190,6 +190,15 @@ async function config(req, res) {
     ["products", "prompts", "images", "branding", "ai_model", "chat_model", "ai_routing", "legal", "business", "saju"].forEach((k) => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
+    if (body.ai_routing !== undefined) {
+      // 예전 관리자 탭이 설정을 저장해도 서버가 기록한 OpenCode 월간 한도 쿨다운은 지우지 않는다.
+      const { data: currentConfig } = await sb.from("site_config").select("ai_routing").eq("id", 1).maybeSingle();
+      const currentOpencode = currentConfig?.ai_routing?.opencode || {};
+      patch.ai_routing = {
+        ...(body.ai_routing || {}),
+        opencode: { ...currentOpencode, ...(body.ai_routing?.opencode || {}) },
+      };
+    }
     const { error } = await sb.from("site_config").update(patch).eq("id", 1);
     if (error) {
       // ai_routing 컬럼 미존재 = 마이그레이션 미적용 — 원인 그대로 안내

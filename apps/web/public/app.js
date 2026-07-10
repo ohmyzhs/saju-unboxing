@@ -685,6 +685,8 @@ function setPaymentStatus(message) {
 
 // ---------- Fetch helper ----------
 const REQUEST_TIMEOUT_MS = 55000;
+// 단일 섹션은 서버의 OpenRouter 3회 시도(각 40초 + 짧은 백오프)를 끝까지 기다린다.
+const SECTION_RETRY_TIMEOUT_MS = 145000;
 async function getJson(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -3061,7 +3063,7 @@ async function retryReportSection(sectionId, trigger = null) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId: item.productId, profile, partner, context, section, otherTitles: allTitles }),
-    }, 45000);
+    }, SECTION_RETRY_TIMEOUT_MS);
     const updated = updateArchiveItem(item.id, (draft) => {
       const next = window.ReportRecovery.mergeSection(draft, sectionId, response.body || "");
       const hasFailed = (next.analysis?.sections || []).some((entry) => entry.status === "failed" || !String(entry.body || "").trim());
@@ -3369,7 +3371,7 @@ function startAnalysis(productId, profile, meta = {}) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ productId, profile, partner, context: data.context, section: s, otherTitles: allTitles }),
-          }, 45000)
+          }, SECTION_RETRY_TIMEOUT_MS)
             .then((r) => {
               s.body = r.body || "";
               fillSectionBody(s.id, s.body);

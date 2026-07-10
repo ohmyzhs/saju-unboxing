@@ -1140,6 +1140,8 @@ function saveAiRouting(event) {
   const ai_routing = {
     primary: value("primary") === "openrouter" ? "openrouter" : "opencode",
     opencode: {
+      // 서버가 기록한 월간 한도 쿨다운 상태는 모델 설정 저장 시에도 보존한다.
+      ...(serverConfig.ai_routing?.opencode || {}),
       report_model: value("oc_report_model"),
       chat_model: value("oc_chat_model"),
     },

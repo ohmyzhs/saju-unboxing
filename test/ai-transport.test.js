@@ -151,7 +151,8 @@ test("does not retry transport failures", async () => {
         throw new Error("network down");
       },
     }),
-    /network down/,
+    (error) => error.code === "AI_PROVIDERS_UNAVAILABLE"
+      && !error.message.includes("network down"),
   );
   assert.equal(attempts, 1);
 });
@@ -186,7 +187,7 @@ test("retries one retryable transport failure", async () => {
   assert.deepEqual(value, { body: "정상" });
 });
 
-test("converts repeated aborts into a Korean 504 timeout", async () => {
+test("converts repeated aborts into a safe Korean 504 response", async () => {
   let attempts = 0;
   await assert.rejects(
     requestStructured({
@@ -201,7 +202,9 @@ test("converts repeated aborts into a Korean 504 timeout", async () => {
         throw Object.assign(new Error("aborted"), { name: "AbortError" });
       },
     }),
-    (error) => error.statusCode === 504 && /시간이 초과/.test(error.message),
+    (error) => error.statusCode === 504
+      && error.code === "AI_PROVIDERS_UNAVAILABLE"
+      && /일시적으로 지연/.test(error.message),
   );
   assert.equal(attempts, 2);
 });

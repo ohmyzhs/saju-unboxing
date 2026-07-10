@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { getSupabase } from "./supabase.js";
 
 const DEFAULT_MODEL = process.env.OPENCODE_MODEL || "glm-5.2";
 const DEFAULT_BASE_URL = process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/go/v1";
@@ -11,6 +12,7 @@ const MODEL_PROFILES = Object.freeze({
 // OpenRouter는 OpenAI 호환 chat 엔드포인트만 사용. response_format json_schema는
 // 모델마다 지원이 갈려서 프롬프트 JSON 강제(jsonOnlySystem) 방식으로 통일한다.
 const OPENROUTER_PROFILE = Object.freeze({ transport: "chat", strictJson: false });
+const providerCooldownCache = new Map();
 
 export function modelProfile(model) {
   return MODEL_PROFILES[model] || DEFAULT_PROFILE;
@@ -58,6 +60,163 @@ function toRoutes(modelOption) {
   return [{ provider: "opencode", model }];
 }
 
+function nowMs(dependencies = {}) {
+  if (typeof dependencies.now === "function") return Number(dependencies.now());
+  const value = Number(dependencies.now);
+  return Number.isFinite(value) ? value : Date.now();
+}
+
+function activeCooldown(value, currentTime = Date.now()) {
+  const blockedUntilMs = Date.parse(String(value?.blockedUntil || value?.cooldown_until || ""));
+  if (!Number.isFinite(blockedUntilMs) || blockedUntilMs <= currentTime) return null;
+  return {
+    blockedUntil: new Date(blockedUntilMs).toISOString(),
+    reason: String(value?.reason || value?.cooldown_reason || ""),
+    statusCode: Number(value?.statusCode || value?.cooldown_status || 429),
+  };
+}
+
+export function parseOpenCodeMonthlyLimit(error, currentTime = Date.now()) {
+  const status = Number(error?.statusCode || error?.status || 0);
+  const message = String(error?.message || "");
+  if (status !== 429 || !/monthly usage limit reached/i.test(message)) return null;
+  const match = /resets?\s+in\s+(\d+(?:\.\d+)?)\s*(minutes?|hours?|days?|weeks?)/i.exec(message);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  const unitMs = unit.startsWith("minute")
+    ? 60_000
+    : unit.startsWith("hour")
+      ? 3_600_000
+      : unit.startsWith("week")
+        ? 7 * 86_400_000
+        : 86_400_000;
+  const blockedUntilMs = Number(currentTime) + Math.ceil(amount * unitMs);
+  if (!Number.isFinite(blockedUntilMs)) return null;
+  return {
+    blockedUntil: new Date(blockedUntilMs).toISOString(),
+    reason: message.replace(/https?:\/\/\S+/gi, "").trim().slice(0, 240),
+    statusCode: 429,
+  };
+}
+
+async function storedProviderCooldown(provider, dependencies = {}) {
+  if (provider !== "opencode") return null;
+  const currentTime = nowMs(dependencies);
+  const cached = providerCooldownCache.get(provider);
+  if (cached) {
+    const active = activeCooldown(cached.value, currentTime);
+    if (active) return active;
+    providerCooldownCache.delete(provider);
+  }
+
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const { data, error } = await sb.from("site_config").select("ai_routing").eq("id", 1).maybeSingle();
+    if (error) throw error;
+    const value = activeCooldown(data?.ai_routing?.[provider], currentTime);
+    if (value) providerCooldownCache.set(provider, { value });
+    return value;
+  } catch (error) {
+    console.error(`[ai-circuit] ${provider} 상태 조회 실패: ${String(error?.message || error).slice(0, 160)}`);
+    return null;
+  }
+}
+
+async function persistProviderCooldown(provider, cooldown) {
+  providerCooldownCache.set(provider, {
+    value: cooldown,
+  });
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    const { data, error: readError } = await sb.from("site_config").select("ai_routing").eq("id", 1).maybeSingle();
+    if (readError) throw readError;
+    const routing = data?.ai_routing || {};
+    const current = routing[provider] || {};
+    const currentUntil = Date.parse(String(current.cooldown_until || ""));
+    const nextUntil = Math.max(Number.isFinite(currentUntil) ? currentUntil : 0, Date.parse(cooldown.blockedUntil));
+    const nextRouting = {
+      ...routing,
+      [provider]: {
+        ...current,
+        cooldown_until: new Date(nextUntil).toISOString(),
+        cooldown_reason: cooldown.reason,
+        cooldown_status: cooldown.statusCode,
+      },
+    };
+    const { error: updateError } = await sb
+      .from("site_config")
+      .update({ ai_routing: nextRouting, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error(`[ai-circuit] ${provider} 쿨다운 저장 실패: ${String(error?.message || error).slice(0, 160)}`);
+  }
+}
+
+const defaultProviderStatus = Object.freeze({
+  get: storedProviderCooldown,
+  block: persistProviderCooldown,
+});
+
+async function routeCooldown(route, dependencies = {}) {
+  if (route.provider !== "opencode") return null;
+  const currentTime = nowMs(dependencies);
+  const configured = activeCooldown({
+    blockedUntil: route.cooldownUntil,
+    reason: route.cooldownReason,
+    statusCode: route.cooldownStatus,
+  }, currentTime);
+  if (configured) return configured;
+  const store = dependencies.providerStatus || defaultProviderStatus;
+  return store.get ? store.get(route.provider, { now: currentTime }) : null;
+}
+
+async function blockForMonthlyLimit(route, error, dependencies = {}) {
+  if (route.provider !== "opencode") return null;
+  const cooldown = parseOpenCodeMonthlyLimit(error, nowMs(dependencies));
+  if (!cooldown) return null;
+  const store = dependencies.providerStatus || defaultProviderStatus;
+  if (store.block) await store.block(route.provider, cooldown);
+  console.error(`[ai-circuit] opencode 월간 한도 감지 · ${cooldown.blockedUntil}까지 호출 차단`);
+  return cooldown;
+}
+
+function retryAfterMs(error, attempt, baseMs = 250) {
+  const headers = error?.headers;
+  const getHeader = (name) => {
+    if (typeof headers?.get === "function") return headers.get(name);
+    return headers?.[name] ?? headers?.[name.toLowerCase()];
+  };
+  const retryAfterMsHeader = Number(getHeader("retry-after-ms"));
+  if (Number.isFinite(retryAfterMsHeader) && retryAfterMsHeader > 0) return Math.min(retryAfterMsHeader, 5_000);
+  const retryAfter = getHeader("retry-after");
+  if (retryAfter !== undefined && retryAfter !== null && retryAfter !== "") {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1_000, 5_000);
+    const at = Date.parse(String(retryAfter));
+    if (Number.isFinite(at)) return Math.max(0, Math.min(at - Date.now(), 5_000));
+  }
+  return Math.min(Math.max(0, Number(baseMs) || 250) * (2 ** attempt), 2_000);
+}
+
+async function waitBeforeRetry(error, attempt, options, dependencies) {
+  // 주입 request를 쓰는 단위 테스트는 실제 대기하지 않는다. 운영 전송에서만 짧게 백오프한다.
+  if (dependencies.request && !dependencies.sleep) return;
+  const sleep = dependencies.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  await sleep(retryAfterMs(error, attempt, options.retryBaseMs));
+}
+
+function providerExhaustedError(lastError) {
+  const error = new Error("AI 해설 생성이 일시적으로 지연되고 있습니다. 잠시 후 다시 시도해주세요.");
+  error.statusCode = Number(lastError?.statusCode || lastError?.status) === 504 ? 504 : 503;
+  error.code = "AI_PROVIDERS_UNAVAILABLE";
+  error.cause = lastError;
+  return error;
+}
+
 // site_config → 우선순위 라우팅 체인. kind: "report"(AI해설) | "chat"(챗봇상담)
 export function resolveAiRouting(config = {}, kind = "report") {
   const routing = config.ai_routing || {};
@@ -70,6 +229,11 @@ export function resolveAiRouting(config = {}, kind = "report") {
     provider: "opencode",
     model: (kind === "chat" ? oc.chat_model : oc.report_model) || legacyModel,
   };
+  if (oc.cooldown_until) {
+    opencodeRoute.cooldownUntil = String(oc.cooldown_until);
+    opencodeRoute.cooldownReason = String(oc.cooldown_reason || "");
+    opencodeRoute.cooldownStatus = Number(oc.cooldown_status || 429);
+  }
   const orModel = kind === "chat" ? (or.chat_model || or.report_model) : or.report_model;
   const orKey = or.api_key || process.env.OPENROUTER_API_KEY || "";
   const openrouterRoutes = [];
@@ -361,6 +525,11 @@ export async function requestText(options, dependencies = {}) {
   let lastError;
   for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
     const route = routes[routeIndex];
+    const cooldown = await routeCooldown(route, dependencies);
+    if (cooldown) {
+      console.error(`[ai-circuit] ${routeLabel(route)} 건너뜀 · ${cooldown.blockedUntil}까지 차단`);
+      continue;
+    }
     const profile = routeProfile(route);
     const request = dependencies.request || (profile.transport === "messages" ? requestPlainMessages : requestPlainChat);
     const requestOptions = { ...options, route, model: route.model, profile };
@@ -374,35 +543,52 @@ export async function requestText(options, dependencies = {}) {
         lastError = normalizeTransportError(error);
         // Vercel 함수 로그에서 폴백 여부를 추적할 수 있게 프로바이더별 실패를 남긴다.
         console.error(`[ai-fallback] ${routeLabel(route)} 실패 (${lastError.statusCode || lastError.status || "-"}): ${String(lastError.message || "").slice(0, 200)}`);
+        const monthlyLimit = await blockForMonthlyLimit(route, lastError, dependencies);
+        if (monthlyLimit) {
+          if (options.onReset) await options.onReset();
+          break;
+        }
         // 같은 프로바이더 1회 재시도(재시도 가능 오류) → 소진하면 다음 프로바이더로 폴백
         const hasNextAttempt = attempt === 0 && isRetryableTransport(lastError);
         const hasNextRoute = routeIndex + 1 < routes.length;
-        if (!hasNextAttempt && !hasNextRoute) throw lastError;
+        if (!hasNextAttempt && !hasNextRoute) break;
         if (options.onReset) await options.onReset();
         if (!hasNextAttempt) break;
+        await waitBeforeRetry(lastError, attempt, options, dependencies);
       }
     }
   }
-  throw lastError;
+  throw providerExhaustedError(lastError);
 }
 
 export async function requestStructured(options, dependencies = {}) {
   const routes = toRoutes(options.model);
   let lastError;
-  const maxAttempts = Math.max(1, Math.min(2, Number(options.maxAttempts) || 2));
+  const maxAttempts = Math.max(1, Math.min(3, Number(options.maxAttempts) || 2));
   for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
     const route = routes[routeIndex];
+    const cooldown = await routeCooldown(route, dependencies);
+    if (cooldown) {
+      console.error(`[ai-circuit] ${routeLabel(route)} 건너뜀 · ${cooldown.blockedUntil}까지 차단`);
+      continue;
+    }
     const profile = routeProfile(route);
     const request = dependencies.request || (profile.transport === "messages" ? requestMessages : requestChat);
     const requestOptions = { ...options, route, model: route.model, profile };
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const routeAttempts = route.provider === "openrouter" ? maxAttempts : Math.min(2, maxAttempts);
+    for (let attempt = 0; attempt < routeAttempts; attempt += 1) {
       let text;
       try {
         text = await request(requestOptions);
       } catch (error) {
         lastError = normalizeTransportError(error);
         console.error(`[ai-fallback] ${routeLabel(route)} 실패 (${lastError.statusCode || lastError.status || "-"}): ${String(lastError.message || "").slice(0, 200)}`);
-        if (attempt + 1 < maxAttempts && isRetryableTransport(lastError)) continue;
+        const monthlyLimit = await blockForMonthlyLimit(route, lastError, dependencies);
+        if (monthlyLimit) break;
+        if (attempt + 1 < routeAttempts && isRetryableTransport(lastError)) {
+          await waitBeforeRetry(lastError, attempt, options, dependencies);
+          continue;
+        }
         break; // 이 프로바이더 포기 → 다음 프로바이더 폴백
       }
       try {
@@ -414,5 +600,5 @@ export async function requestStructured(options, dependencies = {}) {
       }
     }
   }
-  throw lastError;
+  throw providerExhaustedError(lastError);
 }

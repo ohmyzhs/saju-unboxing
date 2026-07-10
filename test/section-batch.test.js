@@ -172,3 +172,21 @@ test("generates two section bodies with one structured request", async () => {
     { id: "s1", body: "둘째 본문" },
   ]);
 });
+
+test("단일 섹션은 OpenRouter 재시도를 위해 최대 세 번 시도한다", async () => {
+  let requestOptions;
+  await generateSections({
+    productId: "saju-analysis",
+    profile: { name: "가람" },
+    context: { 기준: "테스트" },
+    sections: [{ id: "s0", title: "첫 제목", angle: "첫 핵심" }],
+    otherTitles: ["첫 제목"],
+    model: "deepseek-v4-flash",
+  }, {
+    requestStructured: async (options) => {
+      requestOptions = options;
+      return { sections: [{ id: "s0", body: "첫 본문" }] };
+    },
+  });
+  assert.equal(requestOptions.maxAttempts, 3);
+});

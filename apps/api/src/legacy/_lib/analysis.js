@@ -681,7 +681,8 @@ export async function generateSections({ productId = "saju-analysis", extra, pro
       schema,
       maxTokens: 3200,
       timeoutMs: 40000,
-      maxAttempts: 1,
+      // 2개 배치는 빠르게 단일 섹션 폴백하고, 단일 섹션은 OpenRouter를 충분히 재시도한다.
+      maxAttempts: sections.length === 1 ? 3 : 1,
     });
 
   let out = validateSectionBatch(sections, (await callOnce()).sections);
