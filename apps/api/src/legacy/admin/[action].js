@@ -148,7 +148,15 @@ async function config(req, res) {
       if (body[k] !== undefined) patch[k] = body[k];
     });
     const { error } = await sb.from("site_config").update(patch).eq("id", 1);
-    if (error) return sendJson(res, 500, { message: error.message });
+    if (error) {
+      // ai_routing 컬럼 미존재 = 마이그레이션 미적용 — 원인 그대로 안내
+      const missingAiRouting = /ai_routing/.test(error.message || "") && /column|schema/i.test(error.message || "");
+      return sendJson(res, 500, {
+        message: missingAiRouting
+          ? "site_config.ai_routing 컬럼이 없습니다. Supabase SQL Editor에서 마이그레이션(20260710150000_ai_routing.sql)을 먼저 실행하세요."
+          : error.message,
+      });
+    }
     return sendJson(res, 200, { ok: true });
   }
   return sendJson(res, 405, { message: "GET/POST only" });

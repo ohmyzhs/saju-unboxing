@@ -258,14 +258,20 @@ export async function loadChatRunContext(sb, runId) {
   if (runError) throw runError;
   if (!run) throw repositoryError("답변 실행을 찾지 못했습니다.", 404, "chat_run_not_found");
 
-  const [{ data: session, error: sessionError }, { data: question, error: questionError }, { data: config, error: configError }] = await Promise.all([
+  const [{ data: session, error: sessionError }, { data: question, error: questionError }, configResult] = await Promise.all([
     sb.from("chat_sessions").select("id, user_id, report_snapshot").eq("id", run.session_id).maybeSingle(),
     sb.from("chat_messages").select("id, content, created_at").eq("id", run.user_message_id).maybeSingle(),
     sb.from("site_config").select("ai_model, chat_model, ai_routing").eq("id", 1).maybeSingle(),
   ]);
   if (sessionError) throw sessionError;
   if (questionError) throw questionError;
-  if (configError) throw configError;
+  // ai_routing 마이그레이션 전 DB — 라이트 컬럼으로 폴백해 챗봇이 끊기지 않게 한다.
+  let config = configResult.data;
+  if (configResult.error) {
+    const lite = await sb.from("site_config").select("ai_model, chat_model").eq("id", 1).maybeSingle();
+    if (lite.error) throw lite.error;
+    config = lite.data;
+  }
   if (!session || !question) throw repositoryError("대화 컨텍스트를 찾지 못했습니다.", 404, "chat_context_not_found");
 
   const { data: history, error: historyError } = await sb

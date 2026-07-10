@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { requestText, requestStructured, resolveAiRouting } from "../apps/api/src/legacy/_lib/aiTransport.js";
+import { loadChatRunContext } from "../apps/api/src/domain/chatRepository.js";
 
 const adminHtml = readFileSync(new URL("../apps/web/public/admin.html", import.meta.url), "utf8");
 const admin = readFileSync(new URL("../apps/web/public/admin.js", import.meta.url), "utf8");
@@ -122,6 +123,48 @@ test("관리자 화면 — AI 모델 탭 분리 + 프로바이더별 2모델 + �
   assert.doesNotMatch(adminHtml, /data-chat-model-form/);
   assert.match(admin, /saveAiRouting/);
   assert.match(admin, /ai_routing/);
+});
+
+// ai_routing 마이그레이션 전 DB(컬럼 없음)에서도 챗봇 컨텍스트 로드가 죽지 않아야 한다.
+test("loadChatRunContext — ai_routing 컬럼이 없으면 라이트 셀렉트로 폴백한다", async () => {
+  const messageCalls = { count: 0 };
+  const resolved = (result) => {
+    const chain = {
+      select: () => chain, eq: () => chain, lt: () => chain, order: () => chain,
+      maybeSingle: () => Promise.resolve(result),
+      limit: () => Promise.resolve(result),
+    };
+    return chain;
+  };
+  const sb = {
+    from(table) {
+      if (table === "chat_runs") return resolved({ data: { id: "r1", session_id: "s1", user_message_id: "m1" } });
+      if (table === "chat_sessions") return resolved({ data: { id: "s1", user_id: "u1", report_snapshot: {} } });
+      if (table === "chat_messages") {
+        messageCalls.count += 1;
+        return messageCalls.count === 1
+          ? resolved({ data: { id: "m1", content: "질문", created_at: "2026-07-10T00:00:00Z" } })
+          : resolved({ data: [] });
+      }
+      if (table === "site_config") {
+        return {
+          select: (cols) => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve(
+                cols.includes("ai_routing")
+                  ? { data: null, error: { message: "column site_config.ai_routing does not exist" } }
+                  : { data: { ai_model: "glm-5.2", chat_model: "deepseek-v4-flash" } },
+              ),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  const context = await loadChatRunContext(sb, "r1");
+  assert.equal(context.question, "질문");
+  assert.deepEqual(context.model, [{ provider: "opencode", model: "deepseek-v4-flash" }]);
 });
 
 test("site_config에 ai_routing 컬럼이 추가된다", () => {
