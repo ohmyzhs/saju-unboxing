@@ -8275,3 +8275,224 @@ label,
     min-width: 54px;
   }
 }
+
+/* ─────────────────────────────────────────────────────
+   HEUKYA v10 — UI/UX 정비 패스
+   ① 헤더 완전 고정 ② 하단 여백 축소(푸터 메뉴 제거 후)
+   ③ 360px 좌우 여백 축소·버튼 줄바꿈 방지
+   ④ 히어로 화살표 ⑤ 밝은 배경 흰 글자 교정
+   ⑥ 마이페이지 개인정보 수정 폼
+   ───────────────────────────────────────────────────── */
+
+/* ① overflow: hidden이 스크롤 컨테이너를 만들어 .topbar position: sticky를
+   무력화했다. clip은 동일하게 잘라내되 스크롤 컨테이너를 만들지 않는다. */
+.app-shell {
+  overflow: clip;
+}
+
+/* ② 푸터 메뉴 바로가기 제거 후 남은 과도한 하단 여백 정리.
+   고정 바텀내브(84px) 클리어런스는 .app-shell padding-bottom: 92px가 담당. */
+.site-footer {
+  margin: 24px 16px 0;
+  padding: 16px 4px calc(8px + env(safe-area-inset-bottom));
+}
+
+.points-view,
+.legal-view {
+  padding-bottom: 24px;
+}
+
+.signup-card,
+.support-board {
+  margin-bottom: 32px;
+}
+
+/* ③ 360px 이하 — 좌우 여백 축소 + 단계 버튼 줄바꿈 방지 */
+.home-story .story-points button,
+.filters button,
+.library-filters button {
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .banner-carousel {
+    margin: 10px 8px 0;
+  }
+
+  .premium-unboxing-card {
+    margin: 12px 8px 4px;
+  }
+
+  .filters {
+    padding: 14px 8px 8px;
+  }
+
+  .product-grid {
+    padding: 10px 8px 20px;
+  }
+
+  .home-story {
+    margin: 8px 8px 22px;
+    padding: 20px 10px 14px;
+  }
+
+  .home-story .story-points {
+    gap: 4px;
+  }
+
+  .home-story .story-points button {
+    padding: 0 2px;
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+
+  .chat-workspace {
+    padding: 12px 8px 24px;
+  }
+
+  .chat-product-grid {
+    gap: 6px;
+    padding: 0 10px 14px;
+  }
+
+  .site-footer {
+    margin-inline: 8px;
+  }
+}
+
+/* ④ 히어로 배너 좌우 화살표 */
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 38px;
+  height: 44px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(213, 170, 85, 0.42);
+  border-radius: 3px;
+  background: rgba(16, 24, 42, 0.44);
+  color: #f3dc9f;
+  font-size: 26px;
+  line-height: 1;
+  backdrop-filter: blur(6px);
+}
+
+.carousel-arrow.prev {
+  left: 10px;
+}
+
+.carousel-arrow.next {
+  right: 10px;
+}
+
+.carousel-arrow:hover {
+  background: rgba(16, 24, 42, 0.68);
+}
+
+/* ⑤ 라이트 한지 카드로 오버라이드된 뒤에도 남아 있던 흰 글자 교정 */
+.chat-credit-card {
+  color: #16233c;
+}
+
+.chat-credit-card strong {
+  color: #7d2e3d;
+}
+
+.chat-credit-card p {
+  color: #6a614f;
+}
+
+/* ⑥ 마이페이지 — 개인정보 수정 */
+.mypage-id-card {
+  flex-wrap: wrap;
+}
+
+.mypage-edit-toggle {
+  min-height: 34px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid rgba(26, 41, 66, 0.24);
+  border-radius: 3px;
+  background: rgba(255, 253, 246, 0.7);
+  color: #33415e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-edit-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(213, 170, 85, 0.32);
+  border-radius: 6px;
+  background: #fbf4e5;
+}
+
+.account-edit-form[hidden] {
+  display: none;
+}
+
+.account-edit-form label {
+  display: grid;
+  gap: 6px;
+  color: #2a3550;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-edit-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(26, 41, 66, 0.18);
+  border-radius: 5px;
+  background: #fffdf8;
+  color: #172033;
+  font: inherit;
+}
+
+.account-edit-divider {
+  margin-top: 4px;
+  color: #9a6d24;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.account-edit-note {
+  margin: 0;
+  color: #756b5b;
+  font-size: 12px;
+}
+
+.account-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.account-edit-actions button[type="submit"] {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid rgba(213, 170, 85, 0.52);
+  border-radius: 3px;
+  background: var(--midnight-ink);
+  color: #f3dc9f;
+  font-weight: 700;
+}
+
+.account-edit-actions button[type="button"] {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(26, 41, 66, 0.22);
+  border-radius: 3px;
+  background: transparent;
+  color: #33415e;
+}
+
+.account-edit-form .form-status {
+  min-height: 16px;
+  margin: 0;
+}

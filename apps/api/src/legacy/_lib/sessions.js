@@ -35,6 +35,14 @@ export async function getSessionUser(req) {
   return data.kakao_user || null;
 }
 
+// 개인정보 수정 후 세션에 저장된 사용자 스냅샷을 갱신한다(재로그인 없이 반영).
+export async function updateSessionUser(req, user) {
+  const sid = readCookies(req).saju_session;
+  if (!sid) return;
+  const sb = getSupabase();
+  if (sb) await sb.from("sessions").update({ kakao_user: user }).eq("id", sid);
+}
+
 export async function deleteSession(req) {
   const sid = readCookies(req).saju_session;
   if (!sid) return;

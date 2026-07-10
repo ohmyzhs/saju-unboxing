@@ -825,6 +825,7 @@ function renderSession() {
   // 드로어 신원 영역
   if (mypageId) {
     if (nickname) {
+      const isEmailUser = user?.provider === "email";
       mypageId.innerHTML = `
         <div class="mypage-id-card">
           <span class="mypage-avatar" style="background:${colorForText(nickname)}">${escapeHtml(profileInitial(nickname))}</span>
@@ -832,7 +833,41 @@ function renderSession() {
             <b>${escapeHtml(nickname)}님</b>
             <small>${email ? escapeHtml(email) : "카카오 계정으로 로그인됨"}${phone ? ` · ${escapeHtml(formatPhoneNumber(phone))}` : ""}</small>
           </div>
-        </div>`;
+          <button class="mypage-edit-toggle" type="button" data-account-edit-toggle>개인정보 수정</button>
+        </div>
+        <form class="account-edit-form" data-account-edit-form hidden>
+          <label>닉네임
+            <input name="nickname" minlength="2" maxlength="20" value="${escapeHtml(nickname)}" autocomplete="nickname" required />
+          </label>
+          <label>휴대폰 번호
+            <input type="tel" name="phone" inputmode="tel" maxlength="13" value="${phone ? escapeHtml(formatPhoneNumber(phone)) : ""}" placeholder="010-1234-5678" autocomplete="tel" />
+          </label>
+          ${isEmailUser ? `
+          <div class="account-edit-divider"><span>비밀번호 변경 (선택)</span></div>
+          <label>현재 비밀번호
+            <input type="password" name="currentPassword" autocomplete="current-password" placeholder="비밀번호를 바꿀 때만 입력" />
+          </label>
+          <label>새 비밀번호
+            <input type="password" name="newPassword" minlength="8" autocomplete="new-password" placeholder="8자 이상" />
+          </label>
+          <label>새 비밀번호 확인
+            <input type="password" name="newPasswordConfirm" minlength="8" autocomplete="new-password" placeholder="한 번 더 입력" />
+          </label>` : `
+          <p class="account-edit-note">카카오 계정은 닉네임·휴대폰 번호만 변경할 수 있어요.</p>`}
+          <div class="account-edit-actions">
+            <button type="submit">저장</button>
+            <button type="button" data-account-edit-cancel>취소</button>
+          </div>
+          <p class="form-status" data-account-edit-status></p>
+        </form>`;
+      const editForm = mypageId.querySelector("[data-account-edit-form]");
+      mypageId.querySelector("[data-account-edit-toggle]")?.addEventListener("click", () => {
+        if (editForm) editForm.hidden = !editForm.hidden;
+      });
+      mypageId.querySelector("[data-account-edit-cancel]")?.addEventListener("click", () => {
+        if (editForm) editForm.hidden = true;
+      });
+      editForm?.addEventListener("submit", updateAccountInfo);
     } else {
       mypageId.innerHTML = `
         <div class="mypage-id-text mypage-auth-intro"><b>로그인하고 이어보기</b>
@@ -872,6 +907,47 @@ async function refreshPoints() {
     renderPointsView();
   } catch {
     // 잔액 갱신 실패는 현재 화면의 마지막 확인값을 유지한다.
+  }
+}
+
+// 마이페이지 — 닉네임·휴대폰·비밀번호 수정
+async function updateAccountInfo(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = form.querySelector("[data-account-edit-status]");
+  const fail = (message) => { if (status) status.textContent = message; };
+  const data = new FormData(form);
+  const nickname = String(data.get("nickname") || "").trim().replace(/\s+/g, " ");
+  const phone = String(data.get("phone") || "").replace(/\D/g, "");
+  const currentPassword = String(data.get("currentPassword") || "");
+  const newPassword = String(data.get("newPassword") || "");
+  const newPasswordConfirm = String(data.get("newPasswordConfirm") || "");
+  if (nickname.length < 2 || nickname.length > 20) return fail("닉네임은 2~20자로 입력하세요.");
+  if (phone && !/^01[016789]\d{7,8}$/.test(phone)) return fail("휴대폰 번호를 정확히 입력하세요.");
+  if (newPassword || currentPassword) {
+    if (!currentPassword) return fail("현재 비밀번호를 입력하세요.");
+    if (newPassword.length < 8) return fail("새 비밀번호는 8자 이상이어야 합니다.");
+    if (newPassword !== newPasswordConfirm) return fail("새 비밀번호 확인이 일치하지 않습니다.");
+  }
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.disabled = true;
+  fail("저장 중...");
+  try {
+    const payload = { action: "update", nickname, phone };
+    if (newPassword) Object.assign(payload, { currentPassword, newPassword, newPasswordConfirm });
+    const res = await window.SajuApi.fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(body.message || "저장에 실패했습니다.");
+    applyVerifiedSession({ user: body.user, points: runtimeSession?.points }, { silent: true });
+    showToast("개인정보가 저장되었습니다.");
+  } catch (error) {
+    fail(error.message || "저장 중 오류가 발생했습니다.");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -4612,8 +4688,35 @@ slideButtons.forEach((button) => {
   button.addEventListener("click", () => {
     activeSlide = Number(button.dataset.slideTarget) || 0;
     showSlide(button.dataset.slideTarget);
+    restartBannerAutoplay();
   });
 });
+
+// 히어로 배너 — 좌우 화살표 + 터치 스와이프
+function stepSlide(delta) {
+  if (!slides.length) return;
+  activeSlide = (activeSlide + delta + slides.length) % slides.length;
+  showSlide(String(activeSlide));
+  restartBannerAutoplay();
+}
+document.querySelector("[data-slide-prev]")?.addEventListener("click", () => stepSlide(-1));
+document.querySelector("[data-slide-next]")?.addEventListener("click", () => stepSlide(1));
+
+const bannerCarousel = document.querySelector(".banner-carousel");
+if (bannerCarousel) {
+  let touchStartX = 0;
+  let touchStartY = 0;
+  bannerCarousel.addEventListener("touchstart", (event) => {
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+  }, { passive: true });
+  bannerCarousel.addEventListener("touchend", (event) => {
+    const dx = event.changedTouches[0].clientX - touchStartX;
+    const dy = event.changedTouches[0].clientY - touchStartY;
+    // 가로 이동이 세로보다 크고 40px 이상일 때만 스와이프로 인정(스크롤 오작동 방지)
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) stepSlide(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
 
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -4627,12 +4730,17 @@ filterButtons.forEach((button) => {
   });
 });
 
-window.setInterval(() => {
-  if (!document.querySelector('[data-view="home"]')?.classList.contains("is-active")) return;
-  if (!slides.length) return;
-  activeSlide = (activeSlide + 1) % slides.length;
-  showSlide(String(activeSlide));
-}, 5200);
+let bannerAutoplayTimer = null;
+function restartBannerAutoplay() {
+  window.clearInterval(bannerAutoplayTimer);
+  bannerAutoplayTimer = window.setInterval(() => {
+    if (!document.querySelector('[data-view="home"]')?.classList.contains("is-active")) return;
+    if (!slides.length) return;
+    activeSlide = (activeSlide + 1) % slides.length;
+    showSlide(String(activeSlide));
+  }, 5200);
+}
+restartBannerAutoplay();
 
 authButtons.forEach((button) => {
   button.addEventListener("click", () => {

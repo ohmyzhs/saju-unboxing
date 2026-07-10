@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-member-support" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-uiux-pass" />
     <script src="https://js.tosspayments.com/v2/standard" defer></script>
   </head>
   <body>
@@ -55,6 +55,8 @@
               <button class="banner-button" data-product-id="mz-dark-mudang-online">운명함 열기</button>
             </div>
           </article>
+          <button type="button" class="carousel-arrow prev" data-slide-prev aria-label="이전 배너">‹</button>
+          <button type="button" class="carousel-arrow next" data-slide-next aria-label="다음 배너">›</button>
           <div class="carousel-dots" role="tablist" aria-label="배너 선택">
             <button class="is-active" data-slide-target="0" aria-label="첫 번째 배너"></button>
             <button data-slide-target="1" aria-label="두 번째 배너"></button>
@@ -702,7 +704,6 @@
             <button type="button" data-view-target="points" data-mypage-close><span>🪙 포인트 충전</span><i>›</i></button>
             <button type="button" data-view-target="people" data-mypage-close><span>👤 사주 인원 관리</span><i>›</i></button>
             <button type="button" data-view-target="chat" data-mypage-close><span>🤖 AI 챗봇 상담</span><i>›</i></button>
-            <button type="button" data-view-target="followup" data-mypage-close><span>💬 추가 질문 상담</span><i>›</i></button>
             <button type="button" data-view-target="orders" data-mypage-close><span>🧾 결제 내역</span><i>›</i></button>
             <button type="button" data-view-target="library" data-mypage-close><span>🗄️ 보관함</span><i>›</i></button>
             <button type="button" data-view-target="support" data-mypage-close><span>💬 문의하기</span><i>›</i></button>
@@ -730,17 +731,6 @@
       </div>
 
       <footer class="site-footer" data-site-footer>
-        <nav class="footer-menu" aria-label="메뉴 바로가기">
-          <b>메뉴 바로가기</b>
-          <div class="footer-menu-grid">
-            <button type="button" data-view-target="home">홈</button>
-            <button type="button" data-view-target="fortune">오늘의 무료운세</button>
-            <button type="button" data-view-target="people">인원 관리</button>
-            <button type="button" data-view-target="library">결과 보관함</button>
-            <button type="button" data-view-target="chat">AI 챗봇 상담</button>
-            <button type="button" data-view-target="support">문의하기</button>
-          </div>
-        </nav>
         <nav class="footer-links" aria-label="약관 및 정책">
           <button type="button" data-view-target="terms">이용약관</button>
           <button type="button" data-view-target="privacy">개인정보처리방침</button>
@@ -768,6 +758,6 @@
     <script src="./chat-stream.js"></script>
     <script src="./chat-markdown.js"></script>
     <script src="./chat-report-preview.js"></script>
-    <script src="./app.js?v=20260710-member-support"></script>
+    <script src="./app.js?v=20260710-uiux-pass"></script>
   </body>
 </html>

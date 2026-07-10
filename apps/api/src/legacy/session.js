@@ -3,7 +3,7 @@
 //   body: { action: "login" | "signup", email, password, passwordConfirm?, nickname?, phone? }
 import { readJson, sendJson, cookie, cookieSecure } from "./_lib/http.js";
 import { getSupabase } from "./_lib/supabase.js";
-import { getSessionUser, createSession, deleteSession } from "./_lib/sessions.js";
+import { getSessionUser, createSession, deleteSession, updateSessionUser } from "./_lib/sessions.js";
 import { hashPassword, verifyPassword } from "./_lib/password.js";
 import { ensurePointAccount, getPointAccount } from "./_lib/points.js";
 
@@ -64,6 +64,55 @@ export default async function handler(req, res) {
   // ── 이메일 로그인/회원가입 ──
   const sb = getSupabase();
   if (!sb) return sendJson(res, 503, { message: "Supabase가 설정되지 않아 이메일 로그인을 쓸 수 없습니다." });
+
+  // ── 개인정보 수정 (닉네임·휴대폰 공통, 비밀번호는 이메일 계정만) ──
+  if (action === "update") {
+    const current = await getSessionUser(req);
+    if (!current?.id) return sendJson(res, 401, { message: "로그인이 필요합니다." });
+
+    const nickname = String(body.nickname || "").trim().replace(/\s+/g, " ");
+    if (nickname.length < 2 || nickname.length > 20) return sendJson(res, 400, { message: "닉네임은 2~20자로 입력하세요." });
+    const phone = normalizePhone(body.phone);
+    if (phone && !PHONE_RE.test(phone)) return sendJson(res, 400, { message: "휴대폰 번호를 정확히 입력하세요." });
+
+    const wantsPasswordChange = Boolean(body.newPassword || body.currentPassword);
+    const isEmailUser = current.provider === "email";
+    if (wantsPasswordChange && !isEmailUser) {
+      return sendJson(res, 400, { message: "카카오 계정은 비밀번호를 변경할 수 없습니다." });
+    }
+
+    if (isEmailUser) {
+      const patch = { nickname, phone: phone || null };
+      if (wantsPasswordChange) {
+        const currentPassword = String(body.currentPassword || "");
+        const newPassword = String(body.newPassword || "");
+        if (newPassword.length < 8) return sendJson(res, 400, { message: "새 비밀번호는 8자 이상이어야 합니다." });
+        if (newPassword !== String(body.newPasswordConfirm || "")) {
+          return sendJson(res, 400, { message: "새 비밀번호 확인이 일치하지 않습니다." });
+        }
+        const { data: row } = await sb.from("users").select("password_hash").eq("id", current.id).maybeSingle();
+        if (!row || !verifyPassword(currentPassword, row.password_hash)) {
+          return sendJson(res, 401, { message: "현재 비밀번호가 올바르지 않습니다." });
+        }
+        patch.password_hash = hashPassword(newPassword);
+      }
+      if (phone && phone !== normalizePhone(current.phone)) {
+        const { data: phoneOwner } = await sb.from("users").select("id").eq("phone", phone).neq("id", current.id).maybeSingle();
+        if (phoneOwner) return sendJson(res, 409, { message: "이미 다른 계정에서 사용 중인 휴대폰 번호입니다." });
+      }
+      const { data, error } = await sb.from("users").update(patch).eq("id", current.id)
+        .select("id, email, nickname, phone").single();
+      if (error) return sendJson(res, 500, { message: error.message });
+      const user = { id: data.id, email: data.email, nickname: data.nickname, phone: data.phone || "", provider: "email" };
+      await updateSessionUser(req, user);
+      return sendJson(res, 200, { ok: true, user });
+    }
+
+    // 카카오 계정 — users 테이블 없이 세션 스냅샷만 갱신
+    const user = { ...current, nickname, phone: phone || current.phone || "" };
+    await updateSessionUser(req, user);
+    return sendJson(res, 200, { ok: true, user });
+  }
 
   const { email, password } = body;
   const em = String(email || "").trim().toLowerCase();
