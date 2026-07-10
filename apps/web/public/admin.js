@@ -69,6 +69,7 @@ let analytics = {
 let visitorAccountMap = new Map();
 let pointAdminData = { members: [], account: null, selectedUserId: null };
 let pointMemberFilter = "";
+let supportAdminData = { inquiries: [], selectedId: null };
 
 function readStore(key, fallback) {
   try {
@@ -737,6 +738,83 @@ async function loadAdminPoints() {
   }
 }
 
+const ADMIN_SUPPORT_STATUS = { received: "접수", in_progress: "확인 중", answered: "답변 완료", closed: "종료" };
+const ADMIN_SUPPORT_CATEGORY = { error: "오류", refund: "환불", general: "일반" };
+
+async function loadAdminSupport() {
+  const target = document.querySelector("[data-admin-support-list]");
+  if (target) target.innerHTML = `<div class="empty-box is-loading"><span class="inline-spinner"></span>문의 내역을 불러오는 중...</div>`;
+  try {
+    const res = await window.SajuApi.fetch("/api/admin/support", { cache: "no-store" });
+    if (res.status === 401) return showLogin();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.message || "문의 내역을 불러오지 못했습니다.");
+    supportAdminData.inquiries = body.inquiries || [];
+    if (!supportAdminData.inquiries.some((item) => item.id === supportAdminData.selectedId)) supportAdminData.selectedId = null;
+    renderAdminSupport();
+  } catch (error) {
+    if (target) target.innerHTML = `<div class="empty-box">${safe(error.message)}</div>`;
+  }
+}
+
+function renderAdminSupport() {
+  const inquiries = supportAdminData.inquiries || [];
+  renderTable(
+    document.querySelector("[data-admin-support-list]"),
+    inquiries.map((item) => `
+      <tr>
+        <td><button class="admin-member-pick${item.id === supportAdminData.selectedId ? " is-active" : ""}" type="button" data-admin-support-id="${safe(item.id)}"><b>${safe(item.title)}</b><small>${safe(ADMIN_SUPPORT_CATEGORY[item.category] || item.category)} · ${shortDate(item.createdAt)}</small></button></td>
+        <td>${statusPill(ADMIN_SUPPORT_STATUS[item.status] || item.status)}</td>
+      </tr>`),
+    "등록된 문의가 없습니다.",
+    ["문의", "상태"],
+  );
+  document.querySelectorAll("[data-admin-support-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      supportAdminData.selectedId = button.dataset.adminSupportId;
+      renderAdminSupport();
+    });
+  });
+  const active = inquiries.find((item) => item.id === supportAdminData.selectedId);
+  const title = document.querySelector("[data-admin-support-title]");
+  const meta = document.querySelector("[data-admin-support-meta]");
+  const content = document.querySelector("[data-admin-support-content]");
+  const form = document.querySelector("[data-admin-support-form]");
+  if (title) title.textContent = active ? active.title : "문의를 선택하세요";
+  if (meta) meta.textContent = active
+    ? `${active.userNickname || "회원"} · ${active.contactEmail || "이메일 없음"} · ${active.contactPhone || "전화번호 없음"} · ${shortDate(active.createdAt)}`
+    : "";
+  if (content) content.textContent = active?.content || "왼쪽 목록에서 문의를 선택하세요.";
+  if (!form) return;
+  form.hidden = !active;
+  if (!active) return;
+  form.elements.id.value = active.id;
+  form.elements.status.value = active.status || "received";
+  form.elements.answer.value = active.answer || "";
+}
+
+async function saveAdminSupport(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector("[data-admin-support-status]");
+  const data = new FormData(form);
+  setStatus(status, "답변 저장 중...");
+  try {
+    const { ok, status: code, body } = await adminPost("/api/admin/support", {
+      id: String(data.get("id") || ""),
+      status: String(data.get("status") || "received"),
+      answer: String(data.get("answer") || ""),
+    });
+    if (code === 401) return showLogin();
+    if (!ok) throw new Error(body.message || "답변 저장에 실패했습니다.");
+    supportAdminData.inquiries = supportAdminData.inquiries.map((item) => item.id === body.inquiry.id ? body.inquiry : item);
+    renderAdminSupport();
+    setStatus(status, "처리 상태와 답변을 저장했습니다.", "ok");
+  } catch (error) {
+    setStatus(status, error.message, "error");
+  }
+}
+
 async function loadAdminPointDetail(userId) {
   pointAdminData.selectedUserId = String(userId || "");
   pointAdminData.account = null;
@@ -869,6 +947,7 @@ document.querySelectorAll("[data-admin-tab]").forEach((tab) => {
     tab.closest("[data-nav-group]")?.classList.remove("is-collapsed");
     document.querySelector(".admin-sidebar")?.classList.remove("nav-open");
     if (tab.dataset.adminTab === "points") loadAdminPoints();
+    if (tab.dataset.adminTab === "support") loadAdminSupport();
     window.scrollTo({ top: 0 });
   });
 });
@@ -1073,9 +1152,11 @@ document.querySelector("[data-saju-test]")?.addEventListener("click", testSaju);
 document.querySelector("[data-password-form]")?.addEventListener("submit", changePassword);
 document.querySelector("[data-point-adjust]")?.addEventListener("submit", (event) => submitPointAdmin(event, "adjust"));
 document.querySelector("[data-regen-adjust]")?.addEventListener("submit", (event) => submitPointAdmin(event, "regen"));
+document.querySelector("[data-admin-support-form]")?.addEventListener("submit", saveAdminSupport);
 document.querySelector("[data-refresh-admin]").addEventListener("click", () => {
   loadAnalytics();
   if (document.querySelector('[data-admin-tab="points"]')?.classList.contains("is-active")) loadAdminPoints();
+  if (document.querySelector('[data-admin-tab="support"]')?.classList.contains("is-active")) loadAdminSupport();
 });
 
 async function init() {

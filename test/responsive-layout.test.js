@@ -4,12 +4,11 @@ import { readFileSync } from "node:fs";
 
 const css = readFileSync(new URL("../apps/web/public/styles.css", import.meta.url), "utf8");
 
-test("앱 shell과 하단 nav는 모바일 430px 고정폭 대신 반응형 최대폭을 사용한다", () => {
-  assert.match(css, /--shell-max:\s*1180px/);
-  assert.match(css, /\.app-shell\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--shell-max\)\)/);
-  assert.match(css, /\.bottom-nav\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--shell-max\)\)/);
-  assert.doesNotMatch(css, /\.app-shell\s*\{[\s\S]*width:\s*min\(100%,\s*430px\)/);
-  assert.doesNotMatch(css, /\.bottom-nav\s*\{[\s\S]*width:\s*min\(100%,\s*430px\)/);
+test("앱 shell은 기기 가로폭 전체를 사용하고 고정 최대폭을 다시 적용하지 않는다", () => {
+  assert.match(css, /\.app-shell\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*none/);
+  assert.doesNotMatch(css, /\.app-shell\s*\{[^}]*max-width:\s*(?:430|760|1180)px/);
+  assert.doesNotMatch(css, /--shell-max/);
+  assert.match(css, /\.bottom-nav\s*\{[\s\S]*?width:\s*100%/);
 });
 
 test("태블릿 이상에서는 상품·목록·채팅 로비가 넓은 화면을 활용한다", () => {

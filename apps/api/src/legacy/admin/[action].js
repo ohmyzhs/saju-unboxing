@@ -7,6 +7,7 @@ import { summarizeAnalytics } from "../_lib/analytics.js";
 import { LEGAL_DEFAULTS } from "../_lib/legalDefaults.js";
 import { fetchBalance } from "../_lib/sajuApi.js";
 import { handleAdminPoints } from "../_lib/adminPoints.js";
+import { mapSupportInquiry, SUPPORT_STATUSES } from "../support.js";
 
 const BUCKET = "site-images";
 
@@ -22,7 +23,46 @@ export default async function handler(req, res) {
   if (action === "password") return changePassword(req, res);
   if (action === "saju-test") return sajuTest(req, res);
   if (action === "points") return handleAdminPoints(req, res, getSupabase());
+  if (action === "support") return support(req, res);
   return sendJson(res, 404, { message: "관리자 경로를 찾지 못했습니다." });
+}
+
+// ── 1:1 문의 답변 관리 ──
+async function support(req, res) {
+  const sb = getSupabase();
+  if (!sb) return sendJson(res, 503, { message: "Supabase가 설정되지 않았습니다." });
+  const columns = "id, user_id, user_nickname, contact_email, contact_phone, category, title, content, status, answer, answered_at, created_at, updated_at";
+  if (req.method === "GET") {
+    const { data, error } = await sb
+      .from("support_inquiries")
+      .select(columns)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return sendJson(res, 500, { message: error.message });
+    return sendJson(res, 200, { inquiries: (data || []).map(mapSupportInquiry) });
+  }
+  if (req.method === "POST") {
+    const body = await readJson(req);
+    const id = String(body.id || "").trim();
+    const status = String(body.status || "").trim();
+    const answer = String(body.answer || "").trim();
+    if (!id) return sendJson(res, 400, { message: "문의 ID가 필요합니다." });
+    if (!SUPPORT_STATUSES.has(status)) return sendJson(res, 400, { message: "처리 상태가 올바르지 않습니다." });
+    if (answer.length > 5000) return sendJson(res, 400, { message: "답변은 5000자 이하로 입력하세요." });
+    if ((status === "answered" || status === "closed") && !answer) {
+      return sendJson(res, 400, { message: "답변 완료 상태에는 답변 내용을 입력해야 합니다." });
+    }
+    const now = new Date().toISOString();
+    const { data, error } = await sb
+      .from("support_inquiries")
+      .update({ answer, status, answered_at: answer ? now : null, updated_at: now })
+      .eq("id", id)
+      .select(columns)
+      .single();
+    if (error) return sendJson(res, 500, { message: error.message });
+    return sendJson(res, 200, { inquiry: mapSupportInquiry(data) });
+  }
+  return sendJson(res, 405, { message: "GET/POST only" });
 }
 
 // ── 로그인 ──

@@ -355,7 +355,7 @@ function showView(nextView) {
   if (nextView === "people") renderPeople();
   if (nextView === "orders") renderOrders();
   if (nextView === "points") renderPointsView();
-  if (nextView === "support") renderSupport(null);
+  if (nextView === "support") loadSupportBoard();
   if (nextView === "profile" && !openingEditProfile) resetProfileForm();
   if (nextView === "compatibility" || nextView === "fortune") renderProfileSelects();
   if (nextView === "calendar") {
@@ -635,6 +635,13 @@ function formatPoints(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}pt`;
 }
 
+function formatPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`;
+}
+
 function shortDate(timestamp) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "2-digit",
@@ -752,6 +759,7 @@ function applyVerifiedSession(session, { forceSync = false, silent = false } = {
     clearPendingPurchase();
     currentCheckout = null;
     reloadAccountData();
+    if (currentViewName === "support") loadSupportBoard({ force: Boolean(nextUserId) });
     if (nextUserId) syncAccountData({ reason: "session-change" });
     else if (prevUserId && !silent) showToast("로그인 세션이 만료되었습니다. 다시 로그인해주세요.", true);
   } else if (nextUserId && (forceSync || Date.now() - accountDataLastSyncedAt >= ACCOUNT_SYNC_STALE_MS)) {
@@ -794,6 +802,7 @@ function renderSession() {
   const user = runtimeSession?.user;
   const nickname = user?.nickname;
   const email = user?.email;
+  const phone = user?.phone;
   authButtons.forEach((button) => {
     button.textContent = nickname ? `${nickname}님` : "카카오 로그인";
     button.disabled = Boolean(nickname);
@@ -821,18 +830,18 @@ function renderSession() {
           <span class="mypage-avatar" style="background:${colorForText(nickname)}">${escapeHtml(profileInitial(nickname))}</span>
           <div class="mypage-id-text">
             <b>${escapeHtml(nickname)}님</b>
-            <small>${email ? escapeHtml(email) : "카카오 계정으로 로그인됨"}</small>
+            <small>${email ? escapeHtml(email) : "카카오 계정으로 로그인됨"}${phone ? ` · ${escapeHtml(formatPhoneNumber(phone))}` : ""}</small>
           </div>
         </div>`;
     } else {
       mypageId.innerHTML = `
-        <div class="mypage-id-text"><b>로그인하고 이어보기</b>
-          <small>결제 내역·분석 기록을 같은 계정에서 관리할 수 있어요.</small></div>
+        <div class="mypage-id-text mypage-auth-intro"><b>로그인하고 이어보기</b>
+          <small>결제 내역, 사주 인원, 분석 기록과 문의 답변을 같은 계정에서 안전하게 관리할 수 있어요.</small></div>
         <button class="mypage-login-btn" type="button" data-mypage-login>카카오로 로그인</button>
         <div class="email-auth">
           <div class="email-auth-or"><span>또는 이메일로</span></div>
           <input class="email-auth-input" type="email" data-email-input placeholder="이메일" autocomplete="email" />
-          <input class="email-auth-input" type="password" data-pw-input placeholder="비밀번호 (6자 이상)" autocomplete="current-password" />
+          <input class="email-auth-input" type="password" data-pw-input placeholder="비밀번호" autocomplete="current-password" />
           <div class="email-auth-actions">
             <button class="email-auth-login" type="button" data-email-login>로그인</button>
             <button class="email-auth-signup" type="button" data-email-signup>회원가입</button>
@@ -841,8 +850,8 @@ function renderSession() {
         </div>`;
       const loginBtn = mypageId.querySelector("[data-mypage-login]");
       if (loginBtn) loginBtn.addEventListener("click", () => { window.location.href = window.SajuApi.url("/api/auth/kakao/start"); });
-      mypageId.querySelector("[data-email-login]")?.addEventListener("click", () => emailAuth("login"));
-      mypageId.querySelector("[data-email-signup]")?.addEventListener("click", () => emailAuth("signup"));
+      mypageId.querySelector("[data-email-login]")?.addEventListener("click", emailAuth);
+      mypageId.querySelector("[data-email-signup]")?.addEventListener("click", () => showView("signup"));
     }
   }
   const pointBox = document.querySelector("[data-mypage-points]");
@@ -866,28 +875,68 @@ async function refreshPoints() {
   }
 }
 
-// 이메일 로그인/회원가입 (드로어 폼) — 카카오 외 대체 로그인. 토스 심사용 테스트 계정에도 사용.
-async function emailAuth(action) {
+// 이메일 로그인 (회원가입은 필수 프로필을 받는 전용 화면에서 처리).
+async function emailAuth() {
   if (!mypageId) return;
   const email = mypageId.querySelector("[data-email-input]")?.value.trim();
   const password = mypageId.querySelector("[data-pw-input]")?.value;
   const msg = mypageId.querySelector("[data-email-msg]");
-  if (msg) msg.textContent = action === "signup" ? "가입 중..." : "로그인 중...";
+  if (msg) msg.textContent = "로그인 중...";
   try {
     const res = await window.SajuApi.fetch("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, email, password }),
+      body: JSON.stringify({ action: "login", email, password }),
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
       applyVerifiedSession({ user: body.user, points: body.points }, { forceSync: true, silent: true });
-      showToast(action === "signup" ? "가입 완료! 로그인되었어요." : "로그인되었습니다.");
+      showToast("로그인되었습니다.");
     } else if (msg) {
       msg.textContent = body.message || "실패했습니다.";
     }
   } catch (e) {
     if (msg) msg.textContent = e.message;
+  }
+}
+
+async function signupWithEmail(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector("[data-signup-status]");
+  const data = new FormData(form);
+  const email = String(data.get("email") || "").trim();
+  const password = String(data.get("password") || "");
+  const passwordConfirm = String(data.get("passwordConfirm") || "");
+  const nickname = String(data.get("nickname") || "").trim().replace(/\s+/g, " ");
+  const phone = String(data.get("phone") || "").replace(/\D/g, "");
+  const fail = (message) => { if (status) status.textContent = message; };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("올바른 이메일을 입력하세요.");
+  if (password.length < 8) return fail("비밀번호는 8자 이상이어야 합니다.");
+  if (password !== passwordConfirm) return fail("비밀번호 확인이 일치하지 않습니다.");
+  if (nickname.length < 2 || nickname.length > 20) return fail("닉네임은 2~20자로 입력하세요.");
+  if (!/^01[016789]\d{7,8}$/.test(phone)) return fail("휴대폰 번호를 정확히 입력하세요.");
+  if (!form.elements.consent.checked) return fail("이용약관과 개인정보처리방침에 동의해주세요.");
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.disabled = true;
+  fail("가입 정보를 확인하고 있습니다...");
+  try {
+    const res = await window.SajuApi.fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "signup", email, password, passwordConfirm, nickname, phone, consent: true }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(body.message || "회원가입에 실패했습니다.");
+    applyVerifiedSession({ user: body.user, points: body.points }, { forceSync: true, silent: true });
+    form.reset();
+    showToast(`${body.user?.nickname || nickname}님, 가입이 완료되었습니다.`);
+    showView("home");
+    window.setTimeout(openMypage, 240);
+  } catch (error) {
+    fail(error.message || "회원가입 중 오류가 발생했습니다.");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -1252,37 +1301,120 @@ function startPointCharge(amount) {
   setupPayView(product);
 }
 
-// ---------- 문의하기 ----------
-const SUPPORT_LABELS = {
-  error: ["오류 문의", "어떤 화면에서 무엇이 안 되는지 적어주시면 가장 빠르게 도와드려요."],
-  refund: ["환불 요청", "주문번호와 환불 사유를 적어주시면 환불·취소 규정에 따라 처리해 드립니다."],
-  general: ["일반 문의", "궁금한 점을 자유롭게 남겨주세요."],
-};
-function renderSupport(type) {
-  const box = document.querySelector("[data-support-contact]");
-  if (!box) return;
-  document.querySelectorAll("[data-support-type]").forEach((b) => {
-    b.classList.toggle("is-active", b.dataset.supportType === type);
-  });
-  if (!type) {
-    box.hidden = true;
-    box.innerHTML = "";
+// ---------- 비공개 1:1 문의 게시판 ----------
+const SUPPORT_CATEGORY_LABELS = { error: "오류 문의", refund: "환불 요청", general: "일반 문의" };
+const SUPPORT_STATUS_LABELS = { received: "접수", in_progress: "확인 중", answered: "답변 완료", closed: "종료" };
+let supportState = { inquiries: [], activeId: null, loading: false, loadedForUser: null, error: "" };
+
+function renderSupport() {
+  const list = document.querySelector("[data-support-list]");
+  const detail = document.querySelector("[data-support-detail]");
+  const gate = document.querySelector("[data-support-login-gate]");
+  const compose = document.querySelector("[data-support-compose]");
+  if (!list || !detail || !gate || !compose) return;
+  const user = runtimeSession?.user;
+  gate.hidden = Boolean(user?.id);
+  compose.textContent = user?.id ? "새 문의" : "로그인 후 문의";
+  if (!user?.id) {
+    list.innerHTML = "";
+    detail.hidden = true;
     return;
   }
-  const [title, desc] = SUPPORT_LABELS[type] || SUPPORT_LABELS.general;
-  const biz = runtimeConfig?.business || {};
-  const email = biz.email || "";
-  const tel = biz.tel || "";
-  const subject = encodeURIComponent(`[문의-${title}] 사주언박싱-mini`);
-  const body = encodeURIComponent(`문의 유형: ${title}\n\n(여기에 내용을 적어주세요)\n\n----\n주문번호:\n`);
-  box.hidden = false;
-  box.innerHTML = `
-    <h3>${title}</h3>
-    <p>${desc}</p>
-    ${email ? `<a class="primary-action" href="mailto:${escapeHtml(email)}?subject=${subject}&body=${body}">이메일로 문의하기</a>` : ""}
-    ${email ? `<div class="support-line"><span>이메일</span><b>${escapeHtml(email)}</b></div>` : ""}
-    ${tel ? `<div class="support-line"><span>전화</span><b>${escapeHtml(tel)}</b></div>` : ""}
-    ${!email && !tel ? `<div class="support-line"><span>안내</span><b>관리자에서 문의처(이메일/전화)를 등록해주세요</b></div>` : ""}`;
+  if (supportState.loading) {
+    list.innerHTML = `<div class="support-empty is-loading"><span class="inline-spinner"></span>문의 내역을 불러오는 중...</div>`;
+    detail.hidden = true;
+    return;
+  }
+  if (supportState.error) {
+    list.innerHTML = `<div class="support-empty is-error">${escapeHtml(supportState.error)}<button type="button" data-support-retry>다시 불러오기</button></div>`;
+    detail.hidden = true;
+    return;
+  }
+  list.innerHTML = supportState.inquiries.length
+    ? supportState.inquiries.map((item) => `
+      <button class="support-list-item${item.id === supportState.activeId ? " is-active" : ""}" type="button" data-support-id="${escapeHtml(item.id)}">
+        <span class="support-status is-${escapeHtml(item.status)}">${escapeHtml(SUPPORT_STATUS_LABELS[item.status] || item.status)}</span>
+        <div><small>${escapeHtml(SUPPORT_CATEGORY_LABELS[item.category] || "일반 문의")} · ${escapeHtml(shortDate(item.createdAt))}</small><b>${escapeHtml(item.title)}</b></div>
+        <i>›</i>
+      </button>`).join("")
+    : `<div class="support-empty"><b>아직 등록한 문의가 없습니다.</b><p>궁금한 점이 생기면 새 문의를 남겨주세요.</p></div>`;
+  const active = supportState.inquiries.find((item) => item.id === supportState.activeId);
+  if (!active) {
+    detail.hidden = true;
+    detail.innerHTML = "";
+    return;
+  }
+  detail.hidden = false;
+  detail.innerHTML = `
+    <header><div><span>${escapeHtml(SUPPORT_CATEGORY_LABELS[active.category] || "일반 문의")}</span><h3>${escapeHtml(active.title)}</h3></div><button type="button" data-support-detail-close aria-label="상세 닫기">×</button></header>
+    <div class="support-detail-meta"><span class="support-status is-${escapeHtml(active.status)}">${escapeHtml(SUPPORT_STATUS_LABELS[active.status] || active.status)}</span><time>${escapeHtml(shortDate(active.createdAt))}</time></div>
+    <section><b>문의 내용</b><p>${escapeHtml(active.content).replace(/\n/g, "<br />")}</p></section>
+    <section class="support-answer${active.answer ? " has-answer" : ""}"><b>관리자 답변</b><p>${active.answer ? escapeHtml(active.answer).replace(/\n/g, "<br />") : "답변을 준비하고 있습니다. 처리 상태가 바뀌면 이 화면에서 확인할 수 있습니다."}</p></section>`;
+}
+
+async function loadSupportBoard({ force = false } = {}) {
+  const userId = runtimeSession?.user?.id ? String(runtimeSession.user.id) : null;
+  if (!userId) {
+    supportState = { inquiries: [], activeId: null, loading: false, loadedForUser: null, error: "" };
+    renderSupport();
+    return;
+  }
+  if (!force && supportState.loadedForUser === userId) return renderSupport();
+  supportState = { inquiries: [], activeId: null, loading: true, loadedForUser: userId, error: "" };
+  renderSupport();
+  try {
+    const res = await window.SajuApi.fetch("/api/support", { cache: "no-store" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.message || "문의 내역을 불러오지 못했습니다.");
+    supportState.inquiries = body.inquiries || [];
+  } catch (error) {
+    supportState.error = error.message;
+  } finally {
+    supportState.loading = false;
+    renderSupport();
+  }
+}
+
+async function submitSupportInquiry(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector("[data-support-status]");
+  const data = new FormData(form);
+  const payload = {
+    category: String(data.get("category") || "general"),
+    title: String(data.get("title") || "").trim(),
+    content: String(data.get("content") || "").trim(),
+  };
+  const setSupportStatus = (message, isError = false) => {
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-error", isError);
+  };
+  if (payload.title.length < 2) return setSupportStatus("제목을 2자 이상 입력하세요.", true);
+  if (payload.content.length < 10) return setSupportStatus("문의 내용을 10자 이상 입력하세요.", true);
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.disabled = true;
+  setSupportStatus("문의 등록 중...");
+  try {
+    const res = await window.SajuApi.fetch("/api/support", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.message || "문의 등록에 실패했습니다.");
+    supportState.inquiries.unshift(body.inquiry);
+    supportState.activeId = body.inquiry.id;
+    form.reset();
+    form.hidden = true;
+    setSupportStatus("");
+    renderSupport();
+    showToast("1:1 문의가 접수되었습니다.");
+  } catch (error) {
+    setSupportStatus(error.message, true);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 }
 
 // ---------- 오늘의 무료운세 (리치) ----------
@@ -4542,9 +4674,40 @@ document.querySelectorAll("[data-mypage-open]").forEach((btn) => {
 document.querySelectorAll("[data-mypage-close]").forEach((btn) => {
   btn.addEventListener("click", closeMypage);
 });
-// 문의 유형 선택 → 연락 카드 노출
-document.querySelectorAll("[data-support-type]").forEach((btn) => {
-  btn.addEventListener("click", () => renderSupport(btn.dataset.supportType));
+document.querySelector("[data-signup-form]")?.addEventListener("submit", signupWithEmail);
+document.querySelector("[data-signup-form] input[name='phone']")?.addEventListener("input", (event) => {
+  event.currentTarget.value = formatPhoneNumber(event.currentTarget.value);
+});
+document.querySelector("[data-signup-login]")?.addEventListener("click", openMypage);
+
+document.querySelector("[data-support-compose]")?.addEventListener("click", () => {
+  if (!runtimeSession?.user?.id) return openMypage();
+  const form = document.querySelector("[data-support-form]");
+  if (form) {
+    form.hidden = false;
+    form.querySelector("input[name='title']")?.focus();
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+document.querySelector("[data-support-login]")?.addEventListener("click", openMypage);
+document.querySelector("[data-support-cancel]")?.addEventListener("click", () => {
+  const form = document.querySelector("[data-support-form]");
+  if (form) form.hidden = true;
+});
+document.querySelector("[data-support-form]")?.addEventListener("submit", submitSupportInquiry);
+document.querySelector("[data-support-list]")?.addEventListener("click", (event) => {
+  const retry = event.target.closest("[data-support-retry]");
+  if (retry) return loadSupportBoard({ force: true });
+  const button = event.target.closest("[data-support-id]");
+  if (!button) return;
+  supportState.activeId = button.dataset.supportId;
+  renderSupport();
+  document.querySelector("[data-support-detail]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.querySelector("[data-support-detail]")?.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-support-detail-close]")) return;
+  supportState.activeId = null;
+  renderSupport();
 });
 // ESC 로 드로어 닫기
 document.addEventListener("keydown", (e) => {

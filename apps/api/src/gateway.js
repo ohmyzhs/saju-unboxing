@@ -3,6 +3,7 @@ import profiles from "./legacy/profiles.js";
 import orders from "./legacy/orders.js";
 import track from "./legacy/track.js";
 import session from "./legacy/session.js";
+import support from "./legacy/support.js";
 import share from "./legacy/share.js";
 import paymentConfirm from "./legacy/payments/confirm.js";
 import sajuAnalyze from "./legacy/saju/analyze.js";
@@ -43,6 +44,7 @@ const ROUTES = new Map([
   ["/api/orders", { name: "orders", handler: orders }],
   ["/api/track", { name: "track", handler: track }],
   ["/api/session", { name: "session", handler: session }],
+  ["/api/support", { name: "support", handler: support }],
   ["/api/share", { name: "share", handler: share }],
   ["/api/external-reports", { name: "external-reports", handler: externalReports }],
   ["/api/payments/confirm", { name: "payment-confirm", handler: paymentConfirm }],

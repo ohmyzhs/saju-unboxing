@@ -82,8 +82,12 @@ create table if not exists users (
   email text unique not null,
   password_hash text not null,
   nickname text,
+  phone text,
+  terms_accepted_at timestamptz,
   created_at timestamptz default now()
 );
+alter table users add column if not exists phone text;
+alter table users add column if not exists terms_accepted_at timestamptz;
 
 -- [7] 사주 인원(프로필) — 로그인 계정별 서버 보관(기기 바뀌어도 따라옴)
 create table if not exists profiles (
@@ -102,6 +106,41 @@ create table if not exists user_data (
   updated_at timestamptz default now(),
   primary key (user_id, kind, id)
 );
+
+-- [9] 로그인 회원의 비공개 1:1 문의와 관리자 답변
+create table if not exists support_inquiries (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  user_nickname text,
+  contact_email text,
+  contact_phone text,
+  category text not null default 'general' check (category in ('error', 'refund', 'general')),
+  title text not null check (char_length(title) between 2 and 80),
+  content text not null check (char_length(content) between 10 and 3000),
+  status text not null default 'received' check (status in ('received', 'in_progress', 'answered', 'closed')),
+  answer text,
+  answered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table support_inquiries add column if not exists id uuid default gen_random_uuid();
+alter table support_inquiries add column if not exists user_id text;
+alter table support_inquiries add column if not exists user_nickname text;
+alter table support_inquiries add column if not exists contact_email text;
+alter table support_inquiries add column if not exists contact_phone text;
+alter table support_inquiries add column if not exists category text default 'general';
+alter table support_inquiries add column if not exists title text;
+alter table support_inquiries add column if not exists content text;
+alter table support_inquiries add column if not exists status text default 'received';
+alter table support_inquiries add column if not exists answer text;
+alter table support_inquiries add column if not exists answered_at timestamptz;
+alter table support_inquiries add column if not exists created_at timestamptz default now();
+alter table support_inquiries add column if not exists updated_at timestamptz default now();
+
+create index if not exists support_inquiries_user_created_idx on support_inquiries(user_id, created_at desc);
+create index if not exists support_inquiries_status_created_idx on support_inquiries(status, created_at desc);
+create unique index if not exists users_phone_unique on users(phone) where phone is not null and phone <> '';
 
 -- [9] 회원 포인트 잔액과 무료운세 재생성 토큰
 create table if not exists user_points (

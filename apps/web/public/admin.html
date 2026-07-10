@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-member-support" />
     <style>body.locked .admin-shell{display:none}</style>
   </head>
   <body class="admin-body locked">
@@ -36,6 +36,7 @@
               <button data-admin-tab="payments">결제</button>
               <button data-admin-tab="customers">고객</button>
               <button data-admin-tab="points">회원 포인트</button>
+              <button data-admin-tab="support">1:1 문의</button>
               <button data-admin-tab="analysis">분석 작업</button>
             </div>
           </div>
@@ -211,6 +212,38 @@
           <div class="admin-table" data-admin-customers-list></div>
         </section>
 
+        <section class="admin-panel" data-admin-panel="support" hidden>
+          <h2>1:1 문의 관리</h2>
+          <p class="admin-help">회원이 남긴 비공개 문의를 확인하고 처리 상태와 답변을 저장합니다.</p>
+          <div class="split-grid admin-support-grid">
+            <section>
+              <h3>최근 문의</h3>
+              <div class="admin-table" data-admin-support-list></div>
+            </section>
+            <section class="admin-support-detail">
+              <h3 data-admin-support-title>문의를 선택하세요</h3>
+              <p class="admin-help" data-admin-support-meta></p>
+              <div class="admin-support-content" data-admin-support-content>왼쪽 목록에서 문의를 선택하세요.</div>
+              <form class="product-admin-grid is-narrow" data-admin-support-form hidden>
+                <input type="hidden" name="id" />
+                <label>처리 상태
+                  <select name="status">
+                    <option value="received">접수</option>
+                    <option value="in_progress">확인 중</option>
+                    <option value="answered">답변 완료</option>
+                    <option value="closed">종료</option>
+                  </select>
+                </label>
+                <label>답변
+                  <textarea name="answer" rows="8" maxlength="5000" placeholder="회원에게 보여줄 답변을 입력하세요."></textarea>
+                </label>
+                <button class="primary-action admin-save" type="submit">답변 저장</button>
+              </form>
+              <p class="form-status" data-admin-support-status></p>
+            </section>
+          </div>
+        </section>
+
         <section class="admin-panel" data-admin-panel="points" hidden>
           <h2>회원 포인트 관리</h2>
           <p class="admin-help">회원별 잔액과 무료운세 재생성 토큰을 조회하고 수동으로 조정합니다. 모든 포인트 변경은 감사 내역에 기록됩니다.</p>
@@ -339,6 +372,6 @@
     </main>
     <script src="./runtime-config.js"></script>
     <script src="./api-client.js"></script>
-    <script src="./admin.js"></script>
+    <script src="./admin.js?v=20260710-member-support"></script>
   </body>
 </html>
