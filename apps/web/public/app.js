@@ -1093,7 +1093,7 @@ function renderOrders() {
       const actions = window.OrderRecovery.capabilities({ ...o, hasReport: Boolean(report) });
       const purchase = recoverOrderPurchase(o);
       const reportLabel = o.reportStatus === "generating"
-        ? `<span class="order-report-status pending">리포트 생성중</span>`
+        ? `<span class="order-report-status pending">${escapeHtml(externalGenerationLabel(o.generation) || "리포트 생성중")}</span>`
         : o.reportStatus === "failed"
           ? `<span class="order-report-status fail">리포트 생성 실패</span>`
           : report
@@ -1249,6 +1249,24 @@ function stopExternalReportPolling(orderId) {
   externalReportPollers.delete(orderId);
 }
 
+// saju-web 생성 진행 상태를 사용자 문구로. 섹션 진행이 오면 "n/m" 까지 보여준다.
+function externalGenerationLabel(generation) {
+  if (!generation || typeof generation !== "object") return "";
+  const phase = {
+    accepted: "접수됨",
+    queued: "생성 대기중",
+    generating: "리포트 생성중",
+    awaiting_model: "리포트 생성중",
+    completed: "리포트 완료",
+    failed: "리포트 생성 실패",
+  }[generation.status] || "리포트 생성중";
+  const total = Number(generation.totalSections || 0);
+  const done = Number(generation.completedSections || 0);
+  if (generation.status === "completed" || generation.status === "failed" || !total) return phase;
+  const current = generation.currentSection?.title ? ` · ${generation.currentSection.title}` : "";
+  return `${phase} ${done}/${total}${current}`;
+}
+
 async function syncExternalReport(orderId) {
   const result = await getJson(`/api/external-reports?orderId=${encodeURIComponent(orderId)}`);
   upsertOrder({
@@ -1256,11 +1274,14 @@ async function syncExternalReport(orderId) {
     reportStatus: result.reportStatus,
     reportError: result.reportError || null,
     externalReport: result.externalReport || null,
+    generation: result.generation || null,
     updatedAt: Date.now(),
   });
   if (result.archive) {
-    saveArchiveItem(result.archive);
+    // 서버가 이미 user_data에 저장했으므로 로컬 보관함만 갱신(중복 push 방지).
+    saveArchive(result.archive, { sync: false });
   }
+  if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
   return result;
 }
 
@@ -1269,12 +1290,14 @@ function scheduleExternalReportPolling(orderId, { immediate = false } = {}) {
   let attempts = 0;
   const poll = async () => {
     attempts += 1;
+    let nextDelay = 15000;
     try {
       const result = await syncExternalReport(orderId);
       if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
       if (result.reportStatus === "complete") {
         stopExternalReportPolling(orderId);
-        showToast("운명 완전개봉 리포트가 완성되었습니다. 결제 내역에서 확인해주세요.");
+        showToast("운명 완전개봉 리포트가 완성되었습니다. 결제 내역에서 바로 열어볼 수 있고, 보관함과 챗봇 상담에서도 사용할 수 있습니다.");
+        if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
         return;
       }
       if (result.reportStatus === "failed") {
@@ -1282,16 +1305,19 @@ function scheduleExternalReportPolling(orderId, { immediate = false } = {}) {
         showToast(result.reportError || "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요.", true);
         return;
       }
+      // saju-web이 권장 주기를 주면 따르되, 서버리스 함수 호출량을 고려해 최소 5초.
+      const suggested = Number(result.generation?.pollAfterMs || 0);
+      if (suggested > 0) nextDelay = Math.max(5000, suggested);
     } catch {
       // 일시적인 조회 실패는 다음 폴링에서 다시 확인한다.
     }
-    if (attempts >= 20) {
+    if (attempts >= 120) {
       stopExternalReportPolling(orderId);
       return;
     }
-    externalReportPollers.set(orderId, window.setTimeout(poll, 15000));
+    externalReportPollers.set(orderId, window.setTimeout(poll, nextDelay));
   };
-  externalReportPollers.set(orderId, window.setTimeout(poll, immediate ? 1000 : 10000));
+  externalReportPollers.set(orderId, window.setTimeout(poll, immediate ? 1000 : 5000));
 }
 
 async function openOrderReport(orderId) {

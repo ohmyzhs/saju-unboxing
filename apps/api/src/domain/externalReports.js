@@ -97,7 +97,7 @@ export function buildExternalReportOrderPayload(order, product = externalReportP
   };
 }
 
-async function requestJson(url, { method = "GET", key, body, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+async function requestJson(url, { method = "GET", key, body, headers = {}, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -106,6 +106,7 @@ async function requestJson(url, { method = "GET", key, body, fetchImpl = fetch, 
       headers: {
         ...(key ? { "X-API-Key": key } : {}),
         ...(body ? { "Content-Type": "application/json" } : {}),
+        ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
@@ -134,6 +135,8 @@ export async function createSajuWebReportOrder({ order, product = externalReport
     method: "POST",
     key,
     body: payload,
+    // 같은 franchise 주문 재전송은 saju-web에서 기존 외부 주문을 돌려준다(중복 접수 방지).
+    headers: order?.id ? { "Idempotency-Key": `saju-franchise-${order.id}` } : {},
     fetchImpl,
   });
   const externalOrderId = created.order_id;
@@ -156,6 +159,49 @@ export async function getSajuWebReport({ externalOrderId, env = process.env, fet
   if (!key) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
   if (!externalOrderId) throw new Error("외부 주문번호가 없습니다.");
   return requestJson(`${base}/api/v1/orders/${encodeURIComponent(externalOrderId)}/report`, { key, fetchImpl });
+}
+
+// 생성 진행 상태 조회. 완성 전 폴링은 이 가벼운 엔드포인트만 사용하고,
+// 본문(/report)은 report_ready가 된 뒤 한 번만 가져온다.
+export async function getSajuWebOrderStatus({ externalOrderId, env = process.env, fetchImpl = fetch } = {}) {
+  const base = baseUrl(env);
+  const key = apiKey(env);
+  if (!base) throw configurationError("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.", "external_report_base_missing");
+  if (!key) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
+  if (!externalOrderId) throw new Error("외부 주문번호가 없습니다.");
+  return requestJson(`${base}/api/v1/orders/${encodeURIComponent(externalOrderId)}`, { key, fetchImpl });
+}
+
+// 같은 외부 주문의 실패한 생성만 재시도한다(새 주문을 만들지 않음).
+// 구버전 saju-web(엔드포인트 없음)이나 재시도 불가 상태면 statusCode 404/409로 던진다.
+export async function retrySajuWebGeneration({ externalOrderId, env = process.env, fetchImpl = fetch } = {}) {
+  const base = baseUrl(env);
+  const key = apiKey(env);
+  if (!base) throw configurationError("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.", "external_report_base_missing");
+  if (!key) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
+  if (!externalOrderId) throw new Error("외부 주문번호가 없습니다.");
+  return requestJson(`${base}/api/v1/orders/${encodeURIComponent(externalOrderId)}/retry`, { method: "POST", key, fetchImpl });
+}
+
+// saju-web generation 객체를 사용자 화면용으로 축약한다.
+// 프롬프트/디자인/내부 오류 원문은 프론트로 내보내지 않는다.
+export function publicGenerationStatus(generation) {
+  if (!generation || typeof generation !== "object") return null;
+  const progress = generation.progress && typeof generation.progress === "object" ? generation.progress : {};
+  const current = progress.current_section && typeof progress.current_section === "object"
+    ? { index: progress.current_section.index ?? null, title: String(progress.current_section.title || "") }
+    : null;
+  return {
+    status: String(generation.status || ""),
+    terminal: Boolean(generation.terminal),
+    retryable: Boolean(generation.retryable),
+    pollAfterMs: generation.poll_after_ms == null ? null : Number(generation.poll_after_ms) || null,
+    percent: Number.isFinite(Number(progress.percent)) ? Number(progress.percent) : null,
+    totalSections: Number(progress.total_sections || 0),
+    completedSections: Number(progress.completed_sections || 0),
+    currentSection: current,
+    updatedAt: generation.updated_at || null,
+  };
 }
 
 export function splitMarkdownReport(markdown) {

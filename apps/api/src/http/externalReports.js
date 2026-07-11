@@ -1,6 +1,9 @@
 import {
   externalReportProduct,
+  getSajuWebOrderStatus,
   getSajuWebReport,
+  publicGenerationStatus,
+  retrySajuWebGeneration,
   splitMarkdownReport,
 } from "../domain/externalReports.js";
 import { fulfillPaidOrder } from "../domain/orderFulfillment.js";
@@ -93,6 +96,34 @@ export async function externalReportsHandler(req, res, dependencies = {}) {
 
     if (req.method === "POST") {
       if (body.action !== "retry") return sendJson(res, 400, { message: "지원하지 않는 작업입니다." });
+      const existing = asObject(order.external_report);
+
+      // 1순위: 이미 접수된 외부 주문이 실패한 경우 saju-web 쪽 재시도(새 주문 생성 없이 같은 주문 재생성).
+      // 구버전 saju-web(404)이나 재시도 불가 상태(409)면 기존 fulfillment 경로로 폴백한다.
+      if (existing.externalOrderId && order.report_status === "failed") {
+        try {
+          const retryGeneration = dependencies.retrySajuWebGeneration || retrySajuWebGeneration;
+          const generationPayload = await retryGeneration({ externalOrderId: existing.externalOrderId });
+          const nextExternal = { ...existing, status: "queued", retriedAt: new Date().toISOString() };
+          const updated = await sb.from("orders").update({
+            external_report: nextExternal,
+            report_status: "generating",
+            fulfillment_error: null,
+          }).eq("id", order.id);
+          if (updated.error) throw updated.error;
+          return sendJson(res, 202, {
+            ok: true,
+            orderId,
+            reportStatus: "generating",
+            externalReport: nextExternal,
+            generation: publicGenerationStatus(generationPayload),
+            fulfillment: { required: true, status: "submitted", externalOrderId: existing.externalOrderId, reused: true },
+          });
+        } catch (error) {
+          if (![404, 409].includes(Number(error?.statusCode))) throw error;
+        }
+      }
+
       const fulfill = dependencies.fulfillPaidOrder || fulfillPaidOrder;
       const fulfillment = await fulfill(sb, order, dependencies.fulfillmentDependencies || {});
       const externalReport = fulfillment.externalOrderId
@@ -105,7 +136,7 @@ export async function externalReportsHandler(req, res, dependencies = {}) {
             status: fulfillment.externalStatus || "queued",
             submittedAt: fulfillment.submittedAt || new Date().toISOString(),
           }
-        : asObject(order.external_report);
+        : existing;
       return sendJson(res, 202, {
         ok: true,
         orderId,
@@ -120,9 +151,17 @@ export async function externalReportsHandler(req, res, dependencies = {}) {
       return sendJson(res, 409, { message: "saju-web 주문번호가 아직 없습니다." });
     }
 
-    const reportPayload = await getSajuWebReport({ externalOrderId: currentExternal.externalOrderId });
+    // 생성 중 폴링은 가벼운 상태 API만 사용한다. 본문(/report)은 완성된 뒤 한 번만 가져온다.
+    const getStatus = dependencies.getSajuWebOrderStatus || getSajuWebOrderStatus;
+    const getReport = dependencies.getSajuWebReport || getSajuWebReport;
+    const statusPayload = await getStatus({ externalOrderId: currentExternal.externalOrderId });
+    const generation = publicGenerationStatus(statusPayload.generation);
+    const reportPayload = statusPayload.report_ready
+      ? await getReport({ externalOrderId: currentExternal.externalOrderId })
+      : statusPayload;
+
     const externalStatus = String(reportPayload.status || currentExternal.status || "").toLowerCase();
-    const reportFailed = externalStatus === "failed";
+    const reportFailed = generation ? generation.status === "failed" : externalStatus === "failed";
     const nextExternal = {
       ...currentExternal,
       shareUrl: reportPayload.share_url || currentExternal.shareUrl || "",
@@ -145,6 +184,7 @@ export async function externalReportsHandler(req, res, dependencies = {}) {
       orderId,
       reportStatus: patch.report_status,
       externalReport: nextExternal,
+      generation,
       archive,
       reportError: patch.fulfillment_error,
     });

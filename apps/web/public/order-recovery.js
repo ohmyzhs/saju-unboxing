@@ -20,6 +20,9 @@ function capabilities(order = {}) {
   const failed = status.includes("실패") || status.includes("오류");
   const viewReport = paid && !pointCharge && (
     order.reportStatus === "complete"
+    // 외부 리포트 생성 중에도 "생성 상태 확인" 진입점은 항상 남긴다
+    // (externalReport가 아직 동기화되지 않았어도 버튼이 사라지면 안 됨).
+    || order.reportStatus === "generating"
     || Boolean(order.hasReport)
     || Boolean(order.externalReport?.shareUrl)
   );
