@@ -35,7 +35,7 @@ const DEFAULT_PRODUCTS = {
     prompt: "사용자가 고른 목적과 후보 날짜만 비교해 날짜별 적합도, 우선순위, 활용법과 주의점을 구체적으로 작성한다.",
   },
   "mz-dark-mudang-online": {
-    name: "운명 완전개봉 · 흑야 프리미엄",
+    name: "운명 완전개봉",
     amount: 9900,
     description: "그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.",
     prompt: "saju-web tight-v3 온라인뷰 리포트로 생성한다. franchise에서는 결제와 열람 연결만 담당한다.",

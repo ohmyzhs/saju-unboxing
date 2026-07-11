@@ -7,6 +7,7 @@ import { adjustPoints, chargeTier, getPointAccount, isInsufficientPoints, paymen
 import { cancelOwnedOrder, resumeOwnedOrder } from "./_lib/orderLifecycle.js";
 import { chatCreditProduct } from "@saju/contracts/chat";
 import { settleOrderFulfillment } from "../domain/orderFulfillment.js";
+import { assertExternalReportConfigured } from "../domain/externalReports.js";
 
 // 주문번호: 한국시각 YYMMDDHHmmss + 4자리 랜덤 = 16자리 숫자 (예: 2606170454239218).
 // 쇼핑몰 표준식 — 시간순 정렬·식별이 쉽고, 토스 orderId 규격(6~64자 영숫자)도 충족.
@@ -24,10 +25,17 @@ function makeOrderId() {
   return stamp + rand;
 }
 
-export function resolveProductPrice(config, productId, plan) {
+// 카탈로그 상품 가격은 어드민(site_config.products)이 유일한 기준이다.
+// 설정이 없으면 기본가로 대체하지 않고 판매를 중단한다(엉뚱한 가격 결제 방지).
+export function resolveProductPrice(config, productId) {
   const configured = config?.products?.[productId]?.amount;
-  const value = configured === undefined || configured === null || configured === "" ? plan?.amount : configured;
-  const amount = Number(value);
+  if (configured === undefined || configured === null || configured === "") {
+    const error = new Error("상품 가격이 설정되지 않았습니다. 어드민 상품 관리에서 가격을 저장한 뒤 다시 시도해주세요.");
+    error.statusCode = 503;
+    error.code = "product_price_not_configured";
+    throw error;
+  }
+  const amount = Number(configured);
   if (!Number.isInteger(amount) || amount < 0) throw new Error("상품 가격 설정이 올바르지 않습니다.");
   return amount;
 }
@@ -47,7 +55,7 @@ export function resolveOrderProduct({ config = {}, productId, plan, user }) {
     error.statusCode = 400;
     throw error;
   }
-  return { ...plan, amount: resolveProductPrice(config, productId, plan) };
+  return { ...plan, amount: resolveProductPrice(config, productId) };
 }
 
 export function resolveOrderPayment({ price, requestedPoints = 0, balance = 0 }) {
@@ -124,6 +132,7 @@ export default async function handler(req, res) {
     if (!plan) return sendJson(res, 400, { message: "결제 상품을 찾지 못했습니다." });
     const config = isPointCharge ? {} : await loadSiteConfig();
     const resolvedProduct = isPointCharge ? plan : resolveOrderProduct({ config, productId, plan, user });
+    assertExternalReportConfigured(productId);
     const price = resolvedProduct.amount;
     const requestedPoints = Number(pointsUsed || 0);
     if (!Number.isInteger(requestedPoints) || requestedPoints < 0) {
@@ -225,6 +234,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     const normalized = normalizeOrderDatabaseError(error);
-    return sendJson(res, normalized.statusCode || 500, { message: normalized.message, code: normalized.code || undefined });
+    return sendJson(res, normalized.statusCode || 500, { message: normalized.publicMessage || normalized.message, code: normalized.code || undefined });
   }
 }

@@ -4,6 +4,7 @@ import { confirmTossPayment } from "../_lib/toss.js";
 import { getSupabase } from "../_lib/supabase.js";
 import { adjustPoints, chargeTier, isInsufficientPoints } from "../_lib/points.js";
 import { settleOrderFulfillment } from "../../domain/orderFulfillment.js";
+import { assertExternalReportConfigured } from "../../domain/externalReports.js";
 
 function paymentError(message, statusCode = 400) {
   const error = new Error(message);
@@ -97,6 +98,7 @@ export default async function handler(req, res) {
     if (Number(amount) !== Number(order.amount)) {
       return sendJson(res, 400, { message: "주문 금액과 결제 요청 금액이 다릅니다." });
     }
+    assertExternalReportConfigured(order.product_id);
 
     const result = await confirmOrderPayment({
       order,
@@ -137,7 +139,7 @@ export default async function handler(req, res) {
     return sendJson(res, 200, { ...result, fulfillment });
   } catch (error) {
     const status = isInsufficientPoints(error) ? 400 : error.statusCode || 500;
-    const payload = isInsufficientPoints(error) ? { message: "포인트가 부족합니다." } : error.payload || { message: error.message };
+    const payload = isInsufficientPoints(error) ? { message: "포인트가 부족합니다." } : error.payload || { message: error.publicMessage || error.message };
     return sendJson(res, status, payload);
   }
 }

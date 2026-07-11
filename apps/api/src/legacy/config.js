@@ -5,6 +5,7 @@ import { getSupabase, loadSiteConfig } from "./_lib/supabase.js";
 import { fetchBalance, sajuCreds } from "./_lib/sajuApi.js";
 import { LEGAL_DEFAULTS } from "./_lib/legalDefaults.js";
 import { POINT_CHARGE_TIERS } from "./_lib/points.js";
+import { externalReportConfiguration } from "../domain/externalReports.js";
 
 // /api/health 는 /api/config?mode=health 로 통합(Vercel Hobby 함수 12개 제한 대응).
 async function healthPayload() {
@@ -35,6 +36,10 @@ async function healthPayload() {
   checks.openai = process.env.OPENCODE_API_KEY
     ? { ok: true, message: `키 설정됨 · 모델 ${process.env.OPENCODE_MODEL || "glm-5.2"}` }
     : { ok: false, message: "OPENCODE_API_KEY 미설정" };
+  const externalReport = externalReportConfiguration();
+  checks.externalReport = externalReport.ready
+    ? { ok: true, message: "외부 심층 리포트 API 연결 설정됨" }
+    : { ok: false, message: !externalReport.baseUrl ? "외부 리포트 API 주소 미설정" : "외부 리포트 API 키 미설정" };
   const tossLive = process.env.TOSS_CLIENT_KEY && !process.env.TOSS_CLIENT_KEY.startsWith("test_");
   checks.toss = { ok: true, message: tossLive ? "실결제 키" : "테스트 키(실제 결제 안 됨) — 학습용으로 OK" };
   checks.kakao = process.env.KAKAO_REST_API_KEY
@@ -46,7 +51,10 @@ async function healthPayload() {
         message: process.env.ADMIN_PASSWORD === "changeme-1234" ? "기본 비밀번호 그대로 — 꼭 변경하세요" : "설정됨",
       }
     : { ok: false, message: "ADMIN_PASSWORD 미설정" };
-  return { ready: checks.centralApi.ok && checks.supabase.ok && checks.openai.ok, checks };
+  return {
+    ready: checks.centralApi.ok && checks.supabase.ok && checks.openai.ok && checks.externalReport.ok,
+    checks,
+  };
 }
 
 export default async function handler(req, res) {

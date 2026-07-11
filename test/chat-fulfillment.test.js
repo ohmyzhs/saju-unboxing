@@ -115,7 +115,7 @@ test("일반 리포트 주문은 별도 fulfillment가 필요 없다", async () 
   assert.equal(sb.calls.length, 0);
 });
 
-test("MZ다크무당 온라인뷰 상품은 saju-web 외부 리포트 주문을 생성한다", async () => {
+test("운명 완전개봉 상품은 saju-web 외부 리포트 주문을 생성한다", async () => {
   const sb = supabaseStub();
   const result = await fulfillPaidOrder(sb, {
     id: "o6",
@@ -153,6 +153,50 @@ test("MZ다크무당 온라인뷰 상품은 saju-web 외부 리포트 주문을 
     sb.calls.filter((call) => call.kind === "update").at(-1).patch.external_report.shareUrl,
     "https://saju-web.example/share/share77",
   );
+});
+
+test("이미 접수된 외부 리포트 주문은 중복 생성하지 않는다", async () => {
+  const sb = supabaseStub();
+  let creates = 0;
+  const result = await fulfillPaidOrder(sb, {
+    id: "o7",
+    product_id: "mz-dark-mudang-online",
+    status: "결제 완료",
+    report_status: "generating",
+    external_report: {
+      provider: "saju-web",
+      externalOrderId: 88,
+      shareToken: "share88",
+      shareUrl: "https://saju-web.example/share/share88",
+      status: "running",
+    },
+  }, {
+    createExternalReportOrder: async () => { creates += 1; return {}; },
+  });
+  assert.equal(creates, 0);
+  assert.equal(result.externalOrderId, 88);
+  assert.equal(result.reused, true);
+  assert.equal(sb.calls.length, 0);
+});
+
+test("실패한 외부 리포트 주문은 새 외부 주문으로 재접수한다", async () => {
+  const sb = supabaseStub();
+  let creates = 0;
+  const result = await fulfillPaidOrder(sb, {
+    id: "o8",
+    product_id: "mz-dark-mudang-online",
+    status: "결제 완료",
+    report_status: "failed",
+    external_report: { externalOrderId: 88, status: "failed" },
+    purchase_snapshot: { profile: { name: "김가별", birthDate: "1980-10-31" } },
+  }, {
+    createExternalReportOrder: async () => {
+      creates += 1;
+      return { provider: "saju-web", externalOrderId: 89, shareToken: "share89", status: "queued" };
+    },
+  });
+  assert.equal(creates, 1);
+  assert.equal(result.externalOrderId, 89);
 });
 
 test("포인트 전액과 토스 승인 모두 같은 fulfillment 서비스를 호출한다", () => {

@@ -8,3 +8,4 @@ cookies.txt
 .DS_Store
 *.swp
 사이트_제작_프롬프트.md
+.playwright-mcp/

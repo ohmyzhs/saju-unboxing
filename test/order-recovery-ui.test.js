@@ -43,7 +43,7 @@ test("결제 내역은 상세·취소·이어하기·리포트 복구 동작을 
   assert.match(app, /OrderRecovery\.totalAmount/);
 });
 
-test("MZ다크무당 온라인뷰 상품은 외부 리포트 스냅샷과 리포트 보기 흐름을 가진다", () => {
+test("운명 완전개봉 상품은 외부 리포트 재접수·상태 조회·보기 흐름을 가진다", () => {
   const schema = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8");
   const migration = readFileSync(
     new URL("../supabase/migrations/20260628090000_external_report_orders.sql", import.meta.url),
@@ -55,6 +55,9 @@ test("MZ다크무당 온라인뷰 상품은 외부 리포트 스냅샷과 리포
   assert.match(app, /externalReport:\s*true/);
   assert.match(app, /purchaseSnapshot\(context\)/);
   assert.match(app, /\/api\/external-reports\?orderId=/);
+  assert.match(app, /action:\s*"retry"/);
+  assert.match(app, /scheduleExternalReportPolling/);
+  assert.match(app, /synced\.reportStatus === "complete" && url/);
   assert.match(admin, /"mz-dark-mudang-online":\s*\{/);
   assert.match(schema, /purchase_snapshot jsonb/i);
   assert.match(schema, /external_report jsonb/i);

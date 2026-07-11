@@ -4,7 +4,7 @@ export const EXTERNAL_REPORT_PRODUCTS = Object.freeze({
   "mz-dark-mudang-online": Object.freeze({
     id: "mz-dark-mudang-online",
     provider: "saju-web",
-    name: "운명 완전개봉 · 흑야 프리미엄",
+    name: "운명 완전개봉",
     productType: "general_saju",
     reportTemplate: "tight-v3",
     reportEngine: "default",
@@ -48,6 +48,27 @@ function baseUrl(env = process.env) {
 
 function apiKey(env = process.env) {
   return String(env.SAJU_WEB_API_KEY || env.SAJU_LAB_API_KEY || "").trim();
+}
+
+export function externalReportConfiguration(env = process.env) {
+  const base = baseUrl(env);
+  const key = apiKey(env);
+  return { baseUrl: base, hasApiKey: Boolean(key), ready: Boolean(base && key) };
+}
+
+function configurationError(message, code) {
+  const error = new Error(message);
+  error.statusCode = 503;
+  error.code = code;
+  error.publicMessage = "외부 심층 리포트 서비스 연결이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.";
+  return error;
+}
+
+export function assertExternalReportConfigured(productId, env = process.env) {
+  if (!isExternalReportProduct(productId)) return;
+  const config = externalReportConfiguration(env);
+  if (!config.baseUrl) throw configurationError("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.", "external_report_base_missing");
+  if (!config.hasApiKey) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
 }
 
 export function buildExternalReportOrderPayload(order, product = externalReportProduct(order?.product_id)) {
@@ -104,8 +125,8 @@ async function requestJson(url, { method = "GET", key, body, fetchImpl = fetch, 
 export async function createSajuWebReportOrder({ order, product = externalReportProduct(order?.product_id), env = process.env, fetchImpl = fetch } = {}) {
   const base = baseUrl(env);
   const key = apiKey(env);
-  if (!base) throw new Error("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.");
-  if (!key) throw new Error("SAJU_WEB_API_KEY가 설정되지 않았습니다.");
+  if (!base) throw configurationError("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.", "external_report_base_missing");
+  if (!key) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
   if (!product) throw new Error("외부 리포트 상품 설정을 찾지 못했습니다.");
 
   const payload = buildExternalReportOrderPayload(order, product);
@@ -131,8 +152,8 @@ export async function createSajuWebReportOrder({ order, product = externalReport
 export async function getSajuWebReport({ externalOrderId, env = process.env, fetchImpl = fetch } = {}) {
   const base = baseUrl(env);
   const key = apiKey(env);
-  if (!base) throw new Error("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.");
-  if (!key) throw new Error("SAJU_WEB_API_KEY가 설정되지 않았습니다.");
+  if (!base) throw configurationError("SAJU_WEB_API_BASE_URL이 설정되지 않았습니다.", "external_report_base_missing");
+  if (!key) throw configurationError("SAJU_WEB_API_KEY가 설정되지 않았습니다.", "external_report_key_missing");
   if (!externalOrderId) throw new Error("외부 주문번호가 없습니다.");
   return requestJson(`${base}/api/v1/orders/${encodeURIComponent(externalOrderId)}/report`, { key, fetchImpl });
 }

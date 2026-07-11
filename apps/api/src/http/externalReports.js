@@ -3,7 +3,8 @@ import {
   getSajuWebReport,
   splitMarkdownReport,
 } from "../domain/externalReports.js";
-import { sendJson } from "../legacy/_lib/http.js";
+import { fulfillPaidOrder } from "../domain/orderFulfillment.js";
+import { readJson, sendJson } from "../legacy/_lib/http.js";
 import { getSessionUser } from "../legacy/_lib/sessions.js";
 import { getSupabase } from "../legacy/_lib/supabase.js";
 
@@ -62,23 +63,56 @@ async function upsertUserArchive(sb, userId, archive) {
   });
 }
 
-export async function externalReportsHandler(req, res) {
-  if (req.method !== "GET") return sendJson(res, 405, { message: "GET only" });
+function publicExternalError(error, fallback) {
+  console.error(`[external-report] ${String(error?.message || error).slice(0, 300)}`);
+  return error?.publicMessage || fallback;
+}
+
+export async function externalReportsHandler(req, res, dependencies = {}) {
+  if (!["GET", "POST"].includes(req.method)) return sendJson(res, 405, { message: "GET/POST only" });
   try {
-    const orderId = String(req.query?.orderId || "").trim();
+    const body = req.method === "POST" ? await readJson(req) : {};
+    const orderId = String(req.query?.orderId || body.orderId || "").trim();
     if (!orderId) return sendJson(res, 400, { message: "주문번호가 필요합니다." });
-    const sb = getSupabase();
+    const sb = (dependencies.getSupabase || getSupabase)();
     if (!sb) return sendJson(res, 503, { message: "데이터베이스를 사용할 수 없습니다." });
-    const user = await getSessionUser(req);
+    const user = await (dependencies.getSessionUser || getSessionUser)(req);
     const { data: order, error } = await sb
       .from("orders")
-      .select("id, user_id, product_id, profile_name, purchase_snapshot, external_report, report_status")
+      .select(req.method === "POST" ? "*" : "id, user_id, product_id, profile_name, purchase_snapshot, external_report, report_status, fulfillment_status, fulfillment_error")
       .eq("id", orderId)
       .maybeSingle();
     if (error) throw error;
     if (!order) return sendJson(res, 404, { message: "주문을 찾지 못했습니다." });
     if (order.user_id && (!user?.id || String(user.id) !== String(order.user_id))) {
       return sendJson(res, 403, { message: "본인 주문만 확인할 수 있습니다." });
+    }
+    if (!externalReportProduct(order.product_id)) {
+      return sendJson(res, 400, { message: "외부 심층 리포트 상품 주문이 아닙니다." });
+    }
+
+    if (req.method === "POST") {
+      if (body.action !== "retry") return sendJson(res, 400, { message: "지원하지 않는 작업입니다." });
+      const fulfill = dependencies.fulfillPaidOrder || fulfillPaidOrder;
+      const fulfillment = await fulfill(sb, order, dependencies.fulfillmentDependencies || {});
+      const externalReport = fulfillment.externalOrderId
+        ? {
+            provider: fulfillment.provider || "saju-web",
+            productId: order.product_id,
+            externalOrderId: fulfillment.externalOrderId,
+            shareToken: fulfillment.shareToken || "",
+            shareUrl: fulfillment.shareUrl || "",
+            status: fulfillment.externalStatus || "queued",
+            submittedAt: fulfillment.submittedAt || new Date().toISOString(),
+          }
+        : asObject(order.external_report);
+      return sendJson(res, 202, {
+        ok: true,
+        orderId,
+        reportStatus: "generating",
+        externalReport,
+        fulfillment,
+      });
     }
 
     const currentExternal = asObject(order.external_report);
@@ -87,17 +121,20 @@ export async function externalReportsHandler(req, res) {
     }
 
     const reportPayload = await getSajuWebReport({ externalOrderId: currentExternal.externalOrderId });
+    const externalStatus = String(reportPayload.status || currentExternal.status || "").toLowerCase();
+    const reportFailed = externalStatus === "failed";
     const nextExternal = {
       ...currentExternal,
       shareUrl: reportPayload.share_url || currentExternal.shareUrl || "",
       shareToken: reportPayload.share_token || currentExternal.shareToken || "",
-      status: reportPayload.status || currentExternal.status || "",
+      status: externalStatus,
       reportReady: Boolean(reportPayload.report_ready),
       checkedAt: new Date().toISOString(),
     };
     const patch = {
       external_report: nextExternal,
-      report_status: reportPayload.report_ready ? "complete" : "generating",
+      report_status: reportPayload.report_ready ? "complete" : reportFailed ? "failed" : "generating",
+      fulfillment_error: reportFailed ? "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요." : null,
     };
     const archive = reportPayload.report_ready ? buildArchiveSnapshot(order, reportPayload, nextExternal) : null;
     if (archive) await upsertUserArchive(sb, order.user_id || user?.id, archive);
@@ -109,9 +146,13 @@ export async function externalReportsHandler(req, res) {
       reportStatus: patch.report_status,
       externalReport: nextExternal,
       archive,
+      reportError: patch.fulfillment_error,
     });
   } catch (error) {
-    return sendJson(res, error.statusCode || 500, { message: error.message });
+    return sendJson(res, error.statusCode || 502, {
+      message: publicExternalError(error, "외부 심층 리포트 서비스와 통신하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      code: error.code || undefined,
+    });
   }
 }
 

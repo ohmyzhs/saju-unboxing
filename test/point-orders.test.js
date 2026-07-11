@@ -8,14 +8,17 @@ import {
   resolveProductPrice,
 } from "../apps/api/src/legacy/orders.js";
 
-test("서버 상품 설정 가격을 클라이언트 금액보다 우선한다", () => {
+test("카탈로그 가격은 어드민 설정만 따르고 클라이언트/기본가로 대체하지 않는다", () => {
   const config = { products: { "saju-analysis": { amount: 1490 } } };
-  assert.equal(resolveProductPrice(config, "saju-analysis", { amount: 990 }), 1490);
-  assert.equal(resolveProductPrice({}, "saju-analysis", { amount: 990 }), 990);
+  assert.equal(resolveProductPrice(config, "saju-analysis"), 1490);
+  assert.throws(
+    () => resolveProductPrice({}, "saju-analysis"),
+    (error) => error.statusCode === 503 && error.code === "product_price_not_configured",
+  );
 });
 
 test("잘못된 서버 상품 가격을 거절한다", () => {
-  assert.throws(() => resolveProductPrice({ products: { x: { amount: -1 } } }, "x", { amount: 990 }), /상품 가격/);
+  assert.throws(() => resolveProductPrice({ products: { x: { amount: -1 } } }, "x"), /상품 가격/);
 });
 
 test("포인트 전액 결제는 토스 금액이 0이다", () => {

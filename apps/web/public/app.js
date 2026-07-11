@@ -44,13 +44,12 @@ const SESSION_REFRESH_INTERVAL_MS = 60 * 1000;
 const ACCOUNT_SYNC_STALE_MS = 90 * 1000;
 
 // ---------- Product catalog ----------
+// 가격(amount/price/amountLabel)은 코드에 두지 않는다.
+// 어드민 설정(site_config.products)이 유일한 가격 기준이며, applyRuntimeConfig()가 채운다.
 const PRODUCTS = {
   "saju-analysis": {
     name: "기본 사주 리포트",
     subtitle: "어떤 분의 사주해설을 볼까요?",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "starter",
     category: "사주해설",
@@ -59,9 +58,6 @@ const PRODUCTS = {
   compatibility: {
     name: "관계 궁합 분석",
     subtitle: "궁합을 볼 기준 프로필을 먼저 선택해주세요.",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "starter",
     category: "궁합해설",
@@ -70,9 +66,6 @@ const PRODUCTS = {
   cycle: {
     name: "대운의 흐름",
     subtitle: "어떤 분의 대운을 볼까요?",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "starter",
     category: "대운해설",
@@ -81,9 +74,6 @@ const PRODUCTS = {
   "yearly-fortune": {
     name: "연도별 운세",
     subtitle: "어떤 분의 연도별 운세를 볼까요?",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "starter",
     category: "연도 운세",
@@ -92,23 +82,17 @@ const PRODUCTS = {
   "auspicious-date": {
     name: "목적별 택일 리포트",
     subtitle: "어떤 분의 일정에 맞는 날짜인지 선택해주세요.",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "fortune",
     category: "택일해설",
     description: "선택한 목적과 후보 날짜를 사주 흐름에 맞춰 비교하고 우선순위와 활용법을 정리합니다.",
   },
   "mz-dark-mudang-online": {
-    name: "운명 완전개봉 · 흑야 프리미엄",
+    name: "운명 완전개봉",
     subtitle: "누구의 운명함을 완전히 열어 보겠소?",
-    price: "9,900원",
-    amountLabel: "9,900원",
-    amount: 9900,
     paid: true,
     planId: "starter",
-    category: "프리미엄 온라인뷰",
+    category: "온라인 심층 리포트",
     description: "그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.",
     externalReport: true,
   },
@@ -126,15 +110,18 @@ const PRODUCTS = {
   followup: {
     name: "질문 1회권",
     subtitle: "어떤 분석에 대해 더 물어볼까요?",
-    price: "990원",
-    amountLabel: "990원",
-    amount: 990,
     paid: true,
     planId: "starter",
     category: "추가 질문",
     description: "이미 받은 분석의 만세력을 그대로 활용해, 더 궁금한 점 하나에 깊이 있는 답을 드립니다.",
   },
 };
+
+// 어드민 가격이 아직 로드되지 않았을 때 노출할 표시. 유료 상품 결제는 가격 로드 전엔 막는다.
+const PRICE_PENDING_LABEL = "가격 확인 중";
+function productPriceLoaded(product) {
+  return Number.isFinite(Number(product?.amount)) && product?.amount !== undefined && product?.amount !== null;
+}
 
 // ---------- Time period catalog (자시 ~ 해시) ----------
 const TIME_PERIODS = [
@@ -1115,7 +1102,7 @@ function renderOrders() {
       const actionButtons = [
         actions.resume && purchase ? `<button type="button" data-order-resume="${escapeHtml(o.orderId)}">결제 이어하기</button>` : "",
         actions.cancel ? `<button type="button" class="is-danger" data-order-cancel="${escapeHtml(o.orderId)}">주문 취소</button>` : "",
-        actions.viewReport ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}">리포트 보기</button>` : "",
+        actions.viewReport ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}">${o.reportStatus === "complete" ? "리포트 보기" : "생성 상태 확인"}</button>` : "",
         actions.retryReport && purchase ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}" data-retry="true">리포트 다시 생성</button>` : "",
       ].filter(Boolean).join("");
       return `
@@ -1254,11 +1241,20 @@ function openStoredAnalysis(item) {
   renderAnalysisResult(item.productId, profile, partner, item.analysis || null);
 }
 
+const externalReportPollers = new Map();
+
+function stopExternalReportPolling(orderId) {
+  const timer = externalReportPollers.get(orderId);
+  if (timer) window.clearTimeout(timer);
+  externalReportPollers.delete(orderId);
+}
+
 async function syncExternalReport(orderId) {
   const result = await getJson(`/api/external-reports?orderId=${encodeURIComponent(orderId)}`);
   upsertOrder({
     orderId,
     reportStatus: result.reportStatus,
+    reportError: result.reportError || null,
     externalReport: result.externalReport || null,
     updatedAt: Date.now(),
   });
@@ -1268,17 +1264,51 @@ async function syncExternalReport(orderId) {
   return result;
 }
 
+function scheduleExternalReportPolling(orderId, { immediate = false } = {}) {
+  stopExternalReportPolling(orderId);
+  let attempts = 0;
+  const poll = async () => {
+    attempts += 1;
+    try {
+      const result = await syncExternalReport(orderId);
+      if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
+      if (result.reportStatus === "complete") {
+        stopExternalReportPolling(orderId);
+        showToast("운명 완전개봉 리포트가 완성되었습니다. 결제 내역에서 확인해주세요.");
+        return;
+      }
+      if (result.reportStatus === "failed") {
+        stopExternalReportPolling(orderId);
+        showToast(result.reportError || "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요.", true);
+        return;
+      }
+    } catch {
+      // 일시적인 조회 실패는 다음 폴링에서 다시 확인한다.
+    }
+    if (attempts >= 20) {
+      stopExternalReportPolling(orderId);
+      return;
+    }
+    externalReportPollers.set(orderId, window.setTimeout(poll, 15000));
+  };
+  externalReportPollers.set(orderId, window.setTimeout(poll, immediate ? 1000 : 10000));
+}
+
 async function openOrderReport(orderId) {
   const order = getOrders().find((entry) => entry.orderId === orderId);
   if (isExternalReportProductId(order?.productId)) {
     try {
       const synced = await syncExternalReport(orderId);
       const url = synced.externalReport?.shareUrl || order?.externalReport?.shareUrl;
-      if (url) window.open(url, "_blank", "noopener");
+      if (synced.reportStatus === "complete" && url) window.open(url, "_blank", "noopener");
       if (synced.archive) showToast("리포트 본문을 보관함에도 저장했습니다. 이제 챗봇 상담에서 선택할 수 있습니다.");
-      else showToast("saju-web에서 리포트를 생성 중입니다. 잠시 후 다시 확인해주세요.");
+      else if (synced.reportStatus === "failed") showToast(synced.reportError || "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요.", true);
+      else {
+        scheduleExternalReportPolling(orderId);
+        showToast("외부 심층 리포트를 생성 중입니다. 완료되면 알려드리겠습니다.");
+      }
     } catch (error) {
-      if (order?.externalReport?.shareUrl) window.open(order.externalReport.shareUrl, "_blank", "noopener");
+      if (order?.reportStatus === "complete" && order?.externalReport?.shareUrl) window.open(order.externalReport.shareUrl, "_blank", "noopener");
       else showToast(error.message || "외부 리포트 상태를 확인하지 못했습니다.", true);
     }
     return;
@@ -1289,12 +1319,31 @@ async function openOrderReport(orderId) {
   trackEvent("archive_reopen", { archiveId: item.id, productId: item.productId, source: "orders" });
 }
 
-function retryOrderReport(orderId) {
+async function retryOrderReport(orderId) {
   const order = getOrders().find((item) => item.orderId === orderId);
-  if (order?.externalReport?.shareUrl) return openOrderReport(orderId);
   if (isExternalReportProductId(order?.productId)) {
-    return showToast("saju-web에서 리포트를 생성 중입니다. 잠시 후 리포트보기를 다시 눌러주세요.", true);
+    if (order?.reportStatus === "complete") return openOrderReport(orderId);
+    try {
+      const result = await getJson("/api/external-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry", orderId }),
+      });
+      upsertOrder({
+        orderId,
+        reportStatus: result.reportStatus || "generating",
+        reportError: null,
+        externalReport: result.externalReport || order?.externalReport || null,
+        updatedAt: Date.now(),
+      });
+      renderOrders();
+      scheduleExternalReportPolling(orderId, { immediate: true });
+      return showToast("외부 심층 리포트 생성을 다시 요청했습니다.");
+    } catch (error) {
+      return showToast(error.message || "외부 심층 리포트를 다시 요청하지 못했습니다.", true);
+    }
   }
+  if (order?.externalReport?.shareUrl) return openOrderReport(orderId);
   const purchase = recoverOrderPurchase(order);
   if (!purchase) return showToast("리포트 생성 정보를 복구할 수 없습니다.", true);
   startAnalysis(purchase.productId, purchase.profile, {
@@ -1959,7 +2008,7 @@ function renderProductCatalog() {
       node.textContent = product.description;
     });
     document.querySelectorAll(`[data-product-price="${productId}"]`).forEach((node) => {
-      node.textContent = product.price;
+      node.textContent = product.price || PRICE_PENDING_LABEL;
     });
   });
 }
@@ -2314,6 +2363,10 @@ function selectedCalendarPick() {
 
 function prepareCheckout(productId, profile, partner = null) {
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
+  if (product.paid && !productPriceLoaded(product)) {
+    showToast("상품 가격 정보를 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.", true);
+    return;
+  }
   currentCheckout = {
     productId,
     product,
@@ -3977,6 +4030,10 @@ function startFollowupCheckout(item) {
     return;
   }
   const product = PRODUCTS.followup;
+  if (!productPriceLoaded(product)) {
+    showToast("상품 가격 정보를 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.", true);
+    return;
+  }
   const profile =
     getProfiles().find((p) => p.id === item.profileId) || { id: item.profileId || "followup", name: item.profileName };
   currentCheckout = {
@@ -4511,12 +4568,12 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
   setPaymentResult(
     fulfillment?.status === "submitted" ? "결제 완료 · 리포트 생성 시작" : "결제 완료 · 리포트 생성 확인 필요",
     fulfillment?.status === "submitted"
-      ? "saju-web MZ다크무당 온라인뷰 리포트 제작을 시작했습니다."
-      : "결제는 완료됐지만 saju-web 주문 상태를 다시 확인해야 합니다.",
+      ? "외부 전문 서비스에서 심층 리포트 제작을 시작했습니다."
+      : "결제는 완료됐지만 외부 리포트 주문 상태를 다시 확인해야 합니다.",
     [
-      ["상품", purchase.product?.name || "운명 완전개봉 · 흑야 프리미엄"],
+      ["상품", purchase.product?.name || "운명 완전개봉"],
       ["대상", purchase.profile?.name || "프로필"],
-      ["생성 상태", fulfillment?.status === "submitted" ? "saju-web 생성중" : "확인 필요"],
+      ["생성 상태", fulfillment?.status === "submitted" ? "외부 서비스 생성중" : "확인 필요"],
     ],
     fulfillment?.status === "submitted",
     fulfillment?.status === "submitted" ? "🔮" : "⏳",
@@ -4530,6 +4587,7 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
     paymentContinueButton.textContent = "결제 내역으로 이동";
     paymentContinueButton.onclick = () => showView("orders");
   }
+  if (fulfillment?.status === "submitted") scheduleExternalReportPolling(orderId);
   pushUserData("order", getOrders().find((order) => order.orderId === orderId));
 }
 

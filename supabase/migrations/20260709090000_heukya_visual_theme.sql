@@ -2,19 +2,18 @@
 -- 정책: 사이트명·상품명·상품 설명은 기존(사주언박싱-mini) 그대로 유지하고
 -- 이미지(스킨)만 흑야 테마로 교체한다. 리포트 문체(사극 하오체)는 코드 프롬프트에서 처리.
 --
--- 한 번 배포됐던 20260708090000_heukya_theme_defaults.sql 이 운영 DB의
--- site_config 에 흑야 상품명을 심어 두었을 수 있으므로, 상품명/브랜딩을
--- 원래 값으로 되돌리는 것까지 포함해 멱등하게 정리한다.
+-- 병합 방향 주의: 어드민 관리 페이지에서 저장한 값(site_config)이 항상 우선이다.
+-- 아래 값들은 "빈 항목 채우기용 시드"라서, 재실행해도 기존 운영 값(가격 포함)을 덮어쓰지 않는다.
 
 insert into public.site_config (id) values (1)
 on conflict (id) do nothing;
 
 update public.site_config
 set
-  branding = coalesce(branding, '{}'::jsonb) || jsonb_build_object(
+  branding = jsonb_build_object(
     'siteName', '사주언박싱-mini'
-  ),
-  products = coalesce(products, '{}'::jsonb) || jsonb_build_object(
+  ) || coalesce(branding, '{}'::jsonb),
+  products = jsonb_build_object(
     'saju-analysis', jsonb_build_object(
       'name', '기본 사주 리포트',
       'amount', 990,
@@ -31,7 +30,7 @@ set
       'description', '10년 단위 운의 전환점과 준비 구간, 기회와 위기를 타임라인으로 풀어드립니다.'
     ),
     'mz-dark-mudang-online', jsonb_build_object(
-      'name', '운명 완전개봉 · 흑야 프리미엄',
+      'name', '운명 완전개봉',
       'amount', 9900,
       'description', '그대의 운명, 이번엔 남김없이 열어 보이겠소. 흉한 대목까지 가감 없이 이를 것이니, 각오를 단단히 하고 함을 여시오.'
     ),
@@ -50,15 +49,15 @@ set
       'amount', 990,
       'description', '이미 받은 분석의 만세력을 그대로 활용해, 더 궁금한 점 하나에 깊이 있는 답을 드립니다.'
     )
-  ),
-  images = coalesce(images, '{}'::jsonb) || jsonb_build_object(
+  ) || coalesce(products, '{}'::jsonb),
+  images = jsonb_build_object(
     'banner.hero', '/assets/generated/banners/heukya-premium-hero.jpg',
     'thumb.saju-analysis', '/assets/generated/thumbnails/heukya-premium-saju-reading.jpg',
     'thumb.compatibility', '/assets/generated/thumbnails/heukya-premium-compatibility.jpg',
     'thumb.cycle', '/assets/generated/thumbnails/heukya-premium-fortune-cycle.jpg',
     'thumb.mz-dark-mudang-online', '/assets/generated/thumbnails/heukya-premium-dark-mudang.jpg',
     'thumb.yearly-fortune', '/assets/generated/thumbnails/heukya-premium-year-wheel.jpg'
-  ),
+  ) || coalesce(images, '{}'::jsonb),
   updated_at = now()
 where id = 1;
 

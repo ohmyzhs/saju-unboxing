@@ -18,6 +18,17 @@ async function updateFulfillment(sb, orderId, patch) {
   if (error) throw error;
 }
 
+function asObject(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function fulfillPaidOrder(sb, order, dependencies = {}) {
   if (!sb) throw fulfillmentError("질의응답권 데이터베이스를 사용할 수 없습니다.", 503);
   if (!order?.id) throw fulfillmentError("주문을 찾지 못했습니다.", 404);
@@ -25,6 +36,17 @@ export async function fulfillPaidOrder(sb, order, dependencies = {}) {
     if (!isPaidOrder(order)) throw fulfillmentError("결제 완료 주문만 외부 리포트를 생성할 수 있습니다.", 409);
     const product = externalReportProduct(order.product_id);
     const createExternalReportOrder = dependencies.createExternalReportOrder || createSajuWebReportOrder;
+    const existing = asObject(order.external_report);
+    if (existing.externalOrderId && order.report_status !== "failed") {
+      return {
+        required: true,
+        ...existing,
+        status: "submitted",
+        externalStatus: existing.status || "queued",
+        fulfilledAt: order.fulfilled_at || existing.submittedAt || null,
+        reused: true,
+      };
+    }
 
     await updateFulfillment(sb, order.id, {
       fulfillment_status: "processing",
