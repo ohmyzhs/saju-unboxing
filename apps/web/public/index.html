@@ -558,6 +558,18 @@
           <h2 data-payment-title>결제 정보를 확인하고 있어요.</h2>
           <p data-payment-message>결제창에서 돌아온 주문을 서버 승인 단계까지 이어갑니다.</p>
           <div data-payment-detail></div>
+          <section class="report-progress" data-report-progress hidden aria-live="polite">
+            <div class="report-progress-lanterns" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="report-progress-head">
+              <span class="report-progress-phase" data-progress-phase>운명함을 여는 중</span>
+              <b class="report-progress-pct" data-progress-pct></b>
+            </div>
+            <div class="report-progress-track">
+              <div class="report-progress-fill" data-progress-fill><i class="report-progress-sheen"></i></div>
+            </div>
+            <p class="report-progress-section" data-progress-section>사주 원국을 읽고 있습니다…</p>
+            <p class="report-progress-hint" data-progress-hint>완성되는 순간 이 화면에서 바로 열립니다. 잠시만 기다려주시오.</p>
+          </section>
           <p class="payment-ref" data-payment-ref hidden></p>
           <div class="payment-result-actions">
             <button class="primary-action" type="button" data-payment-continue hidden>결제 확인됨, 분석 시작</button>

@@ -27,7 +27,9 @@ export async function runReportAgent({
       question: String(question || "").trim(),
       evidence: { toolCalls },
     }),
-    maxTokens: 1600,
+    // 1600은 상세한 한국어 답변이 중간에 잘리던 값. 잘림(finish_reason=length)은
+    // aiTransport가 감지해 이어서 질문하라는 안내를 붙인다.
+    maxTokens: 4096,
     timeoutMs: 180000,
     onDelta,
     onReset,

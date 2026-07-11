@@ -1150,7 +1150,7 @@ function renderOrders() {
   list.querySelectorAll("[data-order-report]").forEach((button) => {
     button.addEventListener("click", () => button.dataset.retry === "true"
       ? retryOrderReport(button.dataset.orderReport)
-      : openOrderReport(button.dataset.orderReport));
+      : openOrderReport(button.dataset.orderReport, button));
   });
 }
 
@@ -1227,6 +1227,14 @@ async function resumeOrderPayment(orderId, button) {
 
 function openStoredAnalysis(item) {
   if (!item) return;
+  // 외부(saju-web) 리포트는 내부 분석 화면(만세력/사주해설)이 없다.
+  // 보관함에서 누르면 완성된 온라인뷰 리포트를 바로 연다.
+  if (item.externalReport || item.reportUrl) {
+    const externalUrl = item.reportUrl || item.externalReport?.shareUrl || "";
+    if (externalUrl) window.open(externalUrl, "_blank", "noopener");
+    else showToast("리포트 주소를 찾지 못했습니다. 결제 내역에서 '생성 상태 확인'을 눌러주세요.", true);
+    return;
+  }
   const profile = getProfiles().find((entry) => entry.id === item.profileId);
   if (!profile) return showToast("분석 대상 프로필을 찾을 수 없습니다.", true);
   const partner = item.partnerId ? getProfiles().find((entry) => entry.id === item.partnerId) : null;
@@ -1282,47 +1290,130 @@ async function syncExternalReport(orderId) {
     saveArchive(result.archive, { sync: false });
   }
   if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
+  renderExternalWaitProgress(orderId, result);
   return result;
 }
 
-function scheduleExternalReportPolling(orderId, { immediate = false } = {}) {
+// ── 결제 완료 화면의 생성 대기 프로그레스 ──
+// 결제 직후 사용자가 화면을 떠나지 않도록 진행률을 실시간으로 보여주고,
+// 완성되는 순간 같은 탭에서 리포트를 바로 연다.
+let externalWaitOrderId = null;
+
+function externalWaitPhaseText(status) {
+  return {
+    accepted: "주문을 접수했습니다",
+    queued: "차례를 기다리는 중",
+    generating: "심층 리포트 집필 중",
+    awaiting_model: "심층 리포트 집필 중",
+    completed: "리포트가 완성되었습니다",
+    failed: "리포트 생성에 실패했습니다",
+  }[status] || "운명함을 여는 중";
+}
+
+function renderExternalWaitProgress(orderId, result) {
+  if (!externalWaitOrderId || externalWaitOrderId !== orderId) return;
+  const box = document.querySelector("[data-report-progress]");
+  if (!box) return;
+  const gen = result?.generation || null;
+  const failed = result?.reportStatus === "failed";
+  const complete = result?.reportStatus === "complete";
+  const phaseEl = box.querySelector("[data-progress-phase]");
+  const pctEl = box.querySelector("[data-progress-pct]");
+  const fillEl = box.querySelector("[data-progress-fill]");
+  const sectionEl = box.querySelector("[data-progress-section]");
+  const hintEl = box.querySelector("[data-progress-hint]");
+  box.hidden = false;
+  box.classList.toggle("is-failed", failed);
+  box.classList.toggle("is-complete", complete);
+  // 구버전 saju-web(진행률 없음)은 왕복 애니메이션으로 "진행 중"만 표현한다.
+  box.classList.toggle("is-indeterminate", !complete && !failed && !gen);
+
+  const percent = complete ? 100 : failed ? 100 : gen?.percent ?? null;
+  if (pctEl) pctEl.textContent = percent === null ? "" : `${Math.max(0, Math.min(100, percent))}%`;
+  if (fillEl && percent !== null) fillEl.style.width = `${Math.max(3, Math.min(100, percent))}%`;
+  if (phaseEl) phaseEl.textContent = failed ? externalWaitPhaseText("failed") : complete ? externalWaitPhaseText("completed") : externalWaitPhaseText(gen?.status);
+  if (sectionEl) {
+    if (complete) sectionEl.textContent = "지금 리포트를 엽니다…";
+    else if (failed) sectionEl.textContent = result?.reportError || "결제 내역에서 '리포트 다시 생성'을 눌러주세요.";
+    else if (gen?.totalSections) {
+      const current = gen.currentSection?.title ? ` · ${gen.currentSection.title}` : "";
+      sectionEl.textContent = `${gen.completedSections}/${gen.totalSections} 단락 집필됨${current}`;
+    } else sectionEl.textContent = "사주 원국을 읽고 있습니다…";
+  }
+  if (hintEl) hintEl.hidden = complete || failed;
+}
+
+function beginExternalWait(orderId) {
+  externalWaitOrderId = orderId;
+  renderExternalWaitProgress(orderId, { reportStatus: "generating", generation: null });
+}
+
+function finishExternalWait(orderId, result) {
+  if (externalWaitOrderId !== orderId) return false;
+  renderExternalWaitProgress(orderId, result);
+  externalWaitOrderId = null;
+  const onPaymentView = document.querySelector('.view.is-active')?.dataset.view === "payment";
+  const url = result?.externalReport?.shareUrl;
+  if (result?.reportStatus === "complete" && url && onPaymentView) {
+    // 완성 즉시 같은 탭에서 리포트 오픈(사용자 제스처가 없어 새 창은 차단됨).
+    window.setTimeout(() => window.location.assign(url), 900);
+    return true;
+  }
+  return false;
+}
+
+function scheduleExternalReportPolling(orderId, { immediate = false, intervalMs = null } = {}) {
   stopExternalReportPolling(orderId);
   let attempts = 0;
+  const baseDelay = Math.max(3000, Number(intervalMs) || 15000);
   const poll = async () => {
     attempts += 1;
-    let nextDelay = 15000;
+    let nextDelay = baseDelay;
     try {
       const result = await syncExternalReport(orderId);
-      if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
       if (result.reportStatus === "complete") {
         stopExternalReportPolling(orderId);
-        showToast("운명 완전개봉 리포트가 완성되었습니다. 결제 내역에서 바로 열어볼 수 있고, 보관함과 챗봇 상담에서도 사용할 수 있습니다.");
-        if (document.querySelector('.view.is-active')?.dataset.view === "orders") renderOrders();
+        const opened = finishExternalWait(orderId, result);
+        if (!opened) showToast("운명 완전개봉 리포트가 완성되었습니다. 결제 내역에서 바로 열어볼 수 있고, 보관함과 챗봇 상담에서도 사용할 수 있습니다.");
         return;
       }
       if (result.reportStatus === "failed") {
         stopExternalReportPolling(orderId);
+        finishExternalWait(orderId, result);
         showToast(result.reportError || "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요.", true);
         return;
       }
-      // saju-web이 권장 주기를 주면 따르되, 서버리스 함수 호출량을 고려해 최소 5초.
+      // saju-web이 권장 주기를 주면 따른다(최소 3초 — 대기 화면 실시간 갱신 기준).
       const suggested = Number(result.generation?.pollAfterMs || 0);
-      if (suggested > 0) nextDelay = Math.max(5000, suggested);
+      if (suggested > 0) nextDelay = Math.max(3000, suggested);
     } catch {
       // 일시적인 조회 실패는 다음 폴링에서 다시 확인한다.
     }
-    if (attempts >= 120) {
+    if (attempts >= 400) {
       stopExternalReportPolling(orderId);
       return;
     }
     externalReportPollers.set(orderId, window.setTimeout(poll, nextDelay));
   };
-  externalReportPollers.set(orderId, window.setTimeout(poll, immediate ? 1000 : 5000));
+  externalReportPollers.set(orderId, window.setTimeout(poll, immediate ? 800 : baseDelay));
 }
 
-async function openOrderReport(orderId) {
+async function openOrderReport(orderId, trigger = null) {
   const order = getOrders().find((entry) => entry.orderId === orderId);
   if (isExternalReportProductId(order?.productId)) {
+    // 이미 완성된 리포트: 클릭 제스처 안에서 즉시 연다(대기·팝업 차단 없이).
+    // 보관함 동기화는 백그라운드로만 수행한다.
+    const readyUrl = order?.reportStatus === "complete" ? order?.externalReport?.shareUrl : "";
+    if (readyUrl) {
+      window.open(readyUrl, "_blank", "noopener");
+      syncExternalReport(orderId).catch(() => {});
+      return;
+    }
+    const restoreLabel = trigger?.textContent;
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.textContent = "생성 상태 확인 중…";
+    }
     try {
       const synced = await syncExternalReport(orderId);
       const url = synced.externalReport?.shareUrl || order?.externalReport?.shareUrl;
@@ -1331,11 +1422,16 @@ async function openOrderReport(orderId) {
       else if (synced.reportStatus === "failed") showToast(synced.reportError || "외부 심층 리포트 생성에 실패했습니다. 다시 생성을 요청해주세요.", true);
       else {
         scheduleExternalReportPolling(orderId);
-        showToast("외부 심층 리포트를 생성 중입니다. 완료되면 알려드리겠습니다.");
+        showToast(externalGenerationLabel(synced.generation) || "외부 심층 리포트를 생성 중입니다. 완료되면 알려드리겠습니다.");
       }
     } catch (error) {
       if (order?.reportStatus === "complete" && order?.externalReport?.shareUrl) window.open(order.externalReport.shareUrl, "_blank", "noopener");
       else showToast(error.message || "외부 리포트 상태를 확인하지 못했습니다.", true);
+    } finally {
+      if (trigger) {
+        trigger.disabled = false;
+        if (restoreLabel) trigger.textContent = restoreLabel;
+      }
     }
     return;
   }
@@ -3613,6 +3709,12 @@ function setPaymentResult(title, message, detail, ok = false, icon) {
     paymentRef.hidden = true;
     paymentRef.textContent = "";
   }
+  // 이전 주문의 생성 대기 프로그레스가 남지 않도록 초기화한다.
+  const progressBox = document.querySelector("[data-report-progress]");
+  if (progressBox) {
+    progressBox.hidden = true;
+    progressBox.classList.remove("is-failed", "is-complete", "is-indeterminate");
+  }
   view?.classList.toggle("is-success", ok);
   view?.classList.toggle("is-loading", loading);
   if (paymentContinueButton) {
@@ -4613,7 +4715,12 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
     paymentContinueButton.textContent = "결제 내역으로 이동";
     paymentContinueButton.onclick = () => showView("orders");
   }
-  if (fulfillment?.status === "submitted") scheduleExternalReportPolling(orderId);
+  if (fulfillment?.status === "submitted") {
+    // 사용자를 이 화면에 붙잡아 두는 실시간 진행 카드 + 3초 폴링.
+    // 완성되면 finishExternalWait()가 같은 탭에서 리포트를 바로 연다.
+    beginExternalWait(orderId);
+    scheduleExternalReportPolling(orderId, { immediate: true, intervalMs: 3000 });
+  }
   pushUserData("order", getOrders().find((order) => order.orderId === orderId));
 }
 

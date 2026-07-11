@@ -441,6 +441,17 @@ function normalizeUsage(usage = {}) {
   };
 }
 
+// max_tokens에 걸려 답이 중간에 끊겼을 때 사용자에게 붙이는 안내.
+// (모델은 잘림 여부를 말해주지 않으므로 finish_reason으로 서버가 감지한다.)
+export const TRUNCATION_NOTICE = "\n\n(답변이 길어 여기까지만 담았습니다. \"이어서 설명해줘\"라고 질문하시면 이어서 답해드립니다.)";
+
+async function appendTruncationNotice({ finishReason, text, onDelta }) {
+  if (finishReason !== "length" || !text) return text;
+  console.error("[ai-truncation] finish_reason=length — 답변이 max_tokens에 걸려 잘림");
+  if (onDelta) await onDelta(TRUNCATION_NOTICE);
+  return text + TRUNCATION_NOTICE;
+}
+
 async function requestPlainChat({ route, system, input, profile = routeProfile(route), maxTokens = 1600, timeoutMs = 70000, onDelta }) {
   const client = new OpenAI(providerClientConfig(route));
   const request = applyRouteRequestOptions(applyChatModelOptions({
@@ -461,20 +472,24 @@ async function requestPlainChat({ route, system, input, profile = routeProfile(r
       }, { signal: timeout.signal });
       let text = "";
       let usage = {};
+      let finishReason = null;
       for await (const chunk of stream) {
         const delta = chatDeltaText(chunk.choices?.[0]?.delta);
         if (delta) {
           text += delta;
           await onDelta(delta);
         }
+        if (chunk.choices?.[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
         if (chunk.usage) usage = chunk.usage;
       }
       if (!text) throw new Error("AI 응답이 비어 있습니다.");
+      text = await appendTruncationNotice({ finishReason, text, onDelta });
       return { text, usage: normalizeUsage(usage) };
     }
     const response = await client.chat.completions.create(request, { signal: timeout.signal });
-    const text = chatMessageText(response.choices?.[0]?.message);
+    let text = chatMessageText(response.choices?.[0]?.message);
     if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    text = await appendTruncationNotice({ finishReason: response.choices?.[0]?.finish_reason, text });
     return { text, usage: normalizeUsage(response.usage) };
   } catch (error) {
     throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);
@@ -507,11 +522,12 @@ async function requestPlainMessages({ route, system, input, maxTokens = 1600, ti
       error.statusCode = response.status;
       throw error;
     }
-    const text = Array.isArray(payload.content)
+    let text = Array.isArray(payload.content)
       ? payload.content.filter((part) => part?.type === "text").map((part) => part.text).join("\n")
       : "";
     if (!text) throw new Error("AI 응답이 비어 있습니다.");
     if (onDelta) await onDelta(text);
+    text = await appendTruncationNotice({ finishReason: payload.stop_reason === "max_tokens" ? "length" : null, text, onDelta });
     return { text, usage: normalizeUsage(payload.usage) };
   } catch (error) {
     throw normalizeTransportError(timeout.signal.aborted ? Object.assign(error, { name: "AbortError" }) : error);

@@ -65,6 +65,11 @@
     if (first?.type === "bullet") return renderBulletList(lines);
 
     const text = lines.join("\n").trim();
+    // ATX 헤딩(#, ##, ### …): 챗 답변에서 자주 나오는데 그대로 노출되면 안 된다.
+    const atx = /^#{1,6}\s+(.+)$/.exec(text);
+    if (atx) {
+      return `<p class="chat-md-heading"><strong>${renderInline(atx[1].replace(/\s*#+\s*$/, ""))}</strong></p>`;
+    }
     const heading = /^([^\w가-힣]{0,4})\s*\*\*([^*\n]+)\*\*\s*$/u.exec(text);
     if (heading) {
       const icon = heading[1].trim();
@@ -92,6 +97,13 @@
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
         flush();
         blocks.push("<hr />");
+        continue;
+      }
+      // 헤딩은 앞뒤 빈 줄 없이 본문에 붙어 있어도 별도 블록으로 끊는다.
+      const atxLine = /^#{1,6}\s+(.+)$/.exec(trimmed);
+      if (atxLine) {
+        flush();
+        blocks.push(`<p class="chat-md-heading"><strong>${renderInline(atxLine[1].replace(/\s*#+\s*$/, ""))}</strong></p>`);
         continue;
       }
       current.push(line);

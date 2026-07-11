@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
+  TRUNCATION_NOTICE,
   applyChatModelOptions,
   chatDeltaText,
   chatMessageText,
@@ -11,6 +13,19 @@ import {
   requestStructured,
   validateSchema,
 } from "../apps/api/src/legacy/_lib/aiTransport.js";
+
+test("챗봇 답변 잘림 방지: finish_reason 감지와 넉넉한 max_tokens", () => {
+  const transport = readFileSync(new URL("../apps/api/src/legacy/_lib/aiTransport.js", import.meta.url), "utf8");
+  const agent = readFileSync(new URL("../apps/api/src/agent/chatAgent.js", import.meta.url), "utf8");
+  // 스트리밍/논스트리밍/메시지 API 모두 잘림(finish_reason=length, stop_reason=max_tokens)을 감지한다.
+  assert.match(transport, /finish_reason\)\s*finishReason = chunk\.choices\[0\]\.finish_reason/);
+  assert.match(transport, /appendTruncationNotice\(\{ finishReason: response\.choices\?\.\[0\]\?\.finish_reason/);
+  assert.match(transport, /stop_reason === "max_tokens" \? "length" : null/);
+  // 챗 상담은 1600 토큰 캡(한국어 장문 잘림 원인)을 쓰지 않는다.
+  assert.match(agent, /maxTokens:\s*4096/);
+  assert.doesNotMatch(agent, /maxTokens:\s*1600/);
+  assert.match(TRUNCATION_NOTICE, /이어서 설명해줘/);
+});
 
 test("does not expose DeepSeek reasoning_content as user-visible chat text", () => {
   assert.equal(chatMessageText({ content: "", reasoning_content: "추론 응답" }), "");

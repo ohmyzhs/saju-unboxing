@@ -92,7 +92,7 @@ test("Agent는 최대 네 도구 결과와 질문만 모델에 전달한다", as
     },
   });
   const input = JSON.parse(captured.input);
-  assert.equal(captured.maxTokens, 1600);
+  assert.equal(captured.maxTokens, 4096);
   assert.equal(input.question, "올해 이직은 어떤가요?");
   assert.equal(input.evidence.toolCalls.length, 4);
   assert.deepEqual(input.evidence.toolCalls.map((call) => call.name), [

@@ -8608,3 +8608,130 @@ label,
     max-height: 92vh;
   }
 }
+
+/* ─────────────────────────────────────────────────────
+   외부 심층 리포트 생성 대기 — 흑야 금사(金絲) 프로그레스
+   결제 완료 화면에서 사용자를 붙잡아 두는 실시간 진행 카드.
+   ───────────────────────────────────────────────────── */
+.report-progress {
+  margin: 18px auto 4px;
+  max-width: 420px;
+  padding: 22px 20px 18px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(201, 162, 39, 0.18), transparent 55%),
+    linear-gradient(168deg, var(--midnight-ink) 0%, var(--palace-ink) 82%);
+  border: 1px solid rgba(201, 162, 39, 0.38);
+  box-shadow: 0 18px 44px rgba(16, 23, 34, 0.35), inset 0 1px 0 rgba(246, 229, 190, 0.12);
+  color: var(--warm-ivory);
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.report-progress::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(201, 162, 39, 0.16);
+  border-radius: 13px;
+  pointer-events: none;
+}
+.report-progress-lanterns {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.report-progress-lanterns i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--royal-gold);
+  box-shadow: 0 0 10px 2px rgba(201, 162, 39, 0.55);
+  animation: lantern-breathe 2.1s ease-in-out infinite;
+}
+.report-progress-lanterns i:nth-child(2) { animation-delay: 0.35s; }
+.report-progress-lanterns i:nth-child(3) { animation-delay: 0.7s; }
+@keyframes lantern-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.report-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.report-progress-phase {
+  font-family: "Gowun Batang", serif;
+  font-size: 1.02rem;
+  letter-spacing: 0.02em;
+  color: var(--warm-ivory);
+}
+.report-progress-pct {
+  font-family: "Gowun Batang", serif;
+  font-size: 1.35rem;
+  color: var(--royal-gold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(201, 162, 39, 0.35);
+}
+.report-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(246, 229, 190, 0.12);
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  overflow: hidden;
+}
+.report-progress-fill {
+  position: relative;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8f6f2a, var(--royal-gold) 55%, #f0d47a);
+  box-shadow: 0 0 12px rgba(201, 162, 39, 0.55);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.report-progress-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 250, 230, 0.55) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: gold-sheen 2.4s ease-in-out infinite;
+}
+@keyframes gold-sheen {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+.report-progress.is-indeterminate .report-progress-fill {
+  width: 38%;
+  animation: seek-fill 1.8s ease-in-out infinite alternate;
+}
+@keyframes seek-fill {
+  from { margin-left: 0; }
+  to { margin-left: 62%; }
+}
+.report-progress-section {
+  margin: 12px 0 0;
+  font-size: 0.92rem;
+  color: rgba(246, 229, 190, 0.92);
+  min-height: 1.3em;
+}
+.report-progress-hint {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: rgba(246, 229, 190, 0.55);
+}
+.report-progress.is-failed {
+  border-color: rgba(111, 37, 48, 0.65);
+}
+.report-progress.is-failed .report-progress-fill {
+  background: linear-gradient(90deg, #6f2530, #a03a48);
+  box-shadow: 0 0 12px rgba(111, 37, 48, 0.55);
+}
+.report-progress.is-failed .report-progress-sheen { animation: none; }
+.report-progress.is-complete .report-progress-lanterns i {
+  animation: none;
+  opacity: 1;
+  transform: scale(1.15);
+}
