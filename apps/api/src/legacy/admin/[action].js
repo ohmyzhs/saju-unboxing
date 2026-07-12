@@ -8,6 +8,7 @@ import { LEGAL_DEFAULTS } from "../_lib/legalDefaults.js";
 import { fetchBalance } from "../_lib/sajuApi.js";
 import { requestText, resolveAiRouting } from "../_lib/aiTransport.js";
 import { handleAdminPoints } from "../_lib/adminPoints.js";
+import { handleAdminDeposits } from "../_lib/adminDeposits.js";
 import { mapSupportInquiry, SUPPORT_STATUSES } from "../support.js";
 
 const BUCKET = "site-images";
@@ -25,6 +26,7 @@ export default async function handler(req, res) {
   if (action === "saju-test") return sajuTest(req, res);
   if (action === "ai-test") return aiTest(req, res);
   if (action === "points") return handleAdminPoints(req, res, getSupabase());
+  if (action === "deposits") return handleAdminDeposits(req, res, getSupabase());
   if (action === "support") return support(req, res);
   return sendJson(res, 404, { message: "관리자 경로를 찾지 못했습니다." });
 }
@@ -179,6 +181,7 @@ async function config(req, res) {
       legal: c.legal || {},
       legalDefaults: LEGAL_DEFAULTS,
       business: c.business || {},
+      bank_transfer: c.bank_transfer || {}, // 무통장입금 계좌 (비면 서버 기본값 사용)
       saju: c.saju || {}, // { base, key, productCode } — 어드민 인증 뒤에서만 노출(/api/config 에는 없음)
     });
   }
@@ -187,7 +190,7 @@ async function config(req, res) {
     if (!sb) return sendJson(res, 503, { message: "Supabase가 설정되지 않았습니다." });
     const body = await readJson(req);
     const patch = { updated_at: new Date().toISOString() };
-    ["products", "prompts", "images", "branding", "ai_model", "chat_model", "ai_routing", "legal", "business", "saju"].forEach((k) => {
+    ["products", "prompts", "images", "branding", "ai_model", "chat_model", "ai_routing", "legal", "business", "saju", "bank_transfer"].forEach((k) => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
     if (body.ai_routing !== undefined) {

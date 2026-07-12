@@ -8735,3 +8735,113 @@ label,
   opacity: 1;
   transform: scale(1.15);
 }
+
+/* ─────────────────────────────────────────────────────
+   무통장입금 충전 카드 (포인트 화면)
+   ───────────────────────────────────────────────────── */
+.deposit-area { display: grid; gap: 12px; }
+.deposit-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 26px rgba(29, 24, 16, 0.08);
+}
+.deposit-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.deposit-badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--jade-soft);
+  color: var(--jade);
+  white-space: nowrap;
+}
+.deposit-card dl { display: grid; gap: 8px; margin: 0 0 10px; }
+.deposit-card dl div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.deposit-card dt { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.deposit-card dd { margin: 0; text-align: right; font-size: 0.92rem; }
+.deposit-code {
+  font-family: "Gowun Batang", serif;
+  font-size: 1.05rem;
+  color: var(--blood-moon);
+  letter-spacing: 0.04em;
+}
+.deposit-copy {
+  border: 1px solid var(--line);
+  background: var(--hanji);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.deposit-note {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+  background: var(--jade-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.deposit-actions { display: flex; gap: 8px; }
+.deposit-method-grid { display: grid; gap: 8px; margin-bottom: 10px; }
+.deposit-method {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--hanji);
+  cursor: pointer;
+}
+.deposit-method.is-primary {
+  border-color: var(--royal-gold);
+  background: linear-gradient(160deg, rgba(201, 162, 39, 0.12), var(--hanji));
+}
+.deposit-method small { color: var(--muted); font-size: 0.78rem; }
+.deposit-form { display: grid; gap: 10px; }
+.deposit-form label { display: grid; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.deposit-form input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 1rem;
+}
+.deposit-history { display: grid; gap: 8px; }
+.deposit-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+.deposit-history-row small { color: var(--muted); margin-left: 8px; }
+.deposit-status { font-size: 0.78rem; padding: 3px 9px; border-radius: 999px; background: var(--hanji); color: var(--muted); }
+.deposit-status.is-confirmed { background: var(--jade-soft); color: var(--jade); }
+.deposit-status.is-rejected, .deposit-status.is-expired { background: rgba(111, 37, 48, 0.1); color: var(--blood-moon); }
+
+/* 어드민 무통장입금 행 */
+.deposit-admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  margin-bottom: 8px;
+}
+.deposit-admin-row small { display: block; color: var(--muted); margin-top: 3px; }
+.deposit-admin-row.is-muted { opacity: 0.85; }
+.deposit-admin-row .admin-row-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.deposit-admin-row .admin-warn { color: var(--blood-moon); }

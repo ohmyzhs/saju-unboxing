@@ -1531,8 +1531,204 @@ function renderPointsView() {
     : `<div class="empty-box">아직 포인트 내역이 없습니다.</div>`;
   if (status) status.textContent = "";
   tiers.querySelectorAll("[data-point-charge]").forEach((button) => {
-    button.addEventListener("click", () => startPointCharge(Number(button.dataset.pointCharge)));
+    button.addEventListener("click", () => chooseChargeMethod(Number(button.dataset.pointCharge)));
   });
+  refreshDeposits();
+}
+
+// ── 무통장입금(계좌이체) 충전 ──
+// 토스 심사 대기 동안의 주 결제 경로. 신청 → 입금 안내 SMS → 관리자 승인 → 포인트 지급 + 완료 SMS.
+const depositState = { requests: [], bank: null, phone: "", selectedAmount: null, loading: false, timer: null };
+
+function awaitingDeposit() {
+  return depositState.requests.find((item) => item.status === "awaiting_deposit") || null;
+}
+
+async function refreshDeposits({ silent = true } = {}) {
+  if (!runtimeSession?.user?.id || !runtimeConfig?.pointsEnabled) return;
+  try {
+    depositState.loading = !silent;
+    const result = await getJson("/api/points/deposit");
+    const hadAwaiting = Boolean(awaitingDeposit());
+    depositState.requests = result.requests || [];
+    depositState.bank = result.bank || depositState.bank;
+    depositState.phone = result.phone || depositState.phone;
+    // 승인 감지: 대기 건이 사라지고 confirmed가 생기면 잔액 갱신 + 알림.
+    if (hadAwaiting && !awaitingDeposit() && depositState.requests.some((item) => item.status === "confirmed")) {
+      showToast("입금이 확인되어 포인트 충전이 완료되었습니다!");
+      refreshPoints();
+    }
+  } catch {
+    // 목록 조회 실패는 다음 갱신에서 재시도.
+  } finally {
+    depositState.loading = false;
+    renderDepositArea();
+    scheduleDepositPolling();
+  }
+}
+
+function scheduleDepositPolling() {
+  if (depositState.timer) {
+    window.clearTimeout(depositState.timer);
+    depositState.timer = null;
+  }
+  if (!awaitingDeposit()) return;
+  depositState.timer = window.setTimeout(() => {
+    // 포인트 화면을 보고 있을 때만 폴링(백그라운드 탭 낭비 방지).
+    if (document.querySelector('.view.is-active')?.dataset.view === "points") refreshDeposits();
+    else scheduleDepositPolling();
+  }, 15000);
+}
+
+function chooseChargeMethod(amount) {
+  const tier = (runtimeConfig?.pointChargeTiers || []).find((item) => Number(item.amount) === Number(amount));
+  if (!tier || !runtimeSession?.user?.id) return;
+  if (awaitingDeposit()) {
+    showToast("입금 대기 중인 신청이 있습니다. 입금하시거나 취소 후 다시 선택해주세요.", true);
+    renderDepositArea();
+    document.querySelector("[data-deposit-area]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  depositState.selectedAmount = tier.amount;
+  renderDepositArea();
+  document.querySelector("[data-deposit-area]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function depositStatusLabel(status) {
+  return {
+    awaiting_deposit: "입금 대기",
+    confirmed: "충전 완료",
+    rejected: "거절됨",
+    expired: "기한 만료",
+    cancelled: "취소됨",
+  }[status] || status;
+}
+
+function renderDepositArea() {
+  const area = document.querySelector("[data-deposit-area]");
+  if (!area) return;
+  if (!runtimeSession?.user?.id || !runtimeConfig?.pointsEnabled) {
+    area.innerHTML = "";
+    return;
+  }
+  const waiting = awaitingDeposit();
+  const tier = (runtimeConfig?.pointChargeTiers || []).find((item) => Number(item.amount) === Number(depositState.selectedAmount));
+
+  if (waiting) {
+    const bank = depositState.bank || {};
+    area.innerHTML = `
+      <article class="deposit-card">
+        <header><b>무통장입금 대기 중</b><span class="deposit-badge">입금 확인 전</span></header>
+        <dl>
+          <div><dt>입금 계좌</dt><dd><b data-deposit-copy="${escapeHtml(`${bank.bank || ""} ${bank.account || ""}`)}">${escapeHtml(bank.bank || "")} ${escapeHtml(bank.account || "")}</b> (${escapeHtml(bank.holder || "")}) <button type="button" class="deposit-copy" data-copy-target="account">복사</button></dd></div>
+          <div><dt>입금 금액</dt><dd><b>${formatWon(waiting.amount)}</b></dd></div>
+          <div><dt>입금자명</dt><dd><b class="deposit-code">${escapeHtml(waiting.depositorCode)}</b> <button type="button" class="deposit-copy" data-copy-target="code">복사</button></dd></div>
+          <div><dt>입금 기한</dt><dd>${shortDate(waiting.expiresAt)}</dd></div>
+        </dl>
+        <p class="deposit-note">입금자명을 꼭 <b>${escapeHtml(waiting.depositorCode)}</b>으로 입력해주세요. 입금 확인 후 <b>${formatPoints(waiting.points)}</b>가 충전되고 문자로 알려드립니다.</p>
+        <div class="deposit-actions">
+          <button type="button" class="secondary-action" data-deposit-cancel="${escapeHtml(waiting.id)}">신청 취소</button>
+        </div>
+      </article>`;
+    area.querySelector("[data-copy-target='account']")?.addEventListener("click", () => copyDepositText(`${bank.bank || ""} ${bank.account || ""}`.trim()));
+    area.querySelector("[data-copy-target='code']")?.addEventListener("click", () => copyDepositText(waiting.depositorCode));
+    area.querySelector("[data-deposit-cancel]")?.addEventListener("click", (event) => cancelDeposit(event.currentTarget.dataset.depositCancel, event.currentTarget));
+    return;
+  }
+
+  if (tier) {
+    area.innerHTML = `
+      <article class="deposit-card">
+        <header><b>${formatWon(tier.amount)} → ${formatPoints(tier.points)} 충전</b><span class="deposit-badge">결제 방법 선택</span></header>
+        <div class="deposit-method-grid">
+          <button type="button" class="deposit-method is-primary" data-deposit-method="bank">
+            <b>🏦 무통장입금</b>
+            <small>계좌이체 후 관리자 확인 시 충전 · 문자 안내</small>
+          </button>
+          <button type="button" class="deposit-method" data-deposit-method="toss">
+            <b>💳 카드·간편결제</b>
+            <small>토스 심사 중 — 현재는 무통장입금을 이용해주세요</small>
+          </button>
+        </div>
+        <form class="deposit-form" data-deposit-form hidden>
+          <label>입금 안내 받을 휴대폰 번호
+            <input type="tel" inputmode="numeric" placeholder="01012345678" value="${escapeHtml(depositState.phone || "")}" data-deposit-phone required />
+          </label>
+          <button type="submit" class="primary-action">입금 계좌 안내받기</button>
+          <p class="deposit-note">신청 즉시 입금 계좌와 입금자명이 문자로 발송됩니다.</p>
+        </form>
+      </article>`;
+    area.querySelector("[data-deposit-method='bank']")?.addEventListener("click", () => {
+      const form = area.querySelector("[data-deposit-form]");
+      if (form) {
+        form.hidden = false;
+        form.querySelector("[data-deposit-phone]")?.focus();
+      }
+    });
+    area.querySelector("[data-deposit-method='toss']")?.addEventListener("click", () => startPointCharge(tier.amount));
+    area.querySelector("[data-deposit-form]")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      requestDeposit(tier.amount, area.querySelector("[data-deposit-phone]")?.value || "", event.submitter);
+    });
+    return;
+  }
+
+  const recent = depositState.requests.slice(0, 3).filter((item) => item.status !== "cancelled");
+  area.innerHTML = recent.length
+    ? `<div class="deposit-history">${recent.map((item) => `
+        <article class="deposit-history-row">
+          <div><b>${formatWon(item.amount)}</b><small>${shortDate(item.createdAt)}</small></div>
+          <span class="deposit-status is-${escapeHtml(item.status)}">${escapeHtml(depositStatusLabel(item.status))}</span>
+        </article>`).join("")}</div>`
+    : "";
+}
+
+function copyDepositText(text) {
+  if (!text) return;
+  navigator.clipboard?.writeText(text).then(
+    () => showToast("복사했습니다."),
+    () => showToast("복사에 실패했습니다. 직접 입력해주세요.", true),
+  );
+}
+
+async function requestDeposit(amount, phone, trigger) {
+  const restore = trigger?.textContent;
+  if (trigger) { trigger.disabled = true; trigger.textContent = "신청 중…"; }
+  try {
+    const result = await getJson("/api/points/deposit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount, phone }),
+    });
+    depositState.selectedAmount = null;
+    depositState.bank = result.bank || depositState.bank;
+    depositState.phone = phone;
+    await refreshDeposits();
+    showToast(result.sms === "sent"
+      ? "입금 계좌를 문자로 보내드렸습니다. 입금 확인 후 충전됩니다."
+      : "신청 완료! 문자 발송은 실패했지만 아래 카드의 계좌로 입금하시면 됩니다.");
+    trackEvent("deposit_requested", { amount });
+  } catch (error) {
+    showToast(error.message || "입금 신청에 실패했습니다.", true);
+  } finally {
+    if (trigger) { trigger.disabled = false; if (restore) trigger.textContent = restore; }
+  }
+}
+
+async function cancelDeposit(id, trigger) {
+  if (trigger) trigger.disabled = true;
+  try {
+    await getJson("/api/points/deposit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel", id }),
+    });
+    showToast("입금 신청을 취소했습니다.");
+    await refreshDeposits();
+  } catch (error) {
+    showToast(error.message || "취소하지 못했습니다.", true);
+    if (trigger) trigger.disabled = false;
+  }
 }
 
 function startPointCharge(amount) {

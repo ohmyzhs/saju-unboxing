@@ -799,6 +799,132 @@ async function loadAdminPoints() {
   }
 }
 
+// ── 무통장입금 관리 ──
+const DEPOSIT_STATUS_LABELS = {
+  awaiting_deposit: "입금 대기",
+  confirmed: "충전 완료",
+  rejected: "거절",
+  expired: "기한 만료",
+  cancelled: "취소",
+};
+
+async function loadAdminDeposits() {
+  const pendingBox = document.querySelector("[data-admin-deposits-pending]");
+  if (pendingBox) pendingBox.innerHTML = `<div class="empty-box is-loading"><span class="inline-spinner"></span>입금 신청을 불러오는 중...</div>`;
+  try {
+    const res = await window.SajuApi.fetch("/api/admin/deposits", { cache: "no-store" });
+    if (res.status === 401) return showLogin();
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "입금 신청을 불러오지 못했습니다.");
+    renderAdminDeposits(body.requests || []);
+    const form = document.querySelector("[data-deposit-bank-form]");
+    if (form && body.bank) {
+      form.bank.value = form.bank.value || body.bank.bank || "";
+      form.account.value = form.account.value || body.bank.account || "";
+      form.holder.value = form.holder.value || body.bank.holder || "";
+    }
+  } catch (error) {
+    setStatus(document.querySelector("[data-admin-deposit-status]"), error.message, "error");
+  }
+}
+
+function renderAdminDeposits(requests) {
+  const pendingBox = document.querySelector("[data-admin-deposits-pending]");
+  const historyBox = document.querySelector("[data-admin-deposits-history]");
+  if (!pendingBox || !historyBox) return;
+  const pending = requests.filter((item) => item.status === "awaiting_deposit");
+  const processed = requests.filter((item) => item.status !== "awaiting_deposit").slice(0, 30);
+  const money = (v) => `${Number(v || 0).toLocaleString("ko-KR")}원`;
+  const when = (iso) => (iso ? new Date(iso).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-");
+
+  pendingBox.innerHTML = pending.length
+    ? pending.map((item) => `
+        <article class="admin-row deposit-admin-row">
+          <div>
+            <b>${item.depositorCode}</b> · ${money(item.amount)} → ${Number(item.points).toLocaleString("ko-KR")}pt
+            <small>${item.userLabel} · ${item.phone} · 신청 ${when(item.createdAt)} · 기한 ${when(item.expiresAt)}</small>
+            ${(item.notifyLog || []).some((log) => !log.ok) ? `<small class="admin-warn">⚠ 문자 발송 실패 이력 있음</small>` : ""}
+          </div>
+          <div class="admin-row-actions">
+            <button type="button" class="primary-action" data-deposit-confirm="${item.id}">입금 확인</button>
+            <button type="button" class="secondary-action" data-deposit-reject="${item.id}">거절</button>
+          </div>
+        </article>`).join("")
+    : `<div class="empty-box">입금 대기 중인 신청이 없습니다.</div>`;
+
+  historyBox.innerHTML = processed.length
+    ? processed.map((item) => `
+        <article class="admin-row deposit-admin-row is-muted">
+          <div>
+            <b>${item.depositorCode}</b> · ${money(item.amount)}
+            <small>${item.userLabel} · ${DEPOSIT_STATUS_LABELS[item.status] || item.status} · ${when(item.confirmedAt || item.createdAt)}${item.memo ? ` · ${item.memo}` : ""}</small>
+          </div>
+          <span class="deposit-status is-${item.status}">${DEPOSIT_STATUS_LABELS[item.status] || item.status}</span>
+        </article>`).join("")
+    : `<div class="empty-box">처리 이력이 없습니다.</div>`;
+
+  pendingBox.querySelectorAll("[data-deposit-confirm]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = pending.find((row) => row.id === button.dataset.depositConfirm);
+      if (!item) return;
+      if (!window.confirm(`${item.depositorCode} · ${money(item.amount)} 입금을 확인했습니까?\n승인 시 ${Number(item.points).toLocaleString("ko-KR")}pt가 즉시 지급되고 완료 문자가 발송됩니다.`)) return;
+      processAdminDeposit(item.id, "confirm", button);
+    });
+  });
+  pendingBox.querySelectorAll("[data-deposit-reject]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const memo = window.prompt("거절 사유(고객 문자에는 표시되지 않고 내부 기록용):", "입금 미확인");
+      if (memo === null) return;
+      processAdminDeposit(button.dataset.depositReject, "reject", button, memo);
+    });
+  });
+}
+
+async function processAdminDeposit(id, action, trigger, memo = "") {
+  const status = document.querySelector("[data-admin-deposit-status]");
+  if (trigger) trigger.disabled = true;
+  try {
+    const res = await window.SajuApi.fetch("/api/admin/deposits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, memo }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "처리에 실패했습니다.");
+    setStatus(status, action === "confirm"
+      ? `충전 완료 (잔액 ${Number(body.balance || 0).toLocaleString("ko-KR")}pt)${body.sms === "sent" ? " · 완료 문자 발송됨" : " · ⚠ 문자 발송 실패"}`
+      : "거절 처리했습니다.", "ok");
+    loadAdminDeposits();
+  } catch (error) {
+    setStatus(status, error.message, "error");
+    if (trigger) trigger.disabled = false;
+  }
+}
+
+document.querySelector("[data-deposit-bank-form]")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector("[data-deposit-bank-status]");
+  try {
+    const res = await window.SajuApi.fetch("/api/admin/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bank_transfer: {
+          bank: form.bank.value.trim(),
+          account: form.account.value.trim(),
+          holder: form.holder.value.trim(),
+        },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "저장에 실패했습니다.");
+    setStatus(status, "입금 계좌를 저장했습니다.", "ok");
+  } catch (error) {
+    setStatus(status, error.message, "error");
+  }
+});
+
 const ADMIN_SUPPORT_STATUS = { received: "접수", in_progress: "확인 중", answered: "답변 완료", closed: "종료" };
 const ADMIN_SUPPORT_CATEGORY = { error: "오류", refund: "환불", general: "일반" };
 
@@ -1000,6 +1126,7 @@ document.querySelectorAll("[data-admin-tab]").forEach((tab) => {
     document.querySelector(".admin-sidebar")?.classList.remove("nav-open");
     if (tab.dataset.adminTab === "customers") loadAdminPoints();
     if (tab.dataset.adminTab === "support") loadAdminSupport();
+    if (tab.dataset.adminTab === "deposits") loadAdminDeposits();
     window.scrollTo({ top: 0 });
   });
 });

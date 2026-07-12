@@ -987,3 +987,28 @@ insert into site_config (id) values (1) on conflict (id) do nothing;
 
 -- 끝. (이미지 업로드용 Storage 버킷 'site-images' 는 앱이 자동 생성하므로 별도 SQL 불필요)
 -- RLS가 필요하면: alter table <테이블> enable row level security; + 정책 직접 추가.
+
+-- ─────────────────────────────────────────────────────
+-- 7) 무통장입금(계좌이체) 포인트 충전 신청
+--    관리자가 은행 입금 확인 후 승인하면 adjust_points로 포인트가 지급된다.
+-- ─────────────────────────────────────────────────────
+create table if not exists point_deposit_requests (
+  id text primary key,
+  user_id uuid not null,
+  amount int not null,
+  points int not null,
+  bonus int not null,
+  depositor_code text not null,
+  phone text not null,
+  status text not null default 'awaiting_deposit',
+  expires_at timestamptz not null,
+  confirmed_by text,
+  confirmed_at timestamptz,
+  memo text,
+  notify_log jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists point_deposit_requests_status_idx on point_deposit_requests (status, created_at desc);
+create index if not exists point_deposit_requests_user_idx on point_deposit_requests (user_id, created_at desc);
+alter table site_config add column if not exists bank_transfer jsonb;

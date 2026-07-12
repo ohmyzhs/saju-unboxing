@@ -1,6 +1,7 @@
 import config from "./legacy/config.js";
 import profiles from "./legacy/profiles.js";
 import orders from "./legacy/orders.js";
+import pointDeposits from "./legacy/pointDeposits.js";
 import track from "./legacy/track.js";
 import session from "./legacy/session.js";
 import support from "./legacy/support.js";
@@ -42,6 +43,7 @@ const ROUTES = new Map([
   ["/api/config", { name: "config", handler: config }],
   ["/api/profiles", { name: "profiles", handler: profiles }],
   ["/api/orders", { name: "orders", handler: orders }],
+  ["/api/points/deposit", { name: "point-deposit", handler: pointDeposits }],
   ["/api/track", { name: "track", handler: track }],
   ["/api/session", { name: "session", handler: session }],
   ["/api/support", { name: "support", handler: support }],
