@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260713-bank-deposit" />
+    <link rel="stylesheet" href="./styles.css?v=20260713-ux-refresh" />
     <script src="https://js.tosspayments.com/v2/standard" defer></script>
   </head>
   <body>
@@ -478,25 +478,43 @@
         <div class="chat-workspace" data-chat-workspace hidden>
           <div class="chat-lobby" data-chat-lobby>
           <section class="chat-credit-card">
-            <div><span>남은 질의응답권</span><strong data-chat-balance>0건</strong></div>
-            <p>질문을 보낼 때마다 1건이 차감되며, 실패하면 자동으로 돌아옵니다.</p>
-          </section>
-          <section class="chat-products-panel">
-            <header><div><small>질의응답권 구매</small><h2>필요한 만큼 먼저 충전하세요</h2></div></header>
-            <div class="chat-product-grid" data-chat-products></div>
+            <div class="chat-credit-summary">
+              <div><span>남은 질의응답권</span><strong data-chat-balance>0건</strong></div>
+              <button type="button" class="chat-store-open" data-chat-store-open>질의응답권 구매</button>
+            </div>
+            <p>질문 1개마다 1건이 사용되며, 답변 실패 시 자동 반환됩니다.</p>
           </section>
           <section class="chat-report-panel">
-            <label for="chat-report-select">상담할 리포트 선택</label>
-            <div class="chat-report-row">
-              <select id="chat-report-select" data-chat-report-select></select>
-              <button type="button" data-chat-session-create>대화 시작</button>
+            <header class="chat-section-heading">
+              <span>1</span>
+              <div><small>상담 기준 선택</small><h2>어떤 리포트로 상담할까요?</h2></div>
+            </header>
+            <input id="chat-report-select" type="hidden" data-chat-report-select />
+            <div class="chat-report-choices" role="listbox" aria-label="상담할 리포트" data-chat-report-choices></div>
+            <div class="chat-report-action">
+              <p data-chat-report-help>보관함 리포트를 고르면 전용 대화방이 만들어집니다.</p>
+              <button type="button" data-chat-session-create>이 리포트로 상담 시작</button>
             </div>
-            <p data-chat-report-help>보관함에 저장된 분석 하나를 골라 전용 대화방을 만듭니다.</p>
           </section>
           <section class="chat-history-panel">
-            <header><small>이전 상담</small><h2>대화방 다시 열기</h2></header>
+            <header class="chat-section-heading">
+              <span>2</span>
+              <div><small>상담 이어보기</small><h2>이전 상담</h2></div>
+            </header>
             <nav class="chat-session-list" aria-label="챗봇 상담 목록" data-chat-sessions></nav>
           </section>
+          </div>
+          <div class="chat-store-popover" data-chat-store aria-hidden="true" hidden>
+            <button type="button" class="chat-store-backdrop" data-chat-store-close aria-label="질의응답권 구매 닫기"></button>
+            <section class="chat-store-panel" role="dialog" aria-modal="true" aria-labelledby="chat-store-title">
+              <header>
+                <div><small>질문이 더 필요할 때</small><h2 id="chat-store-title">질의응답권 구매</h2></div>
+                <button type="button" class="chat-store-close" data-chat-store-close aria-label="닫기">×</button>
+              </header>
+              <p class="chat-store-balance">현재 남은 질문 <b data-chat-balance>0건</b></p>
+              <div class="chat-product-grid" data-chat-products aria-live="polite"></div>
+              <p class="chat-store-note">구매한 질문권은 모든 상담방에서 함께 사용할 수 있습니다.</p>
+            </section>
           </div>
           <section class="chat-conversation" data-chat-conversation hidden>
             <header class="chat-room-header">
@@ -541,7 +559,11 @@
 
       <section class="view library-view" data-view="library">
         <header class="slim-poster library-poster"><p>다시 꺼내 보는 결과</p><h1>보관함</h1></header>
-        <p class="library-retention">📌 분석 결과는 <b>생성일로부터 1개월간</b> 보관되며, 이후 자동으로 삭제됩니다. 필요하면 미리 저장(캡처)해 주세요.</p>
+        <section class="library-vault-intro">
+          <div><small>나의 운세 서고</small><strong data-library-count>보관된 리포트 0권</strong></div>
+          <p>완성된 분석을 다시 읽고, 이어서 챗봇 상담을 시작할 수 있습니다.</p>
+        </section>
+        <p class="library-retention">분석 결과는 <b>생성일로부터 1개월간</b> 안전하게 보관됩니다.</p>
         <div class="library-filters" data-library-filters><button class="is-active" data-library-filter="all">전체</button><button data-library-filter="saju-analysis">사주</button><button data-library-filter="compatibility">궁합</button><button data-library-filter="cycle">대운</button><button data-library-filter="auspicious-date">택일</button></div>
         <section class="archive-list" data-archive-list></section>
       </section>
@@ -771,6 +793,6 @@
     <script src="./chat-stream.js"></script>
     <script src="./chat-markdown.js?v=20260712-report-wait"></script>
     <script src="./chat-report-preview.js"></script>
-    <script src="./app.js?v=20260713-bank-deposit"></script>
+    <script src="./app.js?v=20260713-ux-refresh"></script>
   </body>
 </html>

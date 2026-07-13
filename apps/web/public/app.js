@@ -1,6 +1,12 @@
 // ---------- DOM references ----------
 const views = [...document.querySelectorAll("[data-view]")];
 const bottomButtons = [...document.querySelectorAll(".bottom-nav [data-view-target]")];
+const viewNames = new Set(views.map((view) => view.dataset.view).filter(Boolean));
+const NAVIGATION_VIEW_KEY = "sajuView";
+const NAVIGATION_OVERLAY_KEY = "sajuOverlay";
+const NAVIGATION_PRODUCT_KEY = "sajuProductId";
+const NAVIGATION_CHAT_SESSION_KEY = "sajuChatSessionId";
+const NAVIGATION_OVERLAYS = new Set(["member", "mypage", "chat-report", "chat-store"]);
 const filterButtons = [...document.querySelectorAll("[data-filter]")];
 const productCards = [...document.querySelectorAll(".product-card")];
 const slides = [...document.querySelectorAll(".banner-slide")];
@@ -197,9 +203,14 @@ let activeDailyProfile = null;
 let activeDailyMood = "";
 let analysisDraftSync = Promise.resolve();
 let chatReportPreviewHideTimer = null;
+let chatStoreHideTimer = null;
+let chatCatalogPromise = null;
 let chatState = {
   catalog: null,
+  catalogLoading: false,
+  catalogError: "",
   sessions: [],
+  selectedReportId: null,
   activeSessionId: null,
   detail: null,
   stream: null,
@@ -303,10 +314,110 @@ function trackEvent(event, metadata = {}, options = {}) {
 }
 
 // ---------- View routing ----------
-function showView(nextView) {
+function viewFromNavigation(state = history.state) {
+  const pathView = location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+  if (["terms", "privacy", "refund"].includes(pathView)) return pathView;
+  if (/^payments\/(success|fail)$/.test(pathView)) return "payment";
+
+  const hashView = new URLSearchParams(location.hash.replace(/^#/, "")).get("view");
+  if (viewNames.has(hashView)) return hashView;
+
+  const stateView = state?.[NAVIGATION_VIEW_KEY];
+  return viewNames.has(stateView) ? stateView : "home";
+}
+
+function navigationStateFor(view, extras = {}) {
+  const state = history.state && typeof history.state === "object" ? { ...history.state } : {};
+  state[NAVIGATION_VIEW_KEY] = viewNames.has(view) ? view : "home";
+  delete state[NAVIGATION_OVERLAY_KEY];
+  delete state[NAVIGATION_PRODUCT_KEY];
+  delete state[NAVIGATION_CHAT_SESSION_KEY];
+  if (extras.overlay && NAVIGATION_OVERLAYS.has(extras.overlay)) {
+    state[NAVIGATION_OVERLAY_KEY] = extras.overlay;
+  }
+  if (extras.productId) state[NAVIGATION_PRODUCT_KEY] = extras.productId;
+  if (extras.chatSessionId) state[NAVIGATION_CHAT_SESSION_KEY] = extras.chatSessionId;
+  return state;
+}
+
+function navigationUrlFor(view) {
+  const search = location.search;
+  if (["terms", "privacy", "refund"].includes(view)) return `/${view}${search}`;
+  const hash = view === "home" ? "" : `#view=${encodeURIComponent(view)}`;
+  return `/${search}${hash}`;
+}
+
+function initializeNavigationHistory() {
+  const view = viewFromNavigation();
+  const existing = history.state && typeof history.state === "object" ? history.state : {};
+  const state = navigationStateFor(view, {
+    overlay: existing[NAVIGATION_OVERLAY_KEY],
+    productId: existing[NAVIGATION_PRODUCT_KEY],
+    chatSessionId: view === "chat" ? existing[NAVIGATION_CHAT_SESSION_KEY] : null,
+  });
+  history.replaceState(state, "", location.href);
+  return state;
+}
+
+function updateViewHistory(nextView, historyMode = "push", extras = {}) {
+  if (historyMode === "none") return;
+  const state = history.state && typeof history.state === "object" ? history.state : {};
+  const hasOverlay = NAVIGATION_OVERLAYS.has(state[NAVIGATION_OVERLAY_KEY]);
+  const currentStateView = viewFromNavigation(state);
+  const sameChatSession = (state[NAVIGATION_CHAT_SESSION_KEY] || null) === (extras.chatSessionId || null);
+  const sameDestination = currentStateView === nextView && !hasOverlay && sameChatSession;
+  if (sameDestination && historyMode !== "replace") return;
+
+  const nextState = navigationStateFor(nextView, extras);
+  const method = historyMode === "replace" || hasOverlay ? "replaceState" : "pushState";
+  history[method](nextState, "", navigationUrlFor(nextView));
+}
+
+function replaceNavigationUrl(url, view = currentViewName) {
+  const chatSessionId = view === "chat" ? history.state?.[NAVIGATION_CHAT_SESSION_KEY] : null;
+  history.replaceState(navigationStateFor(view, { chatSessionId }), "", url);
+}
+
+function pushOverlayHistory(overlay, extras = {}) {
+  if (!NAVIGATION_OVERLAYS.has(overlay)) return;
+  const state = history.state && typeof history.state === "object" ? history.state : {};
+  if (state[NAVIGATION_OVERLAY_KEY] === overlay) return;
+  const nextState = {
+    ...state,
+    [NAVIGATION_VIEW_KEY]: viewFromNavigation(state),
+    [NAVIGATION_OVERLAY_KEY]: overlay,
+  };
+  if (extras.productId) nextState[NAVIGATION_PRODUCT_KEY] = extras.productId;
+  history.pushState(nextState, "", location.href);
+}
+
+function closeOverlayHistory(overlay, historyMode) {
+  if (historyMode !== "back") return;
+  if (history.state?.[NAVIGATION_OVERLAY_KEY] === overlay) history.back();
+}
+
+function updateChatSessionHistory(sessionId, historyMode = "push") {
+  if (currentViewName !== "chat") return;
+  const currentSessionId = history.state?.[NAVIGATION_CHAT_SESSION_KEY] || null;
+  const nextSessionId = sessionId || null;
+  if (currentSessionId === nextSessionId) return;
+  const state = navigationStateFor("chat", { chatSessionId: nextSessionId });
+  history[historyMode === "replace" ? "replaceState" : "pushState"](state, "", navigationUrlFor("chat"));
+}
+
+function showView(nextView, options = {}) {
+  if (!viewNames.has(nextView)) return;
+  const historyMode = options.historyMode || "push";
+  const viewChanged = currentViewName !== nextView;
+  const hasChatSessionOption = Object.prototype.hasOwnProperty.call(options, "chatSessionId");
+  const nextChatSessionId = nextView === "chat"
+    ? (hasChatSessionOption ? options.chatSessionId : null)
+    : null;
+  updateViewHistory(nextView, historyMode, { chatSessionId: nextChatSessionId });
+
   if (currentViewName === "chat" && nextView !== "chat") {
     stopChatStream();
-    closeChatReportPreview({ immediate: true, restoreFocus: false });
+    closeChatReportPreview({ immediate: true, restoreFocus: false, historyMode: "none" });
   }
   if (currentViewName === "profile" && nextView !== "profile" && profileReturnContext) {
     profileReturnContext = null;
@@ -335,8 +446,9 @@ function showView(nextView) {
   // 무료운세 FAB는 모든 화면에서 항상 고정 노출(하단 내비 일관성)
   const fab = document.querySelector(".fortune-fab");
   if (fab) fab.classList.remove("fab-hidden");
-  closeMemberModal();
-  closeMypage();
+  closeMemberModal({ historyMode: "none" });
+  closeMypage({ historyMode: "none" });
+  closeChatStore({ historyMode: "none" });
   if (["library", "people", "orders", "points"].includes(nextView)) ensureAccountDataFresh(nextView);
   if (nextView === "library") renderArchive();
   if (nextView === "people") renderPeople();
@@ -349,9 +461,37 @@ function showView(nextView) {
     renderPrimaryProfileLabel();
     renderCalendar();
   }
-  if (nextView === "chat") loadChatView();
+  if (nextView === "chat") {
+    const preferredSessionId = hasChatSessionOption
+      ? options.chatSessionId
+      : history.state?.[NAVIGATION_CHAT_SESSION_KEY] || null;
+    if (viewChanged || (chatState.activeSessionId || null) !== (preferredSessionId || null)) {
+      loadChatView(preferredSessionId || null);
+    }
+  }
   if (nextView === "followup") renderFollowup();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: options.scrollBehavior || "smooth" });
+}
+
+function restoreNavigationState(state = history.state) {
+  const nextView = viewFromNavigation(state);
+  const chatSessionId = nextView === "chat" ? state?.[NAVIGATION_CHAT_SESSION_KEY] || null : null;
+  showView(nextView, {
+    historyMode: "none",
+    scrollBehavior: "auto",
+    chatSessionId,
+  });
+
+  const overlay = state?.[NAVIGATION_OVERLAY_KEY];
+  if (overlay === "member") {
+    openMemberModal(state[NAVIGATION_PRODUCT_KEY] || selectedProductId, { historyMode: "none" });
+  } else if (overlay === "mypage") {
+    openMypage({ historyMode: "none" });
+  } else if (overlay === "chat-report") {
+    openChatReportPreview({ historyMode: "none" });
+  } else if (overlay === "chat-store") {
+    openChatStore({ historyMode: "none" });
+  }
 }
 
 function showSlide(nextSlide) {
@@ -1006,15 +1146,19 @@ async function signupWithEmail(event) {
 }
 
 // ---------- 마이페이지 드로어 ----------
-function openMypage() {
+function openMypage({ historyMode = "push" } = {}) {
   if (!mypageDrawer) return;
   mypageDrawer.removeAttribute("hidden");
   requestAnimationFrame(() => mypageDrawer.classList.add("is-open"));
+  if (historyMode === "push") pushOverlayHistory("mypage");
 }
-function closeMypage() {
+function closeMypage({ historyMode = "back" } = {}) {
   if (!mypageDrawer) return;
   mypageDrawer.classList.remove("is-open");
-  setTimeout(() => mypageDrawer.setAttribute("hidden", ""), 240);
+  setTimeout(() => {
+    if (!mypageDrawer.classList.contains("is-open")) mypageDrawer.setAttribute("hidden", "");
+  }, 240);
+  closeOverlayHistory("mypage", historyMode);
 }
 
 // ---------- 사주 인원 관리 ----------
@@ -1084,7 +1228,13 @@ function renderOrders() {
     list.innerHTML = `<div class="orders-empty">아직 결제 내역이 없어요.<br />상품을 선택해 분석을 결제하면 여기에 기록됩니다.</div>`;
     return;
   }
-  list.innerHTML = orders
+  const completed = orders.filter((order) => String(order.status || "").includes("완료"));
+  const completedTotal = completed.reduce((sum, order) => sum + Number(window.OrderRecovery.totalAmount(order) || 0), 0);
+  const attentionCount = orders.filter((order) => {
+    const status = String(order.status || "");
+    return !status.includes("완료") || order.reportStatus === "failed";
+  }).length;
+  const rows = orders
     .map((o) => {
       const st = String(o.status || "");
       const cls = st.includes("완료") ? "ok" : st.includes("실패") || st.includes("오류") ? "fail" : "pending";
@@ -1105,18 +1255,20 @@ function renderOrders() {
         actions.viewReport ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}">${o.reportStatus === "complete" ? "리포트 보기" : "생성 상태 확인"}</button>` : "",
         actions.retryReport && purchase ? `<button type="button" data-order-report="${escapeHtml(o.orderId)}" data-retry="true">리포트 다시 생성</button>` : "",
       ].filter(Boolean).join("");
+      const productMark = String(o.productName || "결").trim().slice(0, 1);
       return `
         <article class="order-card">
           <button class="order-card-summary" type="button" data-order-detail="${escapeHtml(o.orderId)}" aria-expanded="false">
-            <header>
+            <span class="order-card-mark" aria-hidden="true">${escapeHtml(productMark)}</span>
+            <span class="order-card-copy">
               <b>${escapeHtml(o.productName || "상품")}</b>
-              <span class="order-amount">${escapeHtml(window.OrderRecovery.paymentSummary(o))}</span>
-            </header>
-            <div class="order-meta">
-              <span>${escapeHtml(o.profileName || "-")} · ${shortDate(when)}</span>
-              <span class="order-status ${cls}">${escapeHtml(st || "진행 중")}</span>
-            </div>
-            ${reportLabel}
+              <small>${escapeHtml(o.profileName || "-")} · ${shortDate(when)}</small>
+            </span>
+            <span class="order-card-payment">
+              <b class="order-amount">${escapeHtml(window.OrderRecovery.paymentSummary(o))}</b>
+              <span class="order-card-badges"><span class="order-status ${cls}">${escapeHtml(st || "진행 중")}</span>${reportLabel}</span>
+            </span>
+            <i class="order-card-chevron" aria-hidden="true">⌄</i>
           </button>
           <div class="order-detail" data-order-panel="${escapeHtml(o.orderId)}" hidden>
             <dl>
@@ -1133,6 +1285,13 @@ function renderOrders() {
         </article>`;
     })
     .join("");
+  list.innerHTML = `
+    <section class="orders-overview" aria-label="결제 내역 요약">
+      <div><small>전체 기록</small><strong>${orders.length.toLocaleString("ko-KR")}건</strong></div>
+      <div><small>결제 완료 금액</small><strong>${formatWon(completedTotal)}</strong></div>
+      <div class="${attentionCount ? "needs-attention" : ""}"><small>확인할 내역</small><strong>${attentionCount.toLocaleString("ko-KR")}건</strong></div>
+    </section>
+    <div class="order-ledger">${rows}</div>`;
   list.querySelectorAll("[data-order-detail]").forEach((button) => {
     button.addEventListener("click", () => {
       const panel = list.querySelector(`[data-order-panel="${CSS.escape(button.dataset.orderDetail)}"]`);
@@ -2227,7 +2386,7 @@ function renderAuthNotice() {
   if (!authResult) return;
   const reason = params.get("reason");
   pendingAuthNotice = { result: authResult, reason };
-  history.replaceState(null, "", "/");
+  replaceNavigationUrl("/");
   if (authResult === "kakao-ok") {
     showToast("카카오 로그인 세션을 확인하는 중입니다.");
     return;
@@ -2616,7 +2775,7 @@ profileForm?.addEventListener("submit", (event) => {
 });
 
 // ---------- Member modal ----------
-function openMemberModal(productId) {
+function openMemberModal(productId, { historyMode = "push" } = {}) {
   selectedProductId = productId;
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
   const profiles = getProfiles();
@@ -2644,13 +2803,14 @@ function openMemberModal(productId) {
   memberModal?.classList.add("is-open");
   memberModal?.removeAttribute("hidden");
   memberModal?.setAttribute("aria-hidden", "false");
+  if (historyMode === "push") pushOverlayHistory("member", { productId });
 
   memberModal?.querySelectorAll("[data-select-profile]").forEach((button) => {
     button.addEventListener("click", () => {
       const profile = getProfiles().find((item) => item.id === button.dataset.selectProfile);
       if (!profile) return;
       if (productId === "daily-fortune") {
-        closeMemberModal();
+        closeMemberModal({ historyMode: "none" });
         startDailyFortune(profile);
         return;
       }
@@ -2659,10 +2819,11 @@ function openMemberModal(productId) {
   });
 }
 
-function closeMemberModal() {
+function closeMemberModal({ historyMode = "back" } = {}) {
   memberModal?.classList.remove("is-open");
   memberModal?.setAttribute("aria-hidden", "true");
   memberModal?.setAttribute("hidden", "");
+  closeOverlayHistory("member", historyMode);
 }
 
 // ---------- Checkout ----------
@@ -2693,7 +2854,7 @@ function prepareCheckout(productId, profile, partner = null) {
     targetYear: productId === "yearly-fortune" ? selectedYearlyTarget() : null,
     calendarPick: productId === "auspicious-date" ? selectedCalendarPick() : null,
   };
-  closeMemberModal();
+  closeMemberModal({ historyMode: "none" });
   trackEvent("checkout_view", {
     productId,
     productName: product.name,
@@ -3830,9 +3991,23 @@ function startAnalysis(productId, profile, meta = {}) {
 }
 
 // ---------- Archive ----------
+function archivePresentation(productId) {
+  const presentations = {
+    "saju-analysis": { mark: "命", label: "사주 원국" },
+    compatibility: { mark: "緣", label: "관계 궁합" },
+    cycle: { mark: "運", label: "대운 흐름" },
+    "yearly-fortune": { mark: "年", label: "연도 운세" },
+    "auspicious-date": { mark: "吉", label: "택일 기록" },
+    "mz-saju": { mark: "祕", label: "심층 운명" },
+  };
+  return presentations[productId] || { mark: "書", label: "운세 리포트" };
+}
+
 function renderArchive() {
   if (!archiveList) return;
   const archive = pruneArchiveRetention(); // 1개월 지난 분석은 제거하고 남은 것만
+  const count = document.querySelector("[data-library-count]");
+  if (count) count.textContent = `보관된 리포트 ${archive.length.toLocaleString("ko-KR")}권`;
   if (!archive.length && accountLoading()) {
     archiveList.innerHTML = `<div class="empty-box is-loading"><span class="inline-spinner"></span>보관함을 불러오는 중…</div>`;
     return;
@@ -3850,16 +4025,27 @@ function renderArchive() {
   }
   archiveList.innerHTML = filtered
     .map(
-      (item) => `
+      (item) => {
+        const presentation = archivePresentation(item.productId);
+        const failed = item.generationStatus === "failed";
+        const generating = item.generationStatus === "generating";
+        const status = failed ? "일부 생성 실패 · 재시도 가능" : generating ? "생성 중" : item.paymentStatus || "결제 완료";
+        const statusClass = failed ? "is-failed" : generating ? "is-generating" : "is-complete";
+        return `
         <button type="button" class="archive-card" data-archive-id="${escapeHtml(item.id)}">
-          <header>
-            <span class="archive-product">${escapeHtml(item.productName)}</span>
-            <span class="archive-status">${escapeHtml(item.generationStatus === "failed" ? "일부 생성 실패 · 재시도 가능" : item.generationStatus === "generating" ? "생성 중" : item.paymentStatus || "결제 완료")}</span>
-          </header>
-          <b>${escapeHtml(item.profileName)}님</b>
-          <small>${shortDate(item.createdAt)}</small>
+          <span class="archive-card-seal" aria-hidden="true">${presentation.mark}</span>
+          <span class="archive-card-body">
+            <span class="archive-card-top">
+              <span class="archive-product">${escapeHtml(item.productName || presentation.label)}</span>
+              <span class="archive-status ${statusClass}">${escapeHtml(status)}</span>
+            </span>
+            <b>${escapeHtml(item.profileName)}님의 리포트</b>
+            <small>${shortDate(item.createdAt)} 보관</small>
+            <span class="archive-card-foot"><span>${presentation.label}</span><strong>리포트 열기 <i aria-hidden="true">›</i></strong></span>
+          </span>
         </button>
-      `,
+      `;
+      },
     )
     .join("");
 
@@ -3953,7 +4139,7 @@ async function confirmReturnedPayment() {
       url.searchParams.get("message") || "다시 시도해주세요.",
       "상품 선택 화면에서 다시 결제할 수 있습니다.",
     );
-    history.replaceState(null, "", "/");
+    replaceNavigationUrl("/");
     return;
   }
 
@@ -3972,7 +4158,7 @@ async function confirmReturnedPayment() {
       body: JSON.stringify({ paymentKey, orderId, amount }),
     });
     trackEvent("payment_success", { orderId, amount: Number(amount), productId: pending?.productId });
-    history.replaceState(null, "", "/"); // 주소창을 즉시 홈으로 정리(새로고침/로고 클릭 시 갇힘 방지)
+    replaceNavigationUrl("/"); // 주소창을 즉시 홈으로 정리(새로고침/로고 클릭 시 갇힘 방지)
 
     upsertOrder({
       orderId,
@@ -4056,7 +4242,7 @@ async function confirmReturnedPayment() {
         const purchase = getPendingPurchase();
         if (!purchase) return; // 이미 시작됨 → 중복 분석 방지
         clearPendingPurchase();
-        history.replaceState(null, "", "/");
+        replaceNavigationUrl("/");
         startAnalysis(purchase.productId, purchase.profile, {
           orderId,
           paymentStatus: "결제 완료",
@@ -4084,7 +4270,7 @@ async function confirmReturnedPayment() {
       amount: Number(amount),
       status: "승인 오류",
     });
-    history.replaceState(null, "", "/"); // 실패해도 주소창은 홈으로(새로고침 시 재확인 루프 방지)
+    replaceNavigationUrl("/"); // 실패해도 주소창은 홈으로(새로고침 시 재확인 루프 방지)
     setPaymentResult(
       "결제 확인에 실패했습니다",
       error.message,
@@ -4431,10 +4617,15 @@ function stopChatStream() {
 
 function resetChatState() {
   stopChatStream();
-  closeChatReportPreview({ immediate: true, restoreFocus: false });
+  closeChatReportPreview({ immediate: true, restoreFocus: false, historyMode: "none" });
+  closeChatStore({ historyMode: "none" });
+  chatCatalogPromise = null;
   chatState = {
     catalog: null,
+    catalogLoading: false,
+    catalogError: "",
     sessions: [],
+    selectedReportId: null,
     activeSessionId: null,
     detail: null,
     stream: null,
@@ -4482,7 +4673,7 @@ function renderChatReportPreview() {
   }
 }
 
-function openChatReportPreview() {
+function openChatReportPreview({ historyMode = "push" } = {}) {
   const overlay = document.querySelector("[data-chat-report-preview]");
   if (!overlay || !chatState.detail?.report) return;
   if (chatReportPreviewHideTimer) window.clearTimeout(chatReportPreviewHideTimer);
@@ -4493,9 +4684,10 @@ function openChatReportPreview() {
     overlay.classList.add("is-open");
     overlay.querySelector(".chat-report-preview-close")?.focus();
   });
+  if (historyMode === "push") pushOverlayHistory("chat-report");
 }
 
-function closeChatReportPreview({ immediate = false, restoreFocus = true } = {}) {
+function closeChatReportPreview({ immediate = false, restoreFocus = true, historyMode = "back" } = {}) {
   const overlay = document.querySelector("[data-chat-report-preview]");
   if (!overlay) return;
   if (chatReportPreviewHideTimer) window.clearTimeout(chatReportPreviewHideTimer);
@@ -4508,6 +4700,39 @@ function closeChatReportPreview({ immediate = false, restoreFocus = true } = {})
   if (immediate) finish();
   else chatReportPreviewHideTimer = window.setTimeout(finish, 300);
   if (restoreFocus && !immediate) document.querySelector("[data-chat-report-preview-open]")?.focus();
+  closeOverlayHistory("chat-report", historyMode);
+}
+
+function openChatStore({ historyMode = "push" } = {}) {
+  const overlay = document.querySelector("[data-chat-store]");
+  if (!overlay) return;
+  if (chatStoreHideTimer) window.clearTimeout(chatStoreHideTimer);
+  renderChatState();
+  overlay.hidden = false;
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("chat-store-open");
+  window.requestAnimationFrame(() => {
+    overlay.classList.add("is-open");
+    overlay.querySelector(".chat-store-close")?.focus();
+  });
+  if (historyMode === "push") pushOverlayHistory("chat-store");
+}
+
+function closeChatStore({ immediate = false, restoreFocus = true, historyMode = "back" } = {}) {
+  const overlay = document.querySelector("[data-chat-store]");
+  if (!overlay) return;
+  if (chatStoreHideTimer) window.clearTimeout(chatStoreHideTimer);
+  overlay.classList.remove("is-open");
+  overlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("chat-store-open");
+  const finish = () => {
+    if (!overlay.classList.contains("is-open")) overlay.hidden = true;
+    chatStoreHideTimer = null;
+  };
+  if (immediate) finish();
+  else chatStoreHideTimer = window.setTimeout(finish, 260);
+  if (restoreFocus && !immediate) document.querySelector("[data-chat-store-open]")?.focus();
+  closeOverlayHistory("chat-store", historyMode);
 }
 
 function activeChatRun() {
@@ -4567,43 +4792,77 @@ function renderChatState() {
   const productsHost = document.querySelector("[data-chat-products]");
   if (productsHost) {
     const products = chatState.catalog?.products || [];
-    productsHost.innerHTML = products.length
-      ? products.map((product) => {
+    if (products.length) {
+      productsHost.innerHTML = products.map((product) => {
           const discounted = Number(product.discountRate || 0) > 0;
           return `
             <button class="chat-credit-product" type="button" data-chat-buy="${escapeHtml(product.id)}">
+              <i aria-hidden="true">${escapeHtml(String(product.questions || "Q"))}</i>
               <b>${escapeHtml(product.name)}</b>
               <span>${escapeHtml(formatWon(product.amount))}</span>
               ${discounted ? `<del>${escapeHtml(formatWon(product.regularAmount))}</del><small>${escapeHtml(product.discountRate)}% 할인</small>` : `<small>건당 500원</small>`}
             </button>`;
-        }).join("")
-      : `<div class="empty-box">구매 가능한 질의응답권을 불러오지 못했습니다.</div>`;
+        }).join("");
+    } else if (chatState.catalogLoading || !chatState.catalogError) {
+      productsHost.innerHTML = Array.from({ length: 4 }, () => `
+        <div class="chat-product-skeleton" aria-hidden="true"><i></i><b></b><span></span></div>`).join("");
+    } else {
+      productsHost.innerHTML = `<div class="chat-store-error">
+        <p>${escapeHtml(chatState.catalogError)}</p>
+        <button type="button" data-chat-catalog-retry>다시 불러오기</button>
+      </div>`;
+    }
   }
 
   const reports = followupArchive();
   const reportSelect = document.querySelector("[data-chat-report-select]");
+  const reportChoices = document.querySelector("[data-chat-report-choices]");
   const createButton = document.querySelector("[data-chat-session-create]");
   const reportHelp = document.querySelector("[data-chat-report-help]");
-  if (reportSelect) {
-    reportSelect.innerHTML = reports.length
-      ? reports.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.productName)} · ${escapeHtml(item.profileName)} (${escapeHtml(shortDate(item.createdAt))})</option>`).join("")
-      : `<option value="">상담 가능한 보관함 리포트가 없습니다</option>`;
+  const selectedReportId = reports.some((item) => item.id === chatState.selectedReportId)
+    ? chatState.selectedReportId
+    : reports[0]?.id || null;
+  chatState.selectedReportId = selectedReportId;
+  if (reportSelect) reportSelect.value = selectedReportId || "";
+  if (reportChoices) {
+    reportChoices.innerHTML = reports.length
+      ? reports.map((item) => {
+          const selected = item.id === selectedReportId;
+          const initial = String(item.productName || "리포트").trim().slice(0, 1);
+          return `<button type="button" class="chat-report-choice${selected ? " is-selected" : ""}"
+            role="option" aria-selected="${selected}" data-chat-report-choice="${escapeHtml(item.id)}">
+            <span class="chat-report-choice-mark" aria-hidden="true">${escapeHtml(initial)}</span>
+            <span class="chat-report-choice-copy">
+              <b>${escapeHtml(item.productName || "사주 리포트")}</b>
+              <small>${escapeHtml(item.profileName || "프로필")} · ${escapeHtml(shortDate(item.createdAt))}</small>
+            </span>
+            <i aria-hidden="true">${selected ? "✓" : "›"}</i>
+          </button>`;
+        }).join("")
+      : `<div class="chat-report-empty"><b>상담할 리포트가 아직 없어요</b><p>유료 리포트를 완성하면 이곳에서 바로 선택할 수 있습니다.</p><button type="button" data-chat-home>리포트 만들러 가기</button></div>`;
   }
   if (createButton) createButton.disabled = !reports.length;
   if (reportHelp) {
     reportHelp.textContent = reports.length
-      ? "보관함 리포트 하나마다 별도의 대화방이 만들어집니다."
+      ? `${reports.length}개의 리포트 중 하나를 선택했습니다.`
       : "먼저 유료 사주 리포트를 생성해 보관함에 저장해주세요.";
   }
 
   const sessionsHost = document.querySelector("[data-chat-sessions]");
   if (sessionsHost) {
     sessionsHost.innerHTML = chatState.sessions.length
-      ? chatState.sessions.map((session) => `
-          <button type="button" class="${session.id === chatState.activeSessionId ? "is-active" : ""}" data-chat-session-id="${escapeHtml(session.id)}">
-            ${escapeHtml(session.title)}${session.latestRun?.status === "running" || session.latestRun?.status === "queued" ? " · 답변 중" : ""}
-          </button>`).join("")
-      : "";
+      ? chatState.sessions.map((session) => {
+          const runStatus = session.latestRun?.status;
+          const isRunning = runStatus === "running" || runStatus === "queued";
+          const statusText = isRunning ? "답변 작성 중" : runStatus === "failed" ? "최근 답변 실패" : "이어보기";
+          return `<button type="button" class="chat-session-card${session.id === chatState.activeSessionId ? " is-active" : ""}" data-chat-session-id="${escapeHtml(session.id)}">
+            <span class="chat-session-mark" aria-hidden="true">談</span>
+            <span class="chat-session-copy"><b>${escapeHtml(session.title || "AI 상담")}</b><small>${escapeHtml(shortDate(session.lastMessageAt || session.updatedAt || session.createdAt))}</small></span>
+            <span class="chat-session-state${isRunning ? " is-running" : runStatus === "failed" ? " is-failed" : ""}">${statusText}</span>
+            <i aria-hidden="true">›</i>
+          </button>`;
+        }).join("")
+      : `<div class="chat-session-empty"><b>아직 이전 상담이 없습니다</b><p>위에서 리포트를 선택해 첫 상담을 시작해보세요.</p></div>`;
   }
 
   const conversation = document.querySelector("[data-chat-conversation]");
@@ -4654,6 +4913,28 @@ function renderChatState() {
   }
 }
 
+async function loadChatCatalog({ force = false } = {}) {
+  if (!runtimeSession?.user?.id) return null;
+  if (chatState.catalog && !force) return chatState.catalog;
+  if (chatCatalogPromise && !force) return chatCatalogPromise;
+  chatState.catalogLoading = true;
+  chatState.catalogError = "";
+  renderChatState();
+  chatCatalogPromise = getJson("/api/chat/catalog");
+  try {
+    const catalog = await chatCatalogPromise;
+    chatState.catalog = catalog;
+    return catalog;
+  } catch (error) {
+    chatState.catalogError = error.message || "질의응답권 상품을 불러오지 못했습니다.";
+    throw error;
+  } finally {
+    chatState.catalogLoading = false;
+    chatCatalogPromise = null;
+    renderChatState();
+  }
+}
+
 async function loadChatView(preferredSessionId = chatState.activeSessionId) {
   renderChatState();
   if (!runtimeSession?.user?.id) {
@@ -4663,13 +4944,14 @@ async function loadChatView(preferredSessionId = chatState.activeSessionId) {
   const version = Number(chatState.requestVersion || 0) + 1;
   chatState.requestVersion = version;
   setChatStatus("챗봇 상담 정보를 불러오는 중...");
+  loadChatCatalog().catch(() => {});
   try {
-    const [catalog, sessionPayload] = await Promise.all([
-      getJson("/api/chat/catalog"),
-      getJson("/api/chat/sessions"),
-    ]);
+    const hasPreferredSession = preferredSessionId
+      && chatState.sessions.some((session) => session.id === preferredSessionId);
+    const sessionPayload = hasPreferredSession
+      ? { sessions: chatState.sessions }
+      : await getJson("/api/chat/sessions");
     if (version !== chatState.requestVersion) return;
-    chatState.catalog = catalog;
     chatState.sessions = sessionPayload.sessions || [];
     const activeId = preferredSessionId && chatState.sessions.some((session) => session.id === preferredSessionId)
       ? preferredSessionId
@@ -4688,13 +4970,24 @@ async function loadChatView(preferredSessionId = chatState.activeSessionId) {
   }
 }
 
-function closeChatRoom() {
+function closeChatRoom({ historyMode = "back" } = {}) {
   stopChatStream();
-  closeChatReportPreview({ immediate: true, restoreFocus: false });
+  closeChatReportPreview({ immediate: true, restoreFocus: false, historyMode: "none" });
   chatState.activeSessionId = null;
   chatState.detail = null;
   renderChatState();
   setChatStatus("");
+  if (historyMode === "back" && history.state?.[NAVIGATION_CHAT_SESSION_KEY]) {
+    history.back();
+  } else if (historyMode !== "none") {
+    updateChatSessionHistory(null, "replace");
+  }
+}
+
+function openChatSession(sessionId, { historyMode = "push" } = {}) {
+  if (!sessionId) return Promise.resolve();
+  updateChatSessionHistory(sessionId, historyMode);
+  return loadChatView(sessionId);
 }
 
 function updateChatStreamRecord(runId, record) {
@@ -4755,7 +5048,7 @@ async function createChatSession() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ archiveId }),
     });
-    await loadChatView(payload.session.id);
+    await openChatSession(payload.session.id);
   } catch (error) {
     setChatStatus(error.message || "대화방을 만들지 못했습니다.", true);
   }
@@ -4765,7 +5058,7 @@ async function sendChatMessage() {
   const input = document.querySelector("[data-chat-input]");
   const question = String(input?.value || "").trim();
   if (!chatState.activeSessionId || !chatState.detail) return;
-  if (Number(chatState.catalog?.balance || 0) < 1) {
+  if (Number(chatState.catalog?.balance ?? chatState.detail?.balance ?? 0) < 1) {
     setChatStatus("질문을 보내려면 위에서 질의응답권을 먼저 구매해주세요.", true);
     return;
   }
@@ -4802,7 +5095,8 @@ async function sendChatMessage() {
       status: "queued",
       creditStatus: "reserved",
     });
-    chatState.catalog.balance = Number(result.balance || 0);
+    if (chatState.catalog) chatState.catalog.balance = Number(result.balance || 0);
+    if (chatState.detail) chatState.detail.balance = Number(result.balance || 0);
     renderChatState();
     resumeActiveChatStream();
   } catch (error) {
@@ -4832,6 +5126,7 @@ function startChatCreditCheckout(productId) {
     description: `${row.questions}개의 질문을 선택한 리포트 기반 AI 챗봇에서 사용할 수 있습니다.`,
   };
   currentCheckout = { productId: row.id, product, profile: null, partner: null, pointsUsed: 0 };
+  closeChatStore({ immediate: true, restoreFocus: false, historyMode: "none" });
   showView("pay");
   setupPayView(product);
 }
@@ -4923,14 +5218,32 @@ function completeExternalReportPurchase({ purchase, orderId, fulfillment }) {
 function bindChat() {
   const view = document.querySelector('[data-view="chat"]');
   view?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-chat-store-open]")) return openChatStore();
+    if (event.target.closest("[data-chat-store-close]")) return closeChatStore();
+    if (event.target.closest("[data-chat-catalog-retry]")) return loadChatCatalog({ force: true }).catch(() => {});
+    if (event.target.closest("[data-chat-home]")) return showView("home");
     const buy = event.target.closest("[data-chat-buy]");
     if (buy) return startChatCreditCheckout(buy.dataset.chatBuy);
+    const reportChoice = event.target.closest("[data-chat-report-choice]");
+    if (reportChoice) {
+      chatState.selectedReportId = reportChoice.dataset.chatReportChoice;
+      const input = document.querySelector("[data-chat-report-select]");
+      if (input) input.value = chatState.selectedReportId;
+      view.querySelectorAll("[data-chat-report-choice]").forEach((button) => {
+        const selected = button === reportChoice;
+        button.classList.toggle("is-selected", selected);
+        button.setAttribute("aria-selected", String(selected));
+        const indicator = button.querySelector(":scope > i");
+        if (indicator) indicator.textContent = selected ? "✓" : "›";
+      });
+      return;
+    }
     if (event.target.closest("[data-chat-session-create]")) return createChatSession();
     if (event.target.closest("[data-chat-report-preview-open]")) return openChatReportPreview();
     if (event.target.closest("[data-chat-report-preview-close]")) return closeChatReportPreview();
     if (event.target.closest("[data-chat-room-back]")) return closeChatRoom();
     const sessionButton = event.target.closest("[data-chat-session-id]");
-    if (sessionButton) loadChatView(sessionButton.dataset.chatSessionId);
+    if (sessionButton) openChatSession(sessionButton.dataset.chatSessionId);
   });
   document.querySelector("[data-chat-composer]")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -5066,9 +5379,9 @@ function bindLibraryFilters() {
 // ---------- Global event wiring ----------
 document.querySelectorAll("[data-view-target]").forEach((button) => {
   button.addEventListener("click", () => {
-    closeMemberModal();
+    closeMemberModal({ historyMode: "none" });
     // 결제 결과(/payments/*) 주소에 머물러 있으면 홈으로 정리(로고/뒤로 눌러도 못 빠져나가는 문제 방지)
-    if (/^\/payments\//.test(location.pathname)) history.replaceState(null, "", "/");
+    if (/^\/payments\//.test(location.pathname)) replaceNavigationUrl("/");
     showView(button.dataset.viewTarget);
   });
 });
@@ -5212,6 +5525,10 @@ document.addEventListener("keydown", (e) => {
     closeChatReportPreview();
     return;
   }
+  if (e.key === "Escape" && document.querySelector("[data-chat-store]")?.classList.contains("is-open")) {
+    closeChatStore();
+    return;
+  }
   if (e.key === "Escape" && mypageDrawer && !mypageDrawer.hasAttribute("hidden")) closeMypage();
 });
 
@@ -5238,8 +5555,14 @@ memberModal?.addEventListener("click", (event) => {
   if (event.target === memberModal) closeMemberModal();
 });
 
+window.addEventListener("popstate", (event) => {
+  restoreNavigationState(event.state);
+});
+
 // ---------- Boot ----------
 async function boot() {
+  const initialNavigationState = initializeNavigationHistory();
+  const paymentCallback = /^\/payments\/(success|fail)/.test(location.pathname);
   sessionStorage.setItem(
     "saju_lab_landing_page",
     sessionStorage.getItem("saju_lab_landing_page") || location.pathname + location.search,
@@ -5249,7 +5572,7 @@ async function boot() {
     sessionStorage.getItem("saju_lab_referrer") || document.referrer || "",
   );
   // 결제창에서 돌아온 경우 홈이 깜빡이지 않도록 즉시 결제결과 화면을 띄운다
-  if (/^\/payments\/(success|fail)/.test(location.pathname)) {
+  if (paymentCallback) {
     setPaymentResult("결제 결과 확인 중", "잠시만 기다려 주세요...", "", false, "loading");
   }
   applyAuthHint(); // 상단 로그인 칩을 직전 상태로 즉시 표시(로그인 깜빡임 방지)
@@ -5289,8 +5612,7 @@ async function boot() {
   if (!runtimeSession) applyVerifiedSession(guestSession(), { silent: true });
 
   applyRuntimeConfig();
-  const legalPath = location.pathname.replace(/^\/+/, "").toLowerCase();
-  if (["terms", "privacy", "refund"].includes(legalPath)) showView(legalPath);
+  if (!paymentCallback) restoreNavigationState(initialNavigationState);
   // 결제 확인은 지체 없이 즉시 실행(동기화 끝나길 기다리면 "결제 확인 중"이 길게 돈다).
   // 동기화는 백그라운드 — syncKind가 merge 방식이라 결제확인과 동시 실행해도 주문이 안 사라진다.
   await confirmReturnedPayment();
