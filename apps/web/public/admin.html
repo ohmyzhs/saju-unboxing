@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260713-bank-deposit" />
+    <link rel="stylesheet" href="./styles.css?v=20260713-ux-refresh" />
     <style>body.locked .admin-shell{display:none}</style>
   </head>
   <body class="admin-body locked">
@@ -203,13 +203,12 @@
         <section class="admin-panel" data-admin-panel="deposits" hidden>
           <h2>무통장입금 관리</h2>
           <p class="admin-help">은행 앱에서 입금(입금자명·금액)을 확인한 뒤 [입금 확인]을 누르면 포인트가 지급되고 고객에게 완료 문자가 발송됩니다.</p>
-          <form class="admin-form" data-deposit-bank-form>
-            <div class="admin-form-grid">
-              <label>은행 <input name="bank" placeholder="카카오뱅크" /></label>
-              <label>계좌번호 <input name="account" placeholder="3333-26-3204251" /></label>
-              <label>예금주 <input name="holder" placeholder="에스랩" /></label>
-            </div>
-            <button class="secondary-action" type="submit">입금 계좌 저장</button>
+          <form class="deposit-bank-inline" data-deposit-bank-form>
+            <strong>입금 계좌</strong>
+            <label><span>은행</span><input name="bank" placeholder="카카오뱅크" aria-label="은행" /></label>
+            <label class="is-account"><span>계좌번호</span><input name="account" placeholder="3333-26-3204251" aria-label="계좌번호" /></label>
+            <label><span>예금주</span><input name="holder" placeholder="에스랩" aria-label="예금주" /></label>
+            <button class="primary-action" type="submit">저장</button>
             <p class="form-status" data-deposit-bank-status></p>
           </form>
           <h2>입금 대기</h2>
@@ -430,6 +429,6 @@
     </main>
     <script src="./runtime-config.js"></script>
     <script src="./api-client.js"></script>
-    <script src="./admin.js?v=20260713-bank-deposit"></script>
+    <script src="./admin.js?v=20260713-ux-refresh"></script>
   </body>
 </html>

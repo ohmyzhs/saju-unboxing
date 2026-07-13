@@ -841,26 +841,37 @@ function renderAdminDeposits(requests) {
     ? pending.map((item) => `
         <article class="admin-row deposit-admin-row">
           <div>
-            <b>${item.depositorCode}</b> · ${money(item.amount)} → ${Number(item.points).toLocaleString("ko-KR")}pt
-            <small>${item.userLabel} · ${item.phone} · 신청 ${when(item.createdAt)} · 기한 ${when(item.expiresAt)}</small>
+            <b>${safe(item.depositorCode)}</b> · ${money(item.amount)} → ${Number(item.points).toLocaleString("ko-KR")}pt
+            <small>${safe(item.userLabel)} · ${safe(item.phone)} · 신청 ${when(item.createdAt)} · 기한 ${when(item.expiresAt)}</small>
             ${(item.notifyLog || []).some((log) => !log.ok) ? `<small class="admin-warn">⚠ 문자 발송 실패 이력 있음</small>` : ""}
           </div>
           <div class="admin-row-actions">
-            <button type="button" class="primary-action" data-deposit-confirm="${item.id}">입금 확인</button>
-            <button type="button" class="secondary-action" data-deposit-reject="${item.id}">거절</button>
+            <button type="button" class="primary-action" data-deposit-confirm="${safe(item.id)}">입금 확인</button>
+            <button type="button" class="secondary-action" data-deposit-reject="${safe(item.id)}">거절</button>
           </div>
         </article>`).join("")
     : `<div class="empty-box">입금 대기 중인 신청이 없습니다.</div>`;
 
   historyBox.innerHTML = processed.length
-    ? processed.map((item) => `
-        <article class="admin-row deposit-admin-row is-muted">
-          <div>
-            <b>${item.depositorCode}</b> · ${money(item.amount)}
-            <small>${item.userLabel} · ${DEPOSIT_STATUS_LABELS[item.status] || item.status} · ${when(item.confirmedAt || item.createdAt)}${item.memo ? ` · ${item.memo}` : ""}</small>
-          </div>
-          <span class="deposit-status is-${item.status}">${DEPOSIT_STATUS_LABELS[item.status] || item.status}</span>
-        </article>`).join("")
+    ? `<div class="deposit-history-table-wrap">
+        <table class="deposit-history-table">
+          <caption>최근 무통장입금 처리 이력</caption>
+          <thead><tr><th scope="col">처리일</th><th scope="col">입금 코드</th><th scope="col">고객</th><th scope="col">입금액</th><th scope="col">지급 포인트</th><th scope="col">결과</th><th scope="col">메모</th></tr></thead>
+          <tbody>${processed.map((item) => {
+            const statusKey = ["confirmed", "rejected", "expired", "cancelled"].includes(item.status) ? item.status : "unknown";
+            const statusLabel = DEPOSIT_STATUS_LABELS[statusKey] || item.status || "확인 필요";
+            return `<tr>
+              <td>${when(item.confirmedAt || item.createdAt)}</td>
+              <td><b>${safe(item.depositorCode)}</b></td>
+              <td>${safe(item.userLabel)}</td>
+              <td class="is-numeric">${money(item.amount)}</td>
+              <td class="is-numeric">${Number(item.points || 0).toLocaleString("ko-KR")}pt</td>
+              <td><span class="deposit-status is-${statusKey}">${safe(statusLabel)}</span></td>
+              <td>${safe(item.memo || "-")}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>`
     : `<div class="empty-box">처리 이력이 없습니다.</div>`;
 
   pendingBox.querySelectorAll("[data-deposit-confirm]").forEach((button) => {
