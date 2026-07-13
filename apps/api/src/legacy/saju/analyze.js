@@ -38,11 +38,19 @@ export function normalizeCalendarPick(value) {
   return purpose && dates.length >= 2 && dates.length <= 10 ? { purpose, dates } : null;
 }
 
+export function productRequiresLogin(productId) {
+  return productId === "daily-fortune";
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { message: "POST only" });
 
   try {
     const { productId = "saju-analysis", profile, partner, orderId, visitorId, mood = "", regen = false, stream = false, targetYear = null, calendarPick = null } = await readJson(req);
+    const sessionUser = await getSessionUser(req);
+    if (productRequiresLogin(productId) && !sessionUser?.id) {
+      return sendJson(res, 401, { message: "로그인 후 무료운세를 이용할 수 있습니다." });
+    }
 
     if (!profile || !profile.name || !profile.birthDate) {
       return sendJson(res, 400, { message: "이름과 생년월일이 필요합니다." });
@@ -60,7 +68,6 @@ export default async function handler(req, res) {
     const config = await loadSiteConfig();
     const extra = config?.prompts?.[productId]; // 어드민 추가 지침(코드 base 위에 append)
     const model = resolveAiRouting(config, "report"); // 프로바이더 폴백 체인(opencode→openrouter)
-    const sessionUser = await getSessionUser(req);
     const acct = accountFields(sessionUser); // 로그인 계정(카카오/이메일) — 고객 관리 기준
 
     if (productId === "compatibility" && (!partner || !partner.name || !partner.birthDate)) {

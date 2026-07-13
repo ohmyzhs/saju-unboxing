@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260713-ux-refresh" />
+    <link rel="stylesheet" href="./styles.css?v=20260713-purchase-progress-ux" />
     <script src="https://js.tosspayments.com/v2/standard" defer></script>
   </head>
   <body>
@@ -581,7 +581,17 @@
           <p data-payment-message>결제창에서 돌아온 주문을 서버 승인 단계까지 이어갑니다.</p>
           <div data-payment-detail></div>
           <section class="report-progress" data-report-progress hidden aria-live="polite">
-            <div class="report-progress-lanterns" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="report-progress-story" data-progress-story aria-live="off">
+              <div class="report-progress-visual">
+                <img src="./assets/generated/thumbnails/heukya-premium-dark-mudang.jpg" alt="" data-progress-image />
+                <span class="report-progress-live"><i aria-hidden="true"></i><span data-progress-live>제작 상태를 확인했습니다</span></span>
+              </div>
+              <div class="report-progress-story-copy">
+                <small data-progress-story-step>제작 여정 1 / 4</small>
+                <strong data-progress-story-title>운명의 실마리를 펼치는 중</strong>
+                <p data-progress-story-copy>사주 원국에서 해석의 기준이 될 흐름을 찾고 있습니다.</p>
+              </div>
+            </div>
             <div class="report-progress-head">
               <span class="report-progress-phase" data-progress-phase>운명함을 여는 중</span>
               <b class="report-progress-pct" data-progress-pct></b>
@@ -649,10 +659,10 @@
         </section>
         <section class="point-tier-grid" data-point-tiers></section>
         <section class="deposit-area" data-deposit-area></section>
-        <section class="point-history">
-          <h2>최근 포인트 내역</h2>
-          <div data-point-transactions></div>
-        </section>
+        <details class="point-history">
+          <summary><span>최근 포인트 내역</span><i aria-hidden="true"></i></summary>
+          <div class="point-history-body" data-point-transactions></div>
+        </details>
         <p class="form-status" data-points-status></p>
       </section>
 
@@ -759,9 +769,15 @@
       <div class="member-modal" data-member-modal hidden>
         <div class="member-modal-card">
           <button class="modal-close" type="button" data-member-modal-close aria-label="닫기">×</button>
-          <header><h2 data-member-modal-title>사주해설</h2><p data-member-modal-subtitle>어떤 분의 해설을 볼까요?</p></header>
+          <header>
+            <span class="member-modal-kicker">분석 대상 선택</span>
+            <h2 data-member-modal-title>사주해설</h2>
+            <p data-member-modal-subtitle>등록된 프로필을 선택하면 결제 정보 확인으로 이어집니다.</p>
+          </header>
+          <div class="member-list-head"><b>등록된 프로필</b><span data-member-count>0명</span></div>
           <div class="member-list" data-member-list></div>
-          <button class="modal-add" type="button" data-view-target="profile" data-member-modal-close>새로운 사람 추가하기</button>
+          <p class="member-select-guide" data-member-select-guide>결제할 분석 대상을 한 명 선택해주세요.</p>
+          <button class="modal-add" type="button" data-view-target="profile" data-member-modal-close><span aria-hidden="true">＋</span> 목록에 없는 사람만 새로 등록</button>
         </div>
       </div>
 
@@ -793,6 +809,6 @@
     <script src="./chat-stream.js"></script>
     <script src="./chat-markdown.js?v=20260712-report-wait"></script>
     <script src="./chat-report-preview.js"></script>
-    <script src="./app.js?v=20260713-ux-refresh"></script>
+    <script src="./app.js?v=20260713-repeat-payment-fix"></script>
   </body>
 </html>

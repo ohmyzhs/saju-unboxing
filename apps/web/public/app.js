@@ -7,6 +7,8 @@ const NAVIGATION_OVERLAY_KEY = "sajuOverlay";
 const NAVIGATION_PRODUCT_KEY = "sajuProductId";
 const NAVIGATION_CHAT_SESSION_KEY = "sajuChatSessionId";
 const NAVIGATION_OVERLAYS = new Set(["member", "mypage", "chat-report", "chat-store"]);
+const AUTH_REQUIRED_VIEWS = new Set(["profile", "people", "fortune", "daily"]);
+const PENDING_AUTH_VIEW_KEY = "sajuPendingAuthView";
 const filterButtons = [...document.querySelectorAll("[data-filter]")];
 const productCards = [...document.querySelectorAll(".product-card")];
 const slides = [...document.querySelectorAll(".banner-slide")];
@@ -33,6 +35,8 @@ const memberModal = document.querySelector("[data-member-modal]");
 const memberList = document.querySelector("[data-member-list]");
 const memberModalTitle = document.querySelector("[data-member-modal-title]");
 const memberModalSubtitle = document.querySelector("[data-member-modal-subtitle]");
+const memberCount = document.querySelector("[data-member-count]");
+const memberSelectGuide = document.querySelector("[data-member-select-guide]");
 const archiveList = document.querySelector("[data-archive-list]");
 const primaryProfileLabel = document.querySelector("[data-primary-profile]");
 
@@ -189,7 +193,9 @@ let activeAnalysisArchiveId = null;
 let runtimeSession = null;
 let lastSessionRefreshAt = 0;
 let sessionRefreshPromise = null;
+let lastSessionRefreshSucceeded = false;
 let pendingAuthNotice = null;
+let pendingAuthView = null;
 let activeSlide = 0;
 let selectedProductId = "saju-analysis";
 let selectedProfileId = null;
@@ -198,6 +204,7 @@ let activeAnalysisTimer = null;
 let analysisLoadingHideTimer = null;
 let currentViewName = "home";
 let currentViewStartedAt = Date.now();
+let bootCompleted = false;
 let paymentReturn = false;
 let activeDailyProfile = null;
 let activeDailyMood = "";
@@ -405,9 +412,86 @@ function updateChatSessionHistory(sessionId, historyMode = "push") {
   history[historyMode === "replace" ? "replaceState" : "pushState"](state, "", navigationUrlFor("chat"));
 }
 
+function isAuthRequiredView(view) {
+  return AUTH_REQUIRED_VIEWS.has(view);
+}
+
+function rememberPendingAuthView(view) {
+  pendingAuthView = isAuthRequiredView(view) ? view : null;
+}
+
+function persistPendingAuthView() {
+  if (!pendingAuthView) return;
+  try {
+    sessionStorage.setItem(PENDING_AUTH_VIEW_KEY, pendingAuthView);
+  } catch {}
+}
+
+function readPendingAuthView() {
+  if (pendingAuthView) return pendingAuthView;
+  try {
+    const stored = sessionStorage.getItem(PENDING_AUTH_VIEW_KEY);
+    return isAuthRequiredView(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingAuthView() {
+  pendingAuthView = null;
+  try {
+    sessionStorage.removeItem(PENDING_AUTH_VIEW_KEY);
+  } catch {}
+}
+
+function beginKakaoLogin() {
+  persistPendingAuthView();
+  window.location.href = window.SajuApi.url("/api/auth/kakao/start");
+}
+
+function requestLoginForView(nextView, { historyMode = "push" } = {}) {
+  rememberPendingAuthView(nextView);
+  showToast("로그인 후 이용할 수 있습니다.", true);
+  openMypage({ historyMode });
+  return false;
+}
+
+async function requireAuthenticatedView(nextView, { historyMode = "push", force = false } = {}) {
+  if (!force && runtimeSession?.user?.id) return true;
+  await refreshAuthSession("protected-view", { force: true, silent: true });
+  if (lastSessionRefreshSucceeded && runtimeSession?.user?.id) return true;
+  return requestLoginForView(nextView, { historyMode });
+}
+
+async function navigateToView(nextView, options = {}) {
+  if (!viewNames.has(nextView)) return false;
+  if (isAuthRequiredView(nextView)) {
+    const allowed = await requireAuthenticatedView(nextView, {
+      historyMode: options.historyMode === "none" ? "none" : "push",
+      force: true,
+    });
+    if (!allowed) return false;
+  }
+  showView(nextView, options);
+  return true;
+}
+
+function resumePendingAuthView() {
+  if (!runtimeSession?.user?.id) return false;
+  const nextView = readPendingAuthView();
+  if (!nextView) return false;
+  clearPendingAuthView();
+  closeMypage({ historyMode: "none" });
+  showView(nextView, { authGuard: false });
+  return true;
+}
+
 function showView(nextView, options = {}) {
   if (!viewNames.has(nextView)) return;
   const historyMode = options.historyMode || "push";
+  if (options.authGuard !== false && isAuthRequiredView(nextView) && !runtimeSession?.user?.id) {
+    return requestLoginForView(nextView, { historyMode: historyMode === "none" ? "none" : "push" });
+  }
   const viewChanged = currentViewName !== nextView;
   const hasChatSessionOption = Object.prototype.hasOwnProperty.call(options, "chatSessionId");
   const nextChatSessionId = nextView === "chat"
@@ -890,7 +974,10 @@ function applyVerifiedSession(session, { forceSync = false, silent = false } = {
     reloadAccountData();
     if (currentViewName === "support") loadSupportBoard({ force: Boolean(nextUserId) });
     if (nextUserId) syncAccountData({ reason: "session-change" });
-    else if (prevUserId && !silent) showToast("로그인 세션이 만료되었습니다. 다시 로그인해주세요.", true);
+    else if (prevUserId) {
+      if (isAuthRequiredView(currentViewName)) showView("home", { authGuard: false, historyMode: "replace" });
+      if (!silent) showToast("로그인 세션이 만료되었습니다. 다시 로그인해주세요.", true);
+    }
   } else if (nextUserId && (forceSync || Date.now() - accountDataLastSyncedAt >= ACCOUNT_SYNC_STALE_MS)) {
     accountDataReady = false;
     reloadAccountData();
@@ -907,8 +994,12 @@ async function refreshAuthSession(reason = "manual", { force = false, silent = f
   if (!force && now - lastSessionRefreshAt < SESSION_REFRESH_INTERVAL_MS) return runtimeSession;
   lastSessionRefreshAt = now;
   sessionRefreshPromise = getJson("/api/session")
-    .then((session) => applyVerifiedSession(session, { forceSync: force, silent }))
+    .then((session) => {
+      lastSessionRefreshSucceeded = true;
+      return applyVerifiedSession(session, { forceSync: force, silent });
+    })
     .catch(() => {
+      lastSessionRefreshSucceeded = false;
       consumeAuthNotice(runtimeSession);
       return runtimeSession;
     })
@@ -1013,7 +1104,7 @@ function renderSession() {
           <p class="email-auth-msg" data-email-msg></p>
         </div>`;
       const loginBtn = mypageId.querySelector("[data-mypage-login]");
-      if (loginBtn) loginBtn.addEventListener("click", () => { window.location.href = window.SajuApi.url("/api/auth/kakao/start"); });
+      if (loginBtn) loginBtn.addEventListener("click", beginKakaoLogin);
       mypageId.querySelector("[data-email-login]")?.addEventListener("click", emailAuth);
       mypageId.querySelector("[data-email-signup]")?.addEventListener("click", () => showView("signup"));
     }
@@ -1097,6 +1188,7 @@ async function emailAuth() {
     if (res.ok) {
       applyVerifiedSession({ user: body.user, points: body.points }, { forceSync: true, silent: true });
       showToast("로그인되었습니다.");
+      resumePendingAuthView();
     } else if (msg) {
       msg.textContent = body.message || "실패했습니다.";
     }
@@ -1136,8 +1228,10 @@ async function signupWithEmail(event) {
     applyVerifiedSession({ user: body.user, points: body.points }, { forceSync: true, silent: true });
     form.reset();
     showToast(`${body.user?.nickname || nickname}님, 가입이 완료되었습니다.`);
-    showView("home");
-    window.setTimeout(openMypage, 240);
+    if (!resumePendingAuthView()) {
+      showView("home");
+      window.setTimeout(openMypage, 240);
+    }
   } catch (error) {
     fail(error.message || "회원가입 중 오류가 발생했습니다.");
   } finally {
@@ -1154,6 +1248,7 @@ function openMypage({ historyMode = "push" } = {}) {
 }
 function closeMypage({ historyMode = "back" } = {}) {
   if (!mypageDrawer) return;
+  if (historyMode === "back" && !runtimeSession?.user?.id) clearPendingAuthView();
   mypageDrawer.classList.remove("is-open");
   setTimeout(() => {
     if (!mypageDrawer.classList.contains("is-open")) mypageDrawer.setAttribute("hidden", "");
@@ -1409,6 +1504,28 @@ function openStoredAnalysis(item) {
 }
 
 const externalReportPollers = new Map();
+const EXTERNAL_WAIT_STORIES = [
+  {
+    image: "./assets/generated/thumbnails/heukya-premium-dark-mudang.jpg",
+    title: "운명의 실마리를 펼치는 중",
+    copy: "사주 원국에서 해석의 기준이 될 흐름을 찾고 있습니다.",
+  },
+  {
+    image: "./assets/generated/thumbnails/heukya-premium-saju-reading.jpg",
+    title: "삶의 장면을 차례로 엮는 중",
+    copy: "성향과 관계, 일과 재물의 흐름을 한 편의 이야기로 잇고 있습니다.",
+  },
+  {
+    image: "./assets/generated/thumbnails/heukya-premium-fortune-cycle.jpg",
+    title: "겹치는 문장을 정갈하게 다듬는 중",
+    copy: "읽기 편하도록 표현을 고르고 중요한 해석을 다시 확인하고 있습니다.",
+  },
+  {
+    image: "./assets/generated/thumbnails/heukya-premium-year-wheel.jpg",
+    title: "마지막 봉인과 열람 준비 중",
+    copy: "완성된 리포트를 안전하게 보관하고 바로 열 수 있는 주소를 준비합니다.",
+  },
+];
 
 function stopExternalReportPolling(orderId) {
   const timer = externalReportPollers.get(orderId);
@@ -1457,6 +1574,60 @@ async function syncExternalReport(orderId) {
 // 결제 직후 사용자가 화면을 떠나지 않도록 진행률을 실시간으로 보여주고,
 // 완성되는 순간 같은 탭에서 리포트를 바로 연다.
 let externalWaitOrderId = null;
+let externalWaitStartedAt = 0;
+let externalWaitLastConfirmedAt = 0;
+let externalWaitStoryIndex = 0;
+let externalWaitStoryTimer = null;
+
+function stopExternalWaitStory() {
+  if (externalWaitStoryTimer) window.clearTimeout(externalWaitStoryTimer);
+  externalWaitStoryTimer = null;
+}
+
+function renderExternalWaitStory() {
+  if (!externalWaitOrderId) return;
+  const box = document.querySelector("[data-report-progress]");
+  const storyEl = box?.querySelector("[data-progress-story]");
+  if (!box || !storyEl) return;
+  const story = EXTERNAL_WAIT_STORIES[externalWaitStoryIndex % EXTERNAL_WAIT_STORIES.length];
+  const elapsedMs = Math.max(0, Date.now() - externalWaitStartedAt);
+  const confirmedAgo = Math.max(0, Date.now() - externalWaitLastConfirmedAt);
+  const imageEl = storyEl.querySelector("[data-progress-image]");
+  const stepEl = storyEl.querySelector("[data-progress-story-step]");
+  const titleEl = storyEl.querySelector("[data-progress-story-title]");
+  const copyEl = storyEl.querySelector("[data-progress-story-copy]");
+  const liveEl = storyEl.querySelector("[data-progress-live]");
+  if (imageEl) imageEl.src = story.image;
+  if (stepEl) stepEl.textContent = `제작 여정 ${(externalWaitStoryIndex % EXTERNAL_WAIT_STORIES.length) + 1} / ${EXTERNAL_WAIT_STORIES.length}`;
+  if (titleEl) titleEl.textContent = story.title;
+  if (copyEl) {
+    copyEl.textContent = elapsedMs >= 120000
+      ? "화면을 닫아도 제작은 계속됩니다. 결제 내역에서 언제든 완성 상태를 확인할 수 있어요."
+      : elapsedMs >= 45000
+        ? `${story.copy} 마지막 편집은 1~2분 더 걸릴 수 있어요.`
+        : story.copy;
+  }
+  if (liveEl) {
+    liveEl.textContent = confirmedAgo < 15000
+      ? "방금 제작 상태를 확인했습니다"
+      : "제작 상태를 다시 확인하고 있습니다";
+  }
+  box.classList.toggle("is-long-wait", elapsedMs >= 45000);
+  storyEl.classList.remove("is-changing");
+  void storyEl.offsetWidth;
+  storyEl.classList.add("is-changing");
+  externalWaitStoryIndex += 1;
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  externalWaitStoryTimer = window.setTimeout(renderExternalWaitStory, reduceMotion ? 12000 : 6500);
+}
+
+function startExternalWaitStory() {
+  stopExternalWaitStory();
+  externalWaitStartedAt = Date.now();
+  externalWaitLastConfirmedAt = Date.now();
+  externalWaitStoryIndex = 0;
+  renderExternalWaitStory();
+}
 
 function externalWaitPhaseText(status) {
   return {
@@ -1476,6 +1647,7 @@ function renderExternalWaitProgress(orderId, result) {
   const gen = result?.generation || null;
   const failed = result?.reportStatus === "failed";
   const complete = result?.reportStatus === "complete";
+  externalWaitLastConfirmedAt = Date.now();
   const phaseEl = box.querySelector("[data-progress-phase]");
   const pctEl = box.querySelector("[data-progress-pct]");
   const fillEl = box.querySelector("[data-progress-fill]");
@@ -1490,7 +1662,15 @@ function renderExternalWaitProgress(orderId, result) {
   const percent = complete ? 100 : failed ? 100 : gen?.percent ?? null;
   if (pctEl) pctEl.textContent = percent === null ? "" : `${Math.max(0, Math.min(100, percent))}%`;
   if (fillEl && percent !== null) fillEl.style.width = `${Math.max(3, Math.min(100, percent))}%`;
-  if (phaseEl) phaseEl.textContent = failed ? externalWaitPhaseText("failed") : complete ? externalWaitPhaseText("completed") : externalWaitPhaseText(gen?.status);
+  if (phaseEl) {
+    phaseEl.textContent = failed
+      ? externalWaitPhaseText("failed")
+      : complete
+        ? externalWaitPhaseText("completed")
+        : Number(percent) >= 99
+          ? "최종 편집과 열람 준비 중"
+          : externalWaitPhaseText(gen?.status);
+  }
   if (sectionEl) {
     if (complete) sectionEl.textContent = "지금 리포트를 엽니다…";
     else if (failed) sectionEl.textContent = result?.reportError || "결제 내역에서 '리포트 다시 생성'을 눌러주세요.";
@@ -1499,11 +1679,19 @@ function renderExternalWaitProgress(orderId, result) {
       sectionEl.textContent = `${gen.completedSections}/${gen.totalSections} 단락 집필됨${current}`;
     } else sectionEl.textContent = "사주 원국을 읽고 있습니다…";
   }
-  if (hintEl) hintEl.hidden = complete || failed;
+  if (hintEl) {
+    hintEl.hidden = complete || failed;
+    if (!complete && !failed) {
+      hintEl.textContent = Number(percent) >= 99 || Date.now() - externalWaitStartedAt >= 45000
+        ? "99% 이후에는 문장 검수와 열람 링크 준비로 1~2분 더 걸릴 수 있습니다. 멈추거나 오류가 난 상태가 아닙니다."
+        : "완성되는 순간 이 화면에서 바로 열립니다. 다른 화면으로 이동해도 제작은 계속됩니다.";
+    }
+  }
 }
 
 function beginExternalWait(orderId) {
   externalWaitOrderId = orderId;
+  startExternalWaitStory();
   renderExternalWaitProgress(orderId, { reportStatus: "generating", generation: null });
 }
 
@@ -1511,6 +1699,7 @@ function finishExternalWait(orderId, result) {
   if (externalWaitOrderId !== orderId) return false;
   renderExternalWaitProgress(orderId, result);
   externalWaitOrderId = null;
+  stopExternalWaitStory();
   const onPaymentView = document.querySelector('.view.is-active')?.dataset.view === "payment";
   const url = result?.externalReport?.shareUrl;
   if (result?.reportStatus === "complete" && url && onPaymentView) {
@@ -1696,7 +1885,7 @@ function renderPointsView() {
 }
 
 // ── 무통장입금(계좌이체) 충전 ──
-// 토스 심사 대기 동안의 주 결제 경로. 신청 → 입금 안내 SMS → 관리자 승인 → 포인트 지급 + 완료 SMS.
+// 카드·간편결제 준비 기간의 주 결제 경로. 신청 → 입금 안내 SMS → 관리자 승인 → 포인트 지급 + 완료 SMS.
 const depositState = { requests: [], bank: null, phone: "", selectedAmount: null, loading: false, timer: null };
 
 function awaitingDeposit() {
@@ -1804,9 +1993,9 @@ function renderDepositArea() {
             <b>🏦 무통장입금</b>
             <small>계좌이체 후 관리자 확인 시 충전 · 문자 안내</small>
           </button>
-          <button type="button" class="deposit-method" data-deposit-method="toss">
+          <button type="button" class="deposit-method" data-deposit-method="toss" disabled aria-disabled="true">
             <b>💳 카드·간편결제</b>
-            <small>토스 심사 중 — 현재는 무통장입금을 이용해주세요</small>
+            <small>결제수단 준비중</small>
           </button>
         </div>
         <form class="deposit-form" data-deposit-form hidden>
@@ -1824,7 +2013,6 @@ function renderDepositArea() {
         form.querySelector("[data-deposit-phone]")?.focus();
       }
     });
-    area.querySelector("[data-deposit-method='toss']")?.addEventListener("click", () => startPointCharge(tier.amount));
     area.querySelector("[data-deposit-form]")?.addEventListener("submit", (event) => {
       event.preventDefault();
       requestDeposit(tier.amount, area.querySelector("[data-deposit-phone]")?.value || "", event.submitter);
@@ -2102,8 +2290,10 @@ function bindHomeGuide() {
   render(activeKey);
 }
 
-function startDailyFortune(profile, options = {}) {
+async function startDailyFortune(profile, options = {}) {
   if (!profile) return;
+  const allowed = await requireAuthenticatedView("fortune", { force: true });
+  if (!allowed) return;
   const mood = String(options.mood || "").trim().slice(0, 80);
   activeDailyProfile = profile;
   activeDailyMood = mood;
@@ -2715,8 +2905,10 @@ function editProfile(id) {
 profileForm?.addEventListener("input", schedulePreviewUpdate);
 profileForm?.addEventListener("change", schedulePreviewUpdate);
 
-profileForm?.addEventListener("submit", (event) => {
+profileForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const allowed = await requireAuthenticatedView("profile", { historyMode: "none", force: true });
+  if (!allowed) return;
   const profile = readProfileFromForm();
   if (!profile.name || !profile.birthDate) {
     if (profileStatus) profileStatus.textContent = "이름과 생년월일은 꼭 입력해주세요.";
@@ -2775,24 +2967,42 @@ profileForm?.addEventListener("submit", (event) => {
 });
 
 // ---------- Member modal ----------
-function openMemberModal(productId, { historyMode = "push" } = {}) {
+async function openMemberModal(productId, { historyMode = "push" } = {}) {
+  if (productId === "daily-fortune") {
+    const allowed = await requireAuthenticatedView("fortune", { force: true });
+    if (!allowed) return;
+  }
   selectedProductId = productId;
   const product = PRODUCTS[productId] || PRODUCTS["saju-analysis"];
   const profiles = getProfiles();
+  const prioritizedProfiles = selectedProfileId
+    ? [...profiles].sort((a, b) => Number(b.id === selectedProfileId) - Number(a.id === selectedProfileId))
+    : profiles;
   if (memberModalTitle) memberModalTitle.textContent = product.name;
-  if (memberModalSubtitle) memberModalSubtitle.textContent = product.subtitle;
+  if (memberModalSubtitle) {
+    memberModalSubtitle.textContent = profiles.length
+      ? "등록된 프로필을 선택하면 결제 정보 확인으로 이어집니다."
+      : "분석할 사람을 먼저 등록해주세요.";
+  }
+  if (memberCount) memberCount.textContent = `${profiles.length}명`;
+  if (memberSelectGuide) {
+    memberSelectGuide.textContent = profiles.length
+      ? "결제할 분석 대상을 한 명 선택해주세요."
+      : "프로필 등록 후 이곳에서 분석 대상을 선택할 수 있어요.";
+  }
+  memberModal?.querySelector(".member-modal-card")?.classList.toggle("is-empty", !profiles.length);
   if (memberList) {
     memberList.innerHTML = profiles.length
-      ? profiles
+      ? prioritizedProfiles
           .map(
-            (profile) => `
-              <button type="button" class="member-row" data-select-profile="${escapeHtml(profile.id)}">
+            (profile, index) => `
+              <button type="button" class="member-row${profile.id === selectedProfileId ? " is-priority" : ""}" data-select-profile="${escapeHtml(profile.id)}" aria-label="${escapeHtml(profile.name)} 프로필 선택">
                 <span class="avatar" style="background:${colorForText(profile.name)}">${escapeHtml(profileInitial(profile.name))}</span>
                 <div class="member-meta">
-                  <b>${escapeHtml(profile.name)}</b>
+                  <b>${escapeHtml(profile.name)}${index === 0 && profile.id === selectedProfileId ? `<em>최근 선택</em>` : ""}</b>
                   <small>${escapeHtml(profile.relation)} · ${escapeHtml(formatBirthDate(profile.birthDate))} · ${escapeHtml(profileTime(profile))}</small>
                 </div>
-                <i class="chevron">›</i>
+                <span class="member-select-mark"><small>선택</small><i aria-hidden="true">›</i></span>
               </button>
             `,
           )
@@ -2809,6 +3019,7 @@ function openMemberModal(productId, { historyMode = "push" } = {}) {
     button.addEventListener("click", () => {
       const profile = getProfiles().find((item) => item.id === button.dataset.selectProfile);
       if (!profile) return;
+      selectedProfileId = profile.id;
       if (productId === "daily-fortune") {
         closeMemberModal({ historyMode: "none" });
         startDailyFortune(profile);
@@ -2909,13 +3120,27 @@ function prepareCheckout(productId, profile, partner = null) {
 }
 
 // 주문확인 → 결제 페이지(2단계). 결제 위젯은 이 화면에서만 렌더한다.
+function resetPaymentSubmitButton(button, context = currentCheckout) {
+  if (!button) return;
+  button.disabled = false;
+  button.removeAttribute("aria-busy");
+  const price = Number(context?.product?.amount || 0);
+  const pointsUsed = Math.max(0, Math.min(price, Number(context?.pointsUsed || 0)));
+  const cashAmount = Math.max(0, price - pointsUsed);
+  button.textContent = context?.product
+    ? cashAmount === 0
+      ? `${formatPoints(pointsUsed)}로 결제하기`
+      : `${formatWon(cashAmount)} 결제하기`
+    : "결제하기";
+}
+
 function setupPayView(product) {
   const prod = document.querySelector("[data-pay-product]");
   const amt = document.querySelector("[data-pay-amount]");
   const confirm = document.querySelector("[data-pay-confirm]");
   if (prod) prod.textContent = product.name;
   if (amt) amt.textContent = product.amountLabel;
-  if (confirm) confirm.textContent = `${product.amountLabel} 결제하기`;
+  resetPaymentSubmitButton(confirm, currentCheckout);
   document.querySelector("[data-pay-status]")?.replaceChildren();
   const pointPanel = document.querySelector("[data-point-payment]");
   const pointInput = document.querySelector("[data-point-use]");
@@ -3101,6 +3326,7 @@ async function beginTossPayment(planId, sourceButton, context = null) {
   try {
     if (button) {
       button.disabled = true;
+      button.setAttribute("aria-busy", "true");
       button.textContent = "결제창 준비 중...";
     }
     setPaymentStatus("결제 주문을 만들고 있습니다.");
@@ -3221,13 +3447,13 @@ async function beginTossPayment(planId, sourceButton, context = null) {
       windowTarget: "self",
     });
   } catch (error) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = context?.product ? `${context.product.amountLabel} 결제하기` : "결제하기";
-    }
     document.querySelector("[data-pay-status]")?.replaceChildren(document.createTextNode(`결제 시작 실패: ${error.message}`));
     setPaymentStatus(`결제 시작 실패: ${error.message}`);
     trackEvent("payment_error", { message: error.message, productId: context?.productId, amount: context?.product?.amount });
+  } finally {
+    // 포인트 전액 결제처럼 페이지 이동 없이 끝나는 경로에서도 다음 결제가 가능해야 한다.
+    // SPA는 같은 버튼 DOM을 재사용하므로 disabled 상태를 반드시 원복한다.
+    if (!context || context === currentCheckout) resetPaymentSubmitButton(button, context);
   }
 }
 
@@ -5378,11 +5604,20 @@ function bindLibraryFilters() {
 
 // ---------- Global event wiring ----------
 document.querySelectorAll("[data-view-target]").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async (event) => {
+    const nextView = button.dataset.viewTarget;
+    if (isAuthRequiredView(nextView)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeMemberModal({ historyMode: "none" });
+      if (/^\/payments\//.test(location.pathname)) replaceNavigationUrl("/");
+      await navigateToView(nextView);
+      return;
+    }
     closeMemberModal({ historyMode: "none" });
     // 결제 결과(/payments/*) 주소에 머물러 있으면 홈으로 정리(로고/뒤로 눌러도 못 빠져나가는 문제 방지)
     if (/^\/payments\//.test(location.pathname)) replaceNavigationUrl("/");
-    showView(button.dataset.viewTarget);
+    showView(nextView);
   });
 });
 
@@ -5447,7 +5682,7 @@ restartBannerAutoplay();
 authButtons.forEach((button) => {
   button.addEventListener("click", () => {
     if (runtimeSession?.user) return;
-    window.location.href = window.SajuApi.url("/api/auth/kakao/start");
+    beginKakaoLogin();
   });
 });
 
@@ -5465,16 +5700,21 @@ logoutButtons.forEach((button) => {
   });
 });
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") refreshAuthSession("visibility", { force: true });
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+    await refreshAuthSession("visibility", { force: true });
+    if (bootCompleted) resumePendingAuthView();
+  }
 });
 
-window.addEventListener("pageshow", (event) => {
-  refreshAuthSession(event.persisted ? "pageshow-bfcache" : "pageshow", { force: Boolean(event.persisted), silent: true });
+window.addEventListener("pageshow", async (event) => {
+  await refreshAuthSession(event.persisted ? "pageshow-bfcache" : "pageshow", { force: Boolean(event.persisted), silent: true });
+  if (bootCompleted) resumePendingAuthView();
 });
 
-window.addEventListener("focus", () => {
-  refreshAuthSession("focus");
+window.addEventListener("focus", async () => {
+  await refreshAuthSession("focus");
+  if (bootCompleted) resumePendingAuthView();
 });
 
 // 마이페이지 드로어 열기/닫기 (상단 칩 + 햄버거 버튼)
@@ -5613,6 +5853,8 @@ async function boot() {
 
   applyRuntimeConfig();
   if (!paymentCallback) restoreNavigationState(initialNavigationState);
+  bootCompleted = true;
+  if (!paymentCallback) resumePendingAuthView();
   // 결제 확인은 지체 없이 즉시 실행(동기화 끝나길 기다리면 "결제 확인 중"이 길게 돈다).
   // 동기화는 백그라운드 — syncKind가 merge 방식이라 결제확인과 동시 실행해도 주문이 안 사라진다.
   await confirmReturnedPayment();
